@@ -176,10 +176,8 @@ cargo install cargo-ament-build
 mkdir -p ~/ros2_ws/src
 cd ~/ros2_ws/src
 
-# Clone this package
+# Clone this package (includes oxide_gnss driver and oxide_gnss_msgs)
 git clone https://github.com/gsokoll/oxide_gnss.git
-
-# Ensure the oxide_gnss_msgs ROS2 interface package is present in this workspace (~/ros2_ws/src)
 
 # Clone ros2-rust
 git clone https://github.com/ros2-rust/ros2_rust.git
@@ -188,55 +186,55 @@ git clone https://github.com/ros2-rust/ros2_rust.git
 vcs import . < ros2_rust/ros2_rust_jazzy.repos
 ```
 
-#### 3. Initial build (generates cargo patches)
+#### 3. Initial build
 
 ```bash
 cd ~/ros2_ws
 source /opt/ros/jazzy/setup.bash
 
-# Build ros2-rust packages first, allowing overrides
-colcon build --packages-up-to oxide_gnss_msgs oxide_gnss \
+# Build message definitions first (must complete before driver)
+colcon build --packages-select oxide_gnss_msgs \
     --allow-overriding builtin_interfaces std_msgs geometry_msgs \
     sensor_msgs diagnostic_msgs action_msgs
+
+# Source to make messages available
+source install/setup.bash
+
+# Build the driver
+colcon build --packages-select oxide_gnss \
+    --allow-overriding builtin_interfaces std_msgs geometry_msgs \
+    sensor_msgs diagnostic_msgs action_msgs
+
+# Source to make driver available
+source install/setup.bash
 ```
 
 This creates `.cargo/config.toml` in the workspace root with patches that redirect ROS2 crates to the locally-built versions.
 
-> **Important**: The specific order of operations is critical:
-> 1. First source ROS2: `source /opt/ros/jazzy/setup.bash`
-> 2. Then build ros2-rust dependencies with colcon
-> 3. Source the workspace: `source ~/ros2_ws/install/setup.bash`
-> 4. Finally build oxide_gnss with cargo: `cargo build --features ros2`
+### Rebuilding
 
-
-### Building
-
-#### Option A: Build with colcon (recommended for deployment)
+After the initial setup, you can rebuild with:
 
 ```bash
 cd ~/ros2_ws
 source /opt/ros/jazzy/setup.bash
 
-# 1. Build message definitions first (Critical dependency)
-colcon build --packages-select oxide_gnss_msgs
+# Rebuild just the driver (fast - messages rarely change)
+colcon build --packages-select oxide_gnss \
+    --allow-overriding builtin_interfaces std_msgs geometry_msgs \
+    sensor_msgs diagnostic_msgs action_msgs
 
-# 2. Build the driver (and any remaining dependencies)
-colcon build --packages-up-to oxide_gnss
+source install/setup.bash
 ```
 
-#### Option B: Build with cargo (fast iteration for development)
-
-**Prerequisite:** You must have successfully built `oxide_gnss_msgs` using colcon at least once (see Option A).
-
-After the initial colcon build, you can iterate faster with cargo:
+If you've modified `oxide_gnss_msgs`, rebuild both:
 
 ```bash
-source /opt/ros/jazzy/setup.bash
-source ~/ros2_ws/install/setup.bash
-cd ~/ros2_ws/src/oxide_gnss
+colcon build --packages-select oxide_gnss_msgs oxide_gnss \
+    --allow-overriding builtin_interfaces std_msgs geometry_msgs \
+    sensor_msgs diagnostic_msgs action_msgs
 
-# Build binary
-cargo build
+source install/setup.bash
 ```
 
 ### Pre-commit Checks
