@@ -1,0 +1,69 @@
+# Build and push CI Docker image to GitHub Container Registry
+#
+# This workflow builds a Docker image with ROS2 Jazzy + Rust + ros2-rust
+# pre-installed for fast CI builds.
+#
+# Triggers:
+#   - Manual: Actions tab -> "Build CI Docker Image" -> Run workflow
+#   - On Dockerfile changes to master/main
+#   - Weekly (to pick up dependency updates)
+
+name: Build CI Docker Image
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+
+  # Auto-trigger when Dockerfile changes
+  push:
+    branches: [master, main]
+    paths:
+      - '.github/docker/Dockerfile.ci'
+
+  # Weekly rebuild to get updates
+  schedule:
+    - cron: '0 0 * * 0'  # Every Sunday at midnight UTC
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}-ci
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    # Required for pushing to GHCR
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # Tag as 'jazzy' (primary tag)
+            type=raw,value=jazzy
+            # Also tag as 'latest'
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: .github/docker/Dockerfile.ci
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

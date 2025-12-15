@@ -1,0 +1,70 @@
+[package]
+name = "oxide_gnss"
+version = "0.1.0"
+edition = "2021"
+authors = ["gsokoll"]
+description = "A Rust-based ROS2 GNSS driver with integrated NTRIP client"
+license = "MIT"
+repository = "https://github.com/gsokoll/oxide_gnss"
+readme = "README.md"
+keywords = ["ros2", "gnss", "gps", "ntrip", "ublox"]
+categories = ["science::geo", "embedded", "hardware-support"]
+
+[lib]
+name = "oxide_gnss"
+path = "src/lib.rs"
+
+[[bin]]
+name = "oxide_gnss_node"
+path = "src/main.rs"
+required-features = ["ros2"]
+
+[dependencies]
+# ROS2 dependencies - resolved via colcon patches in .cargo/config.toml
+# Build with: source /opt/ros/jazzy/setup.bash && source install/setup.bash && cargo build --features ros2
+rclrs = { version = "0.6", optional = true }
+sensor_msgs = { version = "5", optional = true }
+geometry_msgs = { version = "5", optional = true }
+std_msgs = { version = "5", optional = true }
+diagnostic_msgs = { version = "5", optional = true }
+builtin_interfaces = { version = "2", optional = true }
+oxide_gnss_msgs = { version = "0.1", optional = true }
+
+# GNSS Protocols
+ublox = { version = "0.8", features = ["alloc", "ubx_proto23", "ubx_proto27"] }
+rtcm-rs = "0.11"
+
+# Communications
+serial2-tokio = "0.1"
+base64 = "0.22"
+url = "2.5"
+tokio = { version = "1", features = ["full"] }
+
+# Utilities
+nalgebra = "0.33"
+chrono = "0.4"
+thiserror = "2.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+async-trait = "0.1"
+
+regex = "1.12.2"
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[features]
+default = ["ros2"]
+# Enable ROS2 integration - requires ROS2 environment (e.g., WSL2 with ROS2 Jazzy)
+# Build from workspace root with: colcon build, then cargo build --features ros2
+ros2 = ["dep:rclrs", "dep:sensor_msgs", "dep:geometry_msgs", "dep:std_msgs", "dep:diagnostic_msgs", "dep:builtin_interfaces", "dep:oxide_gnss_msgs"]
+
+[package.metadata.ros]
+install_to_share = ["launch", "config", "udev"]
+
+[patch.crates-io]
+# Use upstream master for latest messages (NAV-COV, SEC-SIG, RXM-COR, MON-COMMS)
+ublox = { git = "https://github.com/ublox-rs/ublox.git", branch = "master" }
+# ublox = { path = "../ublox/ublox" }

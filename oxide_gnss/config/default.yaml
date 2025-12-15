@@ -1,0 +1,111 @@
+# oxide_gnss default configuration
+# Copy this file and customize for your setup
+
+# ROS publishing options
+ros:
+  publish:
+    sec_sig_details: true
+
+# GNSS Device Configuration
+device:
+  # Serial port path
+  # Linux: /dev/ttyACM0, /dev/ttyUSB0, or symlink from udev rule
+  # Windows: COM3, COM4, etc.
+  port: "/dev/gnss_f9p_rover"
+
+  # Baud rate (ZED-F9P default is 38400, but 460800 recommended for high rate)
+  baud_rate: 460800
+
+  # Coordinate frame for velocity output
+  # ENU: East-North-Up (ROS convention)
+  # NED: North-East-Down (aviation/marine convention)
+  frame: ENU
+
+  # Operating mode
+  # rover: Standalone rover with NTRIP corrections
+  # moving_base: Moving base station (Phase 2)
+  mode: rover
+
+  # Navigation settings
+  navigation:
+    # Update rate in Hz (1-25 for ZED-F9P)
+    rate_hz: 10
+
+    # Minimum satellites for valid fix
+    min_satellites: 4
+
+    # Maximum acceptable HDOP (warning threshold)
+    max_hdop: 5.0
+
+    # Maximum acceptable PDOP (warning threshold)
+    max_pdop: 10.0
+
+  # Reconnection behavior
+  reconnect:
+    enabled: true
+    initial_delay_secs: 1
+    max_delay_secs: 30
+    max_attempts: 0  # 0 = unlimited
+
+  # u-blox specific configuration (optional)
+  # Key names match u-blox documentation CFG_* syntax.
+  # See: https://content.u-blox.com/sites/default/files/documents/u-blox-F9-HPG-1.32_InterfaceDescription_UBX-22008968.pdf
+  ublox:
+    family: "F9P"
+
+    # Measurement/Navigation rates
+    CFG_RATE_MEAS: 100      # Measurement rate in ms (100 = 10Hz)
+    CFG_RATE_NAV: 1         # Navigation rate = measurements required per nav solution
+
+    # Message output rates on USB (0 = disabled, 1 = every solution, N = every Nth)
+    CFG_MSGOUT_UBX_NAV_PVT_USB: 1
+    CFG_MSGOUT_UBX_NAV_HPPOSLLH_USB: 1
+    CFG_MSGOUT_UBX_NAV_SAT_USB: 5       # Every 5th solution (reduce bandwidth)
+
+    # Safety/Integrity messages (for integrity monitoring)
+    # CFG_MSGOUT_UBX_NAV_COV_USB: 1     # NOT supported on ZED-F9P (only F9R/F9H)
+    CFG_MSGOUT_UBX_NAV_POSECEF_USB: 1   # ECEF position (for coordinate transforms)
+    # CFG_MSGOUT_UBX_MON_HW_USB: 1      # Hardware status (antenna, jamming)
+    CFG_MSGOUT_UBX_MON_RF_USB: 1        # RF status (antenna, jamming)
+    CFG_MSGOUT_UBX_SEC_SIG_USB: 1       # Jamming/spoofing detection
+    # CFG_MSGOUT_UBX_RXM_COR_USB: 1     # SPARTN corrections only (not RTCM) - disabled
+    CFG_MSGOUT_UBX_MON_COMMS_USB: 1     # Port diagnostics
+    CFG_MSGOUT_UBX_SEC_SIGLOG_USB: 1    # Security event log
+    # CFG_MSGOUT_UBX_NAV_RELPOSNED_USB: 1  # Uncomment for dual-antenna heading
+
+    # Protocol settings for USB
+    CFG_USBINPROT_UBX: true
+    CFG_USBINPROT_RTCM3X: true
+    CFG_USBOUTPROT_UBX: true
+    CFG_USBOUTPROT_NMEA: false
+
+# NTRIP Client Configuration (optional)
+# Comment out this section to disable NTRIP
+ntrip:
+  # NTRIP caster hostname
+  host: "ntrip.data.gnss.ga.gov.au"
+
+  # NTRIP caster port (standard is 2101 for HTTP, 443 for HTTPS)
+  port: 2101
+
+  # Use HTTPS for connection (false=HTTP, true=HTTPS)
+  use_https: false
+
+  # Mountpoint name (check caster sourcetable for available mounts)
+  mountpoint: "SWTC00AUS0"
+
+  # Authentication (if required by caster)
+  username: "${NTRIP_USERNAME}"
+  password: "${NTRIP_PASSWORD}"
+
+  # Send GGA position to caster (required by most VRS networks)
+  send_gga: true
+  gga_interval_secs: 10
+
+  # Connection settings
+  connection:
+    timeout_secs: 10
+    reconnect: true
+    initial_delay_secs: 1
+    max_delay_secs: 60
+    backoff_reset_secs: 3600  # reset after 1 hour of clean streaming

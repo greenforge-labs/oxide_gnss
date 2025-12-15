@@ -1,0 +1,273 @@
+//! oxide_gnss ROS2 node entry point.
+//!
+//! This binary starts the GNSS driver node which:
+//! - Connects to a GNSS receiver via serial port
+//! - Optionally connects to an NTRIP caster for RTK corrections
+//! - Publishes position, velocity, and diagnostics to ROS2 topics
+
+use std::path::PathBuf;
+use std::time::Duration;
+
+use rclrs::{CreateBasicExecutor, SpinOptions};
+use tokio::time::sleep;
+use tracing::{error, info, warn};
+
+use oxide_gnss::config::Config;
+use oxide_gnss::device::{spawn_device_task, DeviceTaskChannels};
+use oxide_gnss::ntrip::{spawn_ntrip_task, NtripTaskChannels};
+use oxide_gnss::ros::{create_context, GnssNode, GnssNodeConfig};
+use oxide_gnss::ros::{spawn_ros_task, RosTaskChannels, RosTaskConfig};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize logging (respects RUST_LOG and FERROUS_GNSS_LOG_STYLE env vars)
+    oxide_gnss::logging::init();
+
+    info!("oxide_gnss v{}", oxide_gnss::VERSION);
+    info!("Starting GNSS driver node...");
+
+    // Initialize ROS2 context from environment (handles arguments like --ros-args)
+    let context = match create_context() {
+        Ok(ctx) => ctx,
+        Err(e) => {
+            error!("Failed to create ROS2 context: {}", e);
+            return Err(e.into());
+        }
+    };
+
+    // Create a basic executor from the context
+    let mut executor = context.create_basic_executor();
+
+    // Create the ROS2 node immediately to access parameters
+    let node = executor.create_node("oxide_gnss")?;
+
+    // Declare and get the config_file parameter
+    // We treat this as a required parameter
+    let config_param_name = "config_file";
+
+    // We cannot easily declare a parameter without a default value in rclrs 0.6 yet in a way that enforces it?
+    // Let's try declaring it with a mandatory flag if possible, or just check if it's set.
+    // rclrs::ParameterValue::String(s)
+
+    // For now, let's look for the parameter.
+    // NOTE: rclrs 0.6 parameter API is basic. We will declare it with a default empty string and check.
+
+    // Safety: we are in the main thread and just created the node.
+    let param = node
+        .declare_parameter::<std::sync::Arc<str>>(config_param_name)
+        .default(std::sync::Arc::from(""))
+        .mandatory()
+        .map_err(|e| {
+            error!("Failed to declare parameter '{}': {}", config_param_name, e);
+            e
+        })?;
+
+    let config_path_str = param.get();
+
+    if config_path_str.is_empty() {
+        let msg = "Parameter 'config_file' is required. Launch with 'ros2 run oxide_gnss oxide_gnss_node --ros-args -p config_file:=/path/to/config.yaml'";
+        error!("{}", msg);
+        return Err(msg.into());
+    }
+
+    let config_path = PathBuf::from(config_path_str.as_ref());
+    info!("Loading configuration from {}", config_path.display());
+
+    // Load configuration
+    let config = match Config::from_file(&config_path) {
+        Ok(config) => config,
+        Err(e) => {
+            error!("Failed to load configuration: {}", e);
+            return Err(e.into());
+        }
+    };
+
+    // Create node configuration
+    // Note: The node usage is slightly different now. We passed the existing node to GnssNode.
+    let node_config = GnssNodeConfig {
+        node_name: "oxide_gnss".to_string(), // Actually unused by new() when passing node, but good for record
+        namespace: node.namespace(),
+        device: config.device.clone(),
+        ntrip: config.ntrip.clone(),
+        diagnostics_rate_hz: 1.0,
+        publish_sec_sig_details: config.ros.publish.sec_sig_details,
+    };
+
+    // Create the driver wrapper around the node
+    let mut gnss_driver = match GnssNode::new(node, node_config) {
+        Ok(driver) => driver,
+        Err(e) => {
+            error!("Failed to initialize GNSS driver: {}", e);
+            return Err(e.into());
+        }
+    };
+
+    // Get values we need from node before taking mutable borrow of supervisor
+    let diagnostics_rate_hz = gnss_driver.config().diagnostics_rate_hz;
+    let publishers = gnss_driver.publishers().clone();
+
+    // Create supervisor (takes mutable borrow of driver)
+    let supervisor = gnss_driver.supervisor_mut();
+    let supervisor_handle = supervisor.handle();
+
+    // Set up shutdown signal handler
+    let shutdown_handle = supervisor_handle.clone();
+    tokio::spawn(async move {
+        // Set up Ctrl+C handler
+        match tokio::signal::ctrl_c().await {
+            Ok(()) => {
+                info!("Received Ctrl+C, initiating shutdown");
+                shutdown_handle.shutdown();
+            }
+            Err(err) => {
+                error!("Unable to listen for shutdown signal: {}", err);
+            }
+        }
+    });
+
+    // Create a channel for device messages
+    let (device_msg_tx, mut device_msg_rx) = tokio::sync::mpsc::channel(64);
+
+    // Create a channel for NTRIP messages
+    let (ntrip_msg_tx, mut ntrip_msg_rx) = tokio::sync::mpsc::channel(64);
+
+    // Create a channel for forwarding messages to the supervisor
+    let supervisor_msg_tx = supervisor.msg_tx().clone();
+
+    // Spawn tasks to forward messages to the supervisor
+    let supervisor_msg_tx_device = supervisor_msg_tx.clone();
+    tokio::spawn(async move {
+        while let Some(msg) = device_msg_rx.recv().await {
+            match msg {
+                oxide_gnss::device::DeviceMessage::Pvt(pvt) => {
+                    let _ = supervisor_msg_tx_device
+                        .send(oxide_gnss::state::GnssMessage::Pvt(pvt))
+                        .await;
+                }
+                oxide_gnss::device::DeviceMessage::StateChanged(state) => {
+                    let _ = supervisor_msg_tx_device
+                        .send(oxide_gnss::state::GnssMessage::DeviceStateChanged(state))
+                        .await;
+                }
+                oxide_gnss::device::DeviceMessage::FixTypeChanged(_fix) => {
+                    // Logic to handle fix type change (e.g. logging or diagnostics update)
+                    // Do not change NTRIP state here.
+                }
+                oxide_gnss::device::DeviceMessage::HpPos(hp) => {
+                    let _ = supervisor_msg_tx_device
+                        .send(oxide_gnss::state::GnssMessage::HpPos(hp))
+                        .await;
+                }
+                oxide_gnss::device::DeviceMessage::SatInfo(sat) => {
+                    let _ = supervisor_msg_tx_device
+                        .send(oxide_gnss::state::GnssMessage::SatInfo(sat))
+                        .await;
+                }
+                oxide_gnss::device::DeviceMessage::SecSig(sig) => {
+                    let _ = supervisor_msg_tx_device
+                        .send(oxide_gnss::state::GnssMessage::SecSig(sig))
+                        .await;
+                }
+                // Forward integrity to ROS node for publishing
+                oxide_gnss::device::DeviceMessage::Integrity(integrity) => {
+                    let _ = supervisor_msg_tx_device
+                        .send(oxide_gnss::state::GnssMessage::Integrity(integrity))
+                        .await;
+                }
+                // Safety-related messages are aggregated by IntegrityAggregator
+                // and published via the Integrity message above
+                oxide_gnss::device::DeviceMessage::Covariance(_)
+                | oxide_gnss::device::DeviceMessage::PosEcef(_)
+                | oxide_gnss::device::DeviceMessage::SecSiglog(_)
+                | oxide_gnss::device::DeviceMessage::RxmCor(_)
+                | oxide_gnss::device::DeviceMessage::MonComms(_)
+                | oxide_gnss::device::DeviceMessage::MonHw(_)
+                | oxide_gnss::device::DeviceMessage::MonRf(_) => {
+                    // These feed into the IntegrityAggregator in DeviceTask
+                }
+            }
+        }
+    });
+
+    let supervisor_msg_tx_ntrip = supervisor_msg_tx.clone();
+    tokio::spawn(async move {
+        while let Some(msg) = ntrip_msg_rx.recv().await {
+            // No need to forward NTRIP messages in this simplified example
+            // But we should probably handle state changes for correct diagnostics
+            if let oxide_gnss::ntrip::NtripMessage::StateChanged(state) = msg {
+                let _ = supervisor_msg_tx_ntrip
+                    .send(oxide_gnss::state::GnssMessage::NtripStateChanged(state))
+                    .await;
+            }
+        }
+    });
+
+    // Create channels for device task
+    let device_channels = DeviceTaskChannels {
+        rtcm_rx: supervisor.take_rtcm_rx(),
+        gga_tx: supervisor.gga_tx(),
+        msg_tx: device_msg_tx,
+        shutdown_rx: supervisor.shutdown_rx(),
+    };
+
+    // Spawn device task
+    let (_, _device_handle) = spawn_device_task(config.device, device_channels);
+
+    // Spawn NTRIP task if configured
+    let _ntrip_handle = if let Some(ntrip_config) = config.ntrip {
+        let ntrip_channels = NtripTaskChannels {
+            rtcm_tx: supervisor.rtcm_tx(),
+            gga_rx: supervisor.gga_rx(),
+            msg_tx: ntrip_msg_tx,
+            shutdown_rx: supervisor.shutdown_rx(),
+        };
+
+        let (_, handle) = spawn_ntrip_task(ntrip_config, ntrip_channels);
+        Some(handle)
+    } else {
+        None
+    };
+
+    // Create ROS task
+    let ros_channels = RosTaskChannels {
+        msg_rx: supervisor.take_msg_rx(),
+        shutdown_rx: supervisor.shutdown_rx(),
+    };
+
+    let ros_config = RosTaskConfig {
+        diagnostics_rate_hz,
+    };
+
+    let _ros_handle = spawn_ros_task(publishers, ros_channels, ros_config);
+
+    // Spin the node
+    info!("Node is ready, spinning...");
+
+    // Main loop
+    loop {
+        // Check if shutdown was requested
+        if *supervisor.shutdown_rx().borrow() {
+            info!("Shutdown requested, stopping node");
+            break;
+        }
+
+        // Process ROS callbacks (spin once with timeout)
+        let errors = executor.spin(SpinOptions::spin_once().timeout(Duration::from_millis(100)));
+        for e in &errors {
+            // Ignore timeout errors - they're expected when there's nothing to process
+            if !e.to_string().contains("Timeout") {
+                warn!("Error spinning ROS2 executor: {}", e);
+            }
+        }
+
+        // Small sleep to avoid busy loop
+        sleep(Duration::from_millis(10)).await;
+    }
+
+    // Wait for tasks to finish
+    info!("Waiting for tasks to finish...");
+    sleep(Duration::from_millis(500)).await;
+
+    info!("Node shutdown complete");
+    Ok(())
+}

@@ -1,0 +1,27 @@
+# Rust build artifacts
+/target/
+# Cargo.lock is committed for reproducible builds (this is a binary, not a library)
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vendor documentation (copyrighted, do not commit)
+/docs/vendor/
+/docs/ublox/
+/docs/datasheets/
+
+# ROS2 build artifacts
+/build/
+/install/
+/log/
+
+# Environment
+.env
+*.local

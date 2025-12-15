@@ -1,0 +1,75 @@
+# CI Docker image for oxide_gnss
+# Contains ROS2 Jazzy + Rust toolchain + ros2-rust dependencies pre-built
+#
+# Build: docker build -f .github/docker/Dockerfile.ci -t oxide-gnss-ci .
+# Usage in CI: See .github/workflows/ci.yml
+
+FROM ros:jazzy-ros-base
+
+# Avoid interactive prompts during apt installs
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Build essentials
+    build-essential \
+    cmake \
+    git \
+    curl \
+    ca-certificates \
+    # Required for ros2-rust bindgen
+    libclang-dev \
+    # Python tools for colcon
+    python3-pip \
+    python3-vcstool \
+    python3-colcon-common-extensions \
+    # Dependencies for message generation and testing
+    ros-jazzy-rosidl-default-generators \
+    ros-jazzy-rosidl-default-runtime \
+    ros-jazzy-test-msgs \
+    ros-jazzy-example-interfaces \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust via rustup (as root, system-wide)
+ENV RUSTUP_HOME=/opt/rustup
+ENV CARGO_HOME=/opt/cargo
+ENV PATH="/opt/cargo/bin:${PATH}"
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+    sh -s -- -y --default-toolchain stable --profile minimal \
+    && rustup component add rustfmt clippy
+
+# Install colcon-cargo plugins
+# Note: --break-system-packages required for Ubuntu 24.04 (PEP 668)
+RUN pip install --break-system-packages \
+    git+https://github.com/colcon/colcon-cargo.git \
+    git+https://github.com/colcon/colcon-ros-cargo.git
+
+# Install cargo-ament-build (required for colcon to build Rust packages)
+RUN cargo install cargo-ament-build
+
+# Create workspace and clone ros2-rust
+WORKDIR /opt/ros2_ws/src
+RUN git clone https://github.com/ros2-rust/ros2_rust.git && \
+    vcs import . < ros2_rust/ros2_rust_jazzy.repos
+
+# Build ros2-rust dependencies (this takes a while but is cached in the image)
+WORKDIR /opt/ros2_ws
+RUN . /opt/ros/jazzy/setup.sh && \
+    colcon build --packages-up-to rclrs std_msgs sensor_msgs geometry_msgs diagnostic_msgs
+
+# Clean up build artifacts to reduce image size (keep install/)
+RUN rm -rf /opt/ros2_ws/build /opt/ros2_ws/log
+
+# Set up environment for builds
+# Source both ROS2 and the workspace in the entrypoint
+RUN echo '#!/bin/bash\n\
+set -e\n\
+source /opt/ros/jazzy/setup.bash\n\
+if [ -f /opt/ros2_ws/install/setup.bash ]; then\n\
+  source /opt/ros2_ws/install/setup.bash\n\
+fi\n\
+exec "$@"' > /entrypoint.sh && chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["bash"]

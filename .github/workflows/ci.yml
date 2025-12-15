@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Fast format check (runs on native runner, no Docker needed)
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+        working-directory: oxide_gnss
+
+  # Full build with ROS2 (uses pre-built Docker image)
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/gsokoll/oxide_gnss-ci:jazzy
+      # Grant access to workspace files
+      options: --user root
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: src/oxide_gnss_repo
+
+      - name: Build with colcon
+        shell: bash
+        run: |
+          # Source ROS2 and ros2-rust workspace
+          source /opt/ros/jazzy/setup.bash
+          source /opt/ros2_ws/install/setup.bash
+          
+          # Copy the .cargo/config.toml from ros2-rust workspace to use the patches
+          mkdir -p .cargo
+          cp /opt/ros2_ws/.cargo/config.toml .cargo/ 2>/dev/null || true
+          
+          # Move repo content to workspace src
+          mv src/oxide_gnss_repo/* src/
+          
+          # Build messages first, then the driver
+          colcon build --packages-select oxide_gnss_msgs oxide_gnss
+
+      - name: Run clippy
+        working-directory: src/oxide_gnss
+        shell: bash
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source /opt/ros2_ws/install/setup.bash
+          source ../../install/setup.bash
+          cargo clippy --features ros2 -- -D warnings
+
+      - name: Run tests
+        working-directory: src/oxide_gnss
+        shell: bash
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source /opt/ros2_ws/install/setup.bash
+          source ../../install/setup.bash
+          cargo test --features ros2
