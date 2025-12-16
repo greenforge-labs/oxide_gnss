@@ -89,17 +89,17 @@ The "duplicate indices" are correct because covariance matrices are **symmetric*
 
 ---
 
-### 1.4 Documentation vs. Implementation Mismatch
+### 1.4 ~~Documentation vs. Implementation Mismatch~~ — **COMPLETED**
 
 | Attribute | Value |
 |-----------|-------|
-| **Severity** | **MEDIUM** |
+| **Severity** | ~~MEDIUM~~ → **RESOLVED** |
 | **Location** | `docs/GNSS_TOPICS_AND_SAFETY_REFERENCE.md` |
 | **Confidence** | High (both reviewers) |
 
-**Description:** Documentation emphasizes "Dual Independent Rover" architecture for safety, but implementation is single-device only.
+**Description:** Documentation emphasized "Dual Independent Rover" architecture for safety, but implementation is single-device only.
 
-**Resolution:** Add a "Future Roadmap" section to documentation, or implement the second device task.
+**Resolution:** ✅ Removed all dual-device/dual-antenna references from documentation, config, and code. oxide_gnss is now clearly a single-device driver with no misleading claims.
 
 ---
 
@@ -154,6 +154,7 @@ The "duplicate indices" are correct because covariance matrices are **symmetric*
 | Missing QoS configuration | `ros/publishers.rs` | Add explicit QoS for safety topics |
 | Unused `PendingAck` logic | `device/ubx.rs` | Implement or remove |
 | Empty `.cargo/config.toml` | `.cargo/config.toml` | Remove if unused |
+| ~~Unused `DeviceMode` enum~~ | ~~`config/device.rs`~~ | ✅ **COMPLETED** — Removed dead code |
 | Duplicate state tracking | `ros/node.rs` + `ros/task.rs` | Consolidate to single source of truth |
 
 ---
@@ -226,7 +227,7 @@ Both reviewers independently identified strong indicators of AI/LLM-generated co
 |----------|-------|--------|
 | **CRITICAL** | 0 | — |
 | **HIGH** | 1 | Duplicate integrity publishing |
-| **MEDIUM** | 5 | Correction age stub, Doc mismatch, Duplicate backoff, Message forwarding, Excessive cloning |
+| **MEDIUM** | 4 | Correction age stub, ~~Doc mismatch~~, Duplicate backoff, Message forwarding, Excessive cloning |
 | **LOW** | 8+ | Y2038, Hardcoded topics, Missing QoS, PendingAck, Empty config, State tracking, Error handling, Deadlock risk |
 | **RETRACTED** | 1 | ~~Covariance transformation~~ (not a bug) |
 
@@ -257,7 +258,7 @@ Both reviewers independently identified strong indicators of AI/LLM-generated co
 
 ### Medium-Term (Backlog)
 
-6. Update documentation to clarify single-device vs. dual-rover roadmap.
+6. ~~Update documentation to clarify single-device vs. dual-rover roadmap.~~ — ✅ **COMPLETED**
 7. Add QoS profiles for safety-critical topics (pending `rclrs` support).
 8. Implement `From<DeviceMessage> for GnssMessage` trait.
 9. Consider `Arc<T>` for shared data to reduce cloning.
