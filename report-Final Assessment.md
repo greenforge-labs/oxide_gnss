@@ -151,7 +151,7 @@ The "duplicate indices" are correct because covariance matrices are **symmetric*
 |-------|----------|------------|
 | Y2038 timestamp truncation | `ros/conversions.rs:171` | Use proper 64-bit timestamp handling |
 | Hardcoded topic names | `ros/publishers.rs` | Make configurable via parameters |
-| Missing QoS configuration | `ros/publishers.rs` | Add explicit QoS for safety topics |
+| ~~Missing QoS configuration~~ | ~~`ros/publishers.rs`~~ | ✅ **COMPLETED** — Added sensor_data + reliable QoS |
 | `PendingAck` logic | `device/ubx.rs` | **NOT DEAD** — used in `device/config.rs` for ACK tracking |
 | ~~Empty `.cargo/config.toml`~~ | ~~`.cargo/config.toml`~~ | ✅ **COMPLETED** — Removed empty file |
 | ~~Unused `DeviceMode` enum~~ | ~~`config/device.rs`~~ | ✅ **COMPLETED** — Removed dead code |
@@ -259,7 +259,9 @@ Both reviewers independently identified strong indicators of AI/LLM-generated co
 ### Medium-Term (Backlog)
 
 6. ~~Update documentation to clarify single-device vs. dual-rover roadmap.~~ — ✅ **COMPLETED**
-7. Add QoS profiles for safety-critical topics (pending `rclrs` support).
+7. ~~Add QoS profiles for safety-critical topics.~~ — ✅ **COMPLETED**
+   - `~/fix`, `~/velocity`, `~/hp_pos`: sensor_data QoS (best effort)
+   - `~/integrity`, `~/operational`, `~/sec_sig_details`: reliable QoS
 8. ~~Implement `From<DeviceMessage> for GnssMessage` trait.~~ — ✅ **COMPLETED** (via `into_gnss_message()` method)
 9. ~~Consider `Arc<T>` for shared data to reduce cloning.~~ — ✅ **COMPLETED** (ownership transfer instead)
 10. ~~Clean up dead code (`PendingAck`, empty config).~~ — ✅ **COMPLETED** (PendingAck is NOT dead code; empty config removed)

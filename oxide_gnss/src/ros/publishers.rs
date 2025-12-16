@@ -1,6 +1,6 @@
 //! ROS2 topic publishers for GNSS data.
 
-use rclrs::{Node, Publisher};
+use rclrs::{IntoPrimitiveOptions, Node, Publisher, QoSProfile};
 use tracing::{debug, error};
 
 use crate::config::CoordinateFrame;
@@ -48,27 +48,37 @@ impl GnssPublishers {
         frame: CoordinateFrame,
         publish_sec_sig_details: bool,
     ) -> Result<Self, rclrs::RclrsError> {
-        let fix_pub = node.create_publisher("~/fix")?;
-        let velocity_pub = node.create_publisher("~/velocity")?;
+        // QoS profiles for different topic types:
+        // - Sensor data: Best effort, keep last (high-rate position/velocity)
+        // - Reliable: For safety-critical topics that must not be lost
+        let sensor_qos = QoSProfile::sensor_data_default();
+        let reliable_qos = QoSProfile::topics_default().reliable();
+
+        // High-rate sensor data topics - best effort, latest sample matters
+        let fix_pub = node.create_publisher("~/fix".qos(sensor_qos))?;
+        let velocity_pub = node.create_publisher("~/velocity".qos(sensor_qos))?;
+        let hp_pos_pub = node
+            .create_publisher("~/hp_pos".qos(sensor_qos))
+            .expect("Failed to create hp_pos publisher");
+
+        // Standard topics
         let time_ref_pub = node.create_publisher("~/time_reference")?;
         let diagnostics_pub = node.create_publisher("/diagnostics")?;
-
-        let hp_pos_pub = node
-            .create_publisher("~/hp_pos")
-            .expect("Failed to create hp_pos publisher");
         let sat_pub = node
             .create_publisher("~/satellites")
             .expect("Failed to create satellites publisher");
+
+        // Safety-critical topics - reliable delivery
         let integrity_pub = node
-            .create_publisher("~/integrity")
+            .create_publisher("~/integrity".qos(reliable_qos))
             .expect("Failed to create integrity publisher");
         let operational_pub = node
-            .create_publisher("~/operational")
+            .create_publisher("~/operational".qos(reliable_qos))
             .expect("Failed to create operational publisher");
 
         let sec_sig_details_pub = if publish_sec_sig_details {
             Some(
-                node.create_publisher("~/sec_sig_details")
+                node.create_publisher("~/sec_sig_details".qos(reliable_qos))
                     .expect("Failed to create sec_sig_details publisher"),
             )
         } else {
