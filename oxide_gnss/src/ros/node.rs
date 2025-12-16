@@ -37,7 +37,6 @@ impl Default for GnssNodeConfig {
                 port: "/dev/ttyACM0".to_string(),
                 baud_rate: 460800,
                 frame: crate::config::CoordinateFrame::ENU,
-                mode: crate::config::DeviceMode::Rover,
                 navigation: Default::default(),
                 reconnect: Default::default(),
                 ublox: None,

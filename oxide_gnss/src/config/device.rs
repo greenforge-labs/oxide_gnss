@@ -16,15 +16,6 @@ pub enum CoordinateFrame {
     NED,
 }
 
-/// Device operating mode.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum DeviceMode {
-    /// Standalone rover receiving RTK corrections via NTRIP
-    #[default]
-    Rover,
-}
-
 /// GNSS device configuration.
 #[derive(Debug, Clone, Deserialize)]
 pub struct DeviceConfig {
@@ -38,10 +29,6 @@ pub struct DeviceConfig {
     /// Coordinate frame for velocity output
     #[serde(default)]
     pub frame: CoordinateFrame,
-
-    /// Device operating mode
-    #[serde(default)]
-    pub mode: DeviceMode,
 
     /// Navigation settings
     #[serde(default)]
@@ -201,7 +188,6 @@ mod tests {
         assert_eq!(config.port, "/dev/ttyACM0");
         assert_eq!(config.baud_rate, 460800);
         assert_eq!(config.frame, CoordinateFrame::ENU);
-        assert_eq!(config.mode, DeviceMode::Rover);
         assert_eq!(config.navigation.rate_hz, 10);
     }
 

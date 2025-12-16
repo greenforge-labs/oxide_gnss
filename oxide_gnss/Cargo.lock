@@ -364,44 +364,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
-name = "ferrous_gnss"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "base64",
- "builtin_interfaces",
- "chrono",
- "diagnostic_msgs",
- "ferrous_gnss_msgs",
- "geometry_msgs",
- "nalgebra",
- "rclrs",
- "regex",
- "rtcm-rs",
- "sensor_msgs",
- "serde",
- "serde_yaml",
- "serial2-tokio",
- "std_msgs",
- "thiserror",
- "tokio",
- "tokio-test",
- "tracing",
- "tracing-subscriber",
- "ublox",
- "url",
-]
-
-[[package]]
-name = "ferrous_gnss_msgs"
-version = "0.1.0"
-dependencies = [
- "builtin_interfaces",
- "rosidl_runtime_rs",
- "std_msgs",
-]
-
-[[package]]
 name = "find-msvc-tools"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -902,6 +864,44 @@ name = "once_cell"
 version = "1.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
+
+[[package]]
+name = "oxide_gnss"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "base64",
+ "builtin_interfaces",
+ "chrono",
+ "diagnostic_msgs",
+ "geometry_msgs",
+ "nalgebra",
+ "oxide_gnss_msgs",
+ "rclrs",
+ "regex",
+ "rtcm-rs",
+ "sensor_msgs",
+ "serde",
+ "serde_yaml",
+ "serial2-tokio",
+ "std_msgs",
+ "thiserror",
+ "tokio",
+ "tokio-test",
+ "tracing",
+ "tracing-subscriber",
+ "ublox",
+ "url",
+]
+
+[[package]]
+name = "oxide_gnss_msgs"
+version = "0.1.0"
+dependencies = [
+ "builtin_interfaces",
+ "rosidl_runtime_rs",
+ "std_msgs",
+]
 
 [[package]]
 name = "parking"
@@ -1982,6 +1982,10 @@ version = "0.12.0"
 
 [[patch.unused]]
 name = "ferrous_gnss"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "ferrous_gnss_msgs"
 version = "0.1.0"
 
 [[patch.unused]]

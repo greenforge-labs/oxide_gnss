@@ -1,5 +1,5 @@
 # Rust build artifacts
-/target/
+**/target/
 # Cargo.lock is committed for reproducible builds (this is a binary, not a library)
 
 # IDE

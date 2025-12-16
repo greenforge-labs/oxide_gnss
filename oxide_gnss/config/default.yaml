@@ -21,9 +21,6 @@ device:
   # NED: North-East-Down (aviation/marine convention)
   frame: ENU
 
-  # Operating mode
-  mode: rover
-
   # Navigation settings
   navigation:
     # Update rate in Hz (1-25 for ZED-F9P)

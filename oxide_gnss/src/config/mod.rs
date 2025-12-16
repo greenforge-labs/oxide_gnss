@@ -6,7 +6,7 @@ mod device;
 mod ntrip;
 mod ublox;
 
-pub use device::{CoordinateFrame, DeviceConfig, DeviceMode, NavigationConfig, ReconnectConfig};
+pub use device::{CoordinateFrame, DeviceConfig, NavigationConfig, ReconnectConfig};
 pub use ntrip::{NtripConfig, NtripConnectionConfig};
 pub use ublox::UbloxConfig;
 
@@ -138,7 +138,6 @@ device:
   port: "/dev/ttyACM0"
   baud_rate: 460800
   frame: ENU
-  mode: rover
 
 ntrip:
   host: "auscors.ga.gov.au"

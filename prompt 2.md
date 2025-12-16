@@ -5,10 +5,6 @@ You shall review both reports and produce a final, authoritative assessment that
 When synthesizing the reports, consider the following:
 - Highlight areas where both reviewers agree
 - Note areas of disagreement and provide your technical rationale for resolving them
-- Emphasize the most severe correctness and architecture issues
-- Ensure ROS2 and Rust coding style guidelines are properly enforced
-- Identify any redundant or dead code that should be removed
-- Flag any AI LLM coding patterns that seem out of place for production code
 - Provide a final summary with severity ratings and recommendations for next steps
 - Structure the final report with clear headings and subheadings for easy navigation
 - Include specific code examples and line numbers where appropriate
