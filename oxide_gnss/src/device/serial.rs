@@ -270,7 +270,7 @@ impl SerialPort {
         }
 
         // Calculate backoff delay
-        let delay_secs = calculate_backoff(
+        let delay_secs = crate::util::calculate_backoff(
             self.reconnect_attempt,
             self.config.reconnect.initial_delay_secs,
             self.config.reconnect.max_delay_secs,
@@ -318,16 +318,6 @@ impl Drop for SerialPort {
     }
 }
 
-/// Calculate exponential backoff delay.
-fn calculate_backoff(attempt: u32, initial_delay: u32, max_delay: u32) -> u32 {
-    if attempt == 0 {
-        return initial_delay;
-    }
-
-    // Exponential backoff: initial * 2^(attempt-1), capped at max
-    let delay = initial_delay.saturating_mul(1 << (attempt - 1).min(10));
-    delay.min(max_delay)
-}
 
 #[cfg(test)]
 mod tests {
@@ -350,20 +340,4 @@ mod tests {
         assert_eq!(builder.read_buffer_size, 8192);
     }
 
-    #[test]
-    fn test_backoff_calculation() {
-        assert_eq!(calculate_backoff(0, 1, 60), 1);
-        assert_eq!(calculate_backoff(1, 1, 60), 1);
-        assert_eq!(calculate_backoff(2, 1, 60), 2);
-        assert_eq!(calculate_backoff(3, 1, 60), 4);
-        assert_eq!(calculate_backoff(4, 1, 60), 8);
-        assert_eq!(calculate_backoff(10, 1, 60), 60); // Capped at max
-    }
-
-    #[test]
-    fn test_backoff_with_larger_initial() {
-        assert_eq!(calculate_backoff(1, 5, 120), 5);
-        assert_eq!(calculate_backoff(2, 5, 120), 10);
-        assert_eq!(calculate_backoff(3, 5, 120), 20);
-    }
 }

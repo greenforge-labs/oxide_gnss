@@ -171,7 +171,7 @@ impl NtripTask {
 
                     // Calculate backoff delay
                     backoff_attempt += 1;
-                    let delay_secs = calculate_backoff(
+                    let delay_secs = crate::util::calculate_backoff(
                         backoff_attempt,
                         self.config.connection.initial_delay_secs,
                         self.config.connection.max_delay_secs,
@@ -345,15 +345,6 @@ impl NtripTask {
     }
 }
 
-/// Calculate exponential backoff delay.
-fn calculate_backoff(attempt: u32, initial_delay: u32, max_delay: u32) -> u32 {
-    if attempt == 0 {
-        return initial_delay;
-    }
-    let delay = initial_delay.saturating_mul(1 << (attempt - 1).min(10));
-    delay.min(max_delay)
-}
-
 /// Spawn an NTRIP task and return a handle.
 pub fn spawn_ntrip_task(
     config: NtripConfig,
@@ -410,15 +401,6 @@ mod tests {
         // Verify we can get a handle and it has default state
         // (can't check state synchronously without tokio runtime)
         assert!(std::mem::size_of_val(&handle) > 0);
-    }
-
-    #[test]
-    fn test_backoff_calculation() {
-        assert_eq!(calculate_backoff(0, 1, 60), 1);
-        assert_eq!(calculate_backoff(1, 1, 60), 1);
-        assert_eq!(calculate_backoff(2, 1, 60), 2);
-        assert_eq!(calculate_backoff(3, 1, 60), 4);
-        assert_eq!(calculate_backoff(10, 1, 60), 60); // Capped
     }
 
     #[test]

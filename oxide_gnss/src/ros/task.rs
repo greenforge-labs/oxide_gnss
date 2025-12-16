@@ -3,7 +3,7 @@
 //! This module provides an async task that receives messages from the
 //! supervisor and publishes them to ROS2 topics.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tokio::sync::{mpsc, watch};
 use tracing::{debug, info, warn};
@@ -92,7 +92,8 @@ pub struct RosTask {
     last_ntrip_state: NtripState,
     last_fix_type: FixType,
     last_pvt: Option<PvtData>,
-    last_correction_age: Option<f64>,
+    /// Timestamp when last RTCM correction was received
+    last_correction_received: Option<Instant>,
 }
 
 impl RosTask {
@@ -114,7 +115,7 @@ impl RosTask {
             last_ntrip_state: NtripState::default(),
             last_fix_type: FixType::NoFix,
             last_pvt: None,
-            last_correction_age: None,
+            last_correction_received: None,
         };
 
         (task, handle)
@@ -188,8 +189,8 @@ impl RosTask {
             }
             GnssMessage::RtcmReceived { bytes } => {
                 debug!(bytes = bytes, "RTCM data received");
-                // Update correction age timestamp
-                self.last_correction_age = Some(0.0); // Just received, so age is 0
+                // Record when correction was received for age calculation
+                self.last_correction_received = Some(Instant::now());
             }
             GnssMessage::HpPos(hp) => {
                 self.publishers.publish_hp_pos(&hp);
@@ -209,13 +210,10 @@ impl RosTask {
 
     /// Publish diagnostics.
     fn publish_diagnostics(&self) {
-        // Calculate correction age if we have a timestamp
-        let correction_age = self.last_correction_age.map(|age| {
-            // For a real implementation, we would calculate the elapsed time
-            // since the last correction was received. For now, we just increment
-            // the age by a small amount to simulate time passing.
-            age + 0.1
-        });
+        // Calculate correction age from timestamp of last received correction
+        let correction_age = self
+            .last_correction_received
+            .map(|t| t.elapsed().as_secs_f64());
 
         self.publishers.publish_diagnostics(
             &self.last_device_state,

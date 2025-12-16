@@ -22,6 +22,7 @@ pub mod logging;
 pub mod ntrip;
 pub mod state;
 pub mod transform;
+pub mod util;
 
 // ROS2 module - only compiled with ros2 feature
 #[cfg(feature = "ros2")]

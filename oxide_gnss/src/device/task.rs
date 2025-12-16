@@ -256,7 +256,7 @@ impl DeviceTask {
                     }
 
                     // Calculate backoff delay for this attempt.
-                    let delay_secs = calculate_backoff(
+                    let delay_secs = crate::util::calculate_backoff(
                         connect_attempt,
                         reconnect_cfg.initial_delay_secs,
                         reconnect_cfg.max_delay_secs,
@@ -548,19 +548,12 @@ impl DeviceTask {
         let _ = self.channels.gga_tx.send(Some(gga));
 
         // Send PVT message
+        // Note: Integrity is published separately in process_serial_data() via the
+        // integrity_updated flag, avoiding duplicate publishing.
         let _ = self
             .channels
             .msg_tx
             .send(DeviceMessage::Pvt(pvt.clone()))
-            .await;
-
-        // Compute and publish integrity after PVT update
-        // PVT is the primary navigation message, so always publish integrity with it
-        let integrity = self.integrity.compute();
-        let _ = self
-            .channels
-            .msg_tx
-            .send(DeviceMessage::Integrity(integrity))
             .await;
     }
 
@@ -599,20 +592,6 @@ impl DeviceTask {
             .send(DeviceMessage::StateChanged(new_state))
             .await;
     }
-}
-
-/// Calculate exponential backoff delay for connection attempts.
-///
-/// Mirrors the behaviour used by the serial port reconnection logic so that
-/// initial connection retries and post-disconnect retries are consistent.
-fn calculate_backoff(attempt: u32, initial_delay: u32, max_delay: u32) -> u32 {
-    if attempt == 0 {
-        return initial_delay;
-    }
-
-    // Exponential backoff: initial * 2^(attempt-1), capped at max
-    let delay = initial_delay.saturating_mul(1 << (attempt - 1).min(10));
-    delay.min(max_delay)
 }
 
 /// Spawn a device task and return a handle.

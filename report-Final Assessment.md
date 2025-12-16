@@ -18,12 +18,12 @@ This report synthesizes the independent reviews conducted by Anthea Opus and Geo
 
 The following issues were independently identified by both reviewers, indicating high confidence in their validity.
 
-### 1.1 Duplicate Integrity Message Publishing
+### 1.1 ~~Duplicate Integrity Message Publishing~~ — **COMPLETED**
 
 | Attribute | Value |
 |-----------|-------|
-| **Severity** | **HIGH** |
-| **Location** | `oxide_gnss/src/device/task.rs:493-501` and `:557-564` |
+| **Severity** | ~~HIGH~~ → **RESOLVED** |
+| **Location** | `oxide_gnss/src/device/task.rs` |
 | **Confidence** | Very High (both reviewers, identical analysis) |
 
 **Description:** The integrity message is published twice per PVT update cycle:
@@ -42,7 +42,7 @@ if integrity_updated {  // Always true after handle_pvt
 }
 ```
 
-**Resolution:** Remove the explicit publish from `handle_pvt()`. The flag-based mechanism in `process_serial_data()` is the correct pattern.
+**Resolution:** ✅ Removed the explicit publish from `handle_pvt()`. The flag-based mechanism in `process_serial_data()` now handles all integrity publishing.
 
 ---
 
@@ -75,17 +75,17 @@ The "duplicate indices" are correct because covariance matrices are **symmetric*
 
 ---
 
-### 1.3 Correction Age Stub Implementation
+### 1.3 ~~Correction Age Stub Implementation~~ — **COMPLETED**
 
 | Attribute | Value |
 |-----------|-------|
-| **Severity** | **MEDIUM** |
-| **Location** | `oxide_gnss/src/ros/task.rs:211-218` |
+| **Severity** | ~~MEDIUM~~ → **RESOLVED** |
+| **Location** | `oxide_gnss/src/ros/task.rs` |
 | **Confidence** | Very High (both reviewers) |
 
-**Description:** The correction age is simulated (`age + 0.1`) rather than computed from actual timestamps. The code contains comments explicitly admitting this is a placeholder.
+**Description:** The correction age was simulated (`age + 0.1`) rather than computed from actual timestamps.
 
-**Resolution:** Store `Instant::now()` when RTCM data arrives; compute elapsed duration at publish time.
+**Resolution:** ✅ Now stores `Instant::now()` when RTCM data arrives and computes actual elapsed duration at publish time.
 
 ---
 
@@ -103,17 +103,17 @@ The "duplicate indices" are correct because covariance matrices are **symmetric*
 
 ---
 
-### 1.5 Duplicate `calculate_backoff` Function
+### 1.5 ~~Duplicate `calculate_backoff` Function~~ — **COMPLETED**
 
 | Attribute | Value |
 |-----------|-------|
-| **Severity** | **MEDIUM** |
-| **Location** | `device/task.rs:604-616` and `ntrip/task.rs:348-355` |
+| **Severity** | ~~MEDIUM~~ → **RESOLVED** |
+| **Location** | `device/task.rs`, `device/serial.rs`, `ntrip/task.rs` |
 | **Confidence** | Very High (both reviewers, identical locations) |
 
-**Description:** Identical exponential backoff logic duplicated in two files.
+**Description:** Identical exponential backoff logic was duplicated in three files.
 
-**Resolution:** Extract to a shared `util` module.
+**Resolution:** ✅ Extracted to shared `util.rs` module with comprehensive tests.
 
 ---
 
@@ -226,8 +226,8 @@ Both reviewers independently identified strong indicators of AI/LLM-generated co
 | Severity | Count | Issues |
 |----------|-------|--------|
 | **CRITICAL** | 0 | — |
-| **HIGH** | 1 | Duplicate integrity publishing |
-| **MEDIUM** | 4 | Correction age stub, ~~Doc mismatch~~, Duplicate backoff, Message forwarding, Excessive cloning |
+| **HIGH** | 0 | ~~Duplicate integrity publishing~~ ✅ |
+| **MEDIUM** | 2 | ~~Correction age stub~~ ✅, ~~Doc mismatch~~ ✅, ~~Duplicate backoff~~ ✅, Message forwarding, Excessive cloning |
 | **LOW** | 8+ | Y2038, Hardcoded topics, Missing QoS, PendingAck, Empty config, State tracking, Error handling, Deadlock risk |
 | **RETRACTED** | 1 | ~~Covariance transformation~~ (not a bug) |
 
@@ -237,9 +237,8 @@ Both reviewers independently identified strong indicators of AI/LLM-generated co
 
 ### Immediate (Before Any Deployment)
 
-1. **Fix duplicate integrity publishing** — Remove publish from `handle_pvt()`.
-   - Effort: 5 minutes
-   - Risk: None
+1. ~~**Fix duplicate integrity publishing**~~ — ✅ **COMPLETED**
+   - Removed duplicate publish from `handle_pvt()`
 
 2. ~~**Fix covariance transformation**~~ — **RETRACTED: Code is correct.**
    - The covariance transformation was independently verified and is mathematically sound.
@@ -247,11 +246,11 @@ Both reviewers independently identified strong indicators of AI/LLM-generated co
 
 ### Short-Term (Next Sprint)
 
-3. **Implement real correction age tracking** — Store `Instant` on RTCM receipt.
-   - Effort: 30 minutes
+3. ~~**Implement real correction age tracking**~~ — ✅ **COMPLETED**
+   - Now uses `Instant::now()` for accurate elapsed time calculation
 
-4. **Extract `calculate_backoff` to util module** — DRY principle.
-   - Effort: 15 minutes
+4. ~~**Extract `calculate_backoff` to util module**~~ — ✅ **COMPLETED**
+   - Created `util.rs` with shared implementation and tests
 
 5. **Consolidate duplicate state tracking** — Single source of truth for PVT state.
    - Effort: 1-2 hours
