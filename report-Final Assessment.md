@@ -117,31 +117,31 @@ The "duplicate indices" are correct because covariance matrices are **symmetric*
 
 ---
 
-### 1.6 Message Forwarding Boilerplate
+### 1.6 ~~Message Forwarding Boilerplate~~ — **COMPLETED**
 
 | Attribute | Value |
 |-----------|-------|
-| **Severity** | **MEDIUM** |
-| **Location** | `oxide_gnss/src/main.rs:139-190` |
+| **Severity** | ~~MEDIUM~~ → **RESOLVED** |
+| **Location** | `oxide_gnss/src/main.rs`, `device/task.rs` |
 | **Confidence** | High (both reviewers) |
 
 **Description:** A dedicated task manually converts and forwards `DeviceMessage` variants to `GnssMessage` variants using exhaustive pattern matching.
 
-**Resolution:** Implement `From<DeviceMessage> for GnssMessage` trait or unify the message enums.
+**Resolution:** ✅ Added `DeviceMessage::into_gnss_message()` method that returns `Option<GnssMessage>`. The main.rs forwarding loop is now 5 lines instead of 50+.
 
 ---
 
-### 1.7 Excessive Cloning
+### 1.7 ~~Excessive Cloning~~ — **COMPLETED**
 
 | Attribute | Value |
 |-----------|-------|
-| **Severity** | **MEDIUM** |
-| **Location** | Multiple files |
-| **Confidence** | High (both reviewers) |
+| **Severity** | ~~MEDIUM~~ → **RESOLVED** |
+| **Location** | `device/task.rs` |
+| **Confidence** | Medium (both reviewers, but "profile first" recommendation) |
 
-**Description:** Data structures like `PvtData` are cloned multiple times per epoch across task boundaries.
+**Description:** `PvtData` was cloned when passing through channels.
 
-**Resolution:** Consider `Arc<T>` for shared read-only data or restructure ownership.
+**Resolution:** ✅ Changed `handle_pvt()` to take ownership instead of reference, eliminating the clone. Ownership is now transferred directly to the channel.
 
 ---
 
@@ -152,10 +152,10 @@ The "duplicate indices" are correct because covariance matrices are **symmetric*
 | Y2038 timestamp truncation | `ros/conversions.rs:171` | Use proper 64-bit timestamp handling |
 | Hardcoded topic names | `ros/publishers.rs` | Make configurable via parameters |
 | Missing QoS configuration | `ros/publishers.rs` | Add explicit QoS for safety topics |
-| Unused `PendingAck` logic | `device/ubx.rs` | Implement or remove |
-| Empty `.cargo/config.toml` | `.cargo/config.toml` | Remove if unused |
+| `PendingAck` logic | `device/ubx.rs` | **NOT DEAD** — used in `device/config.rs` for ACK tracking |
+| ~~Empty `.cargo/config.toml`~~ | ~~`.cargo/config.toml`~~ | ✅ **COMPLETED** — Removed empty file |
 | ~~Unused `DeviceMode` enum~~ | ~~`config/device.rs`~~ | ✅ **COMPLETED** — Removed dead code |
-| Duplicate state tracking | `ros/node.rs` + `ros/task.rs` | Consolidate to single source of truth |
+| ~~Duplicate state tracking~~ | ~~`ros/node.rs` + `ros/task.rs`~~ | ✅ **COMPLETED** — Removed dead code from GnssNode |
 
 ---
 
@@ -227,7 +227,7 @@ Both reviewers independently identified strong indicators of AI/LLM-generated co
 |----------|-------|--------|
 | **CRITICAL** | 0 | — |
 | **HIGH** | 0 | ~~Duplicate integrity publishing~~ ✅ |
-| **MEDIUM** | 2 | ~~Correction age stub~~ ✅, ~~Doc mismatch~~ ✅, ~~Duplicate backoff~~ ✅, Message forwarding, Excessive cloning |
+| **MEDIUM** | 0 | ~~Correction age stub~~ ✅, ~~Doc mismatch~~ ✅, ~~Duplicate backoff~~ ✅, ~~Message forwarding~~ ✅, ~~Excessive cloning~~ ✅ |
 | **LOW** | 8+ | Y2038, Hardcoded topics, Missing QoS, PendingAck, Empty config, State tracking, Error handling, Deadlock risk |
 | **RETRACTED** | 1 | ~~Covariance transformation~~ (not a bug) |
 
@@ -252,16 +252,17 @@ Both reviewers independently identified strong indicators of AI/LLM-generated co
 4. ~~**Extract `calculate_backoff` to util module**~~ — ✅ **COMPLETED**
    - Created `util.rs` with shared implementation and tests
 
-5. **Consolidate duplicate state tracking** — Single source of truth for PVT state.
-   - Effort: 1-2 hours
+5. ~~**Consolidate duplicate state tracking**~~ — ✅ **COMPLETED**
+   - Removed dead state (`last_pvt`, `last_fix_type`) and unused handlers from `GnssNode`
+   - These were ferrous_gnss remnants for dual-device aggregation
 
 ### Medium-Term (Backlog)
 
 6. ~~Update documentation to clarify single-device vs. dual-rover roadmap.~~ — ✅ **COMPLETED**
 7. Add QoS profiles for safety-critical topics (pending `rclrs` support).
-8. Implement `From<DeviceMessage> for GnssMessage` trait.
-9. Consider `Arc<T>` for shared data to reduce cloning.
-10. Clean up dead code (`PendingAck`, empty config).
+8. ~~Implement `From<DeviceMessage> for GnssMessage` trait.~~ — ✅ **COMPLETED** (via `into_gnss_message()` method)
+9. ~~Consider `Arc<T>` for shared data to reduce cloning.~~ — ✅ **COMPLETED** (ownership transfer instead)
+10. ~~Clean up dead code (`PendingAck`, empty config).~~ — ✅ **COMPLETED** (PendingAck is NOT dead code; empty config removed)
 
 ---
 

@@ -106,6 +106,34 @@ pub enum DeviceMessage {
     MonRf(MonRfData),
 }
 
+impl DeviceMessage {
+    /// Convert to a GnssMessage for forwarding to the supervisor/ROS task.
+    ///
+    /// Returns `None` for internal messages that are processed by the
+    /// IntegrityAggregator and don't need to be forwarded (Covariance,
+    /// PosEcef, SecSiglog, RxmCor, MonComms, MonHw, MonRf, FixTypeChanged).
+    pub fn into_gnss_message(self) -> Option<crate::state::GnssMessage> {
+        use crate::state::GnssMessage;
+        match self {
+            DeviceMessage::Pvt(pvt) => Some(GnssMessage::Pvt(pvt)),
+            DeviceMessage::StateChanged(state) => Some(GnssMessage::DeviceStateChanged(state)),
+            DeviceMessage::HpPos(hp) => Some(GnssMessage::HpPos(hp)),
+            DeviceMessage::SatInfo(sat) => Some(GnssMessage::SatInfo(sat)),
+            DeviceMessage::SecSig(sig) => Some(GnssMessage::SecSig(sig)),
+            DeviceMessage::Integrity(integrity) => Some(GnssMessage::Integrity(integrity)),
+            // Internal messages processed by IntegrityAggregator - not forwarded
+            DeviceMessage::FixTypeChanged(_)
+            | DeviceMessage::Covariance(_)
+            | DeviceMessage::PosEcef(_)
+            | DeviceMessage::SecSiglog(_)
+            | DeviceMessage::RxmCor(_)
+            | DeviceMessage::MonComms(_)
+            | DeviceMessage::MonHw(_)
+            | DeviceMessage::MonRf(_) => None,
+        }
+    }
+}
+
 /// Shared device task state for external monitoring.
 #[derive(Debug, Default)]
 pub struct DeviceTaskState {
@@ -390,7 +418,7 @@ impl DeviceTask {
 
         // Handle PVT data
         if let Some(pvt) = result.pvt {
-            self.handle_pvt(&pvt).await;
+            self.handle_pvt(pvt).await;
             integrity_updated = true;
         }
 
@@ -502,7 +530,9 @@ impl DeviceTask {
     }
 
     /// Handle received PVT data.
-    async fn handle_pvt(&mut self, pvt: &PvtData) {
+    ///
+    /// Takes ownership of `pvt` to avoid cloning when forwarding.
+    async fn handle_pvt(&mut self, pvt: PvtData) {
         debug!(
             lat = pvt.lat,
             lon = pvt.lon,
@@ -543,17 +573,17 @@ impl DeviceTask {
             }
         }
 
-        // Update GGA for NTRIP
-        let gga = GgaData::from_pvt(pvt);
+        // Update GGA for NTRIP (uses reference, pvt still owned)
+        let gga = GgaData::from_pvt(&pvt);
         let _ = self.channels.gga_tx.send(Some(gga));
 
-        // Send PVT message
+        // Send PVT message - ownership transferred, no clone needed
         // Note: Integrity is published separately in process_serial_data() via the
         // integrity_updated flag, avoiding duplicate publishing.
         let _ = self
             .channels
             .msg_tx
-            .send(DeviceMessage::Pvt(pvt.clone()))
+            .send(DeviceMessage::Pvt(pvt))
             .await;
     }
 

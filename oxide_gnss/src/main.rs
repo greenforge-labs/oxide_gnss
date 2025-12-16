@@ -126,7 +126,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Create a channel for device messages
-    let (device_msg_tx, mut device_msg_rx) = tokio::sync::mpsc::channel(64);
+    let (device_msg_tx, mut device_msg_rx) =
+        tokio::sync::mpsc::channel::<oxide_gnss::device::DeviceMessage>(64);
 
     // Create a channel for NTRIP messages
     let (ntrip_msg_tx, mut ntrip_msg_rx) = tokio::sync::mpsc::channel(64);
@@ -134,57 +135,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create a channel for forwarding messages to the supervisor
     let supervisor_msg_tx = supervisor.msg_tx().clone();
 
-    // Spawn tasks to forward messages to the supervisor
+    // Spawn task to forward device messages to the supervisor
     let supervisor_msg_tx_device = supervisor_msg_tx.clone();
     tokio::spawn(async move {
         while let Some(msg) = device_msg_rx.recv().await {
-            match msg {
-                oxide_gnss::device::DeviceMessage::Pvt(pvt) => {
-                    let _ = supervisor_msg_tx_device
-                        .send(oxide_gnss::state::GnssMessage::Pvt(pvt))
-                        .await;
-                }
-                oxide_gnss::device::DeviceMessage::StateChanged(state) => {
-                    let _ = supervisor_msg_tx_device
-                        .send(oxide_gnss::state::GnssMessage::DeviceStateChanged(state))
-                        .await;
-                }
-                oxide_gnss::device::DeviceMessage::FixTypeChanged(_fix) => {
-                    // Logic to handle fix type change (e.g. logging or diagnostics update)
-                    // Do not change NTRIP state here.
-                }
-                oxide_gnss::device::DeviceMessage::HpPos(hp) => {
-                    let _ = supervisor_msg_tx_device
-                        .send(oxide_gnss::state::GnssMessage::HpPos(hp))
-                        .await;
-                }
-                oxide_gnss::device::DeviceMessage::SatInfo(sat) => {
-                    let _ = supervisor_msg_tx_device
-                        .send(oxide_gnss::state::GnssMessage::SatInfo(sat))
-                        .await;
-                }
-                oxide_gnss::device::DeviceMessage::SecSig(sig) => {
-                    let _ = supervisor_msg_tx_device
-                        .send(oxide_gnss::state::GnssMessage::SecSig(sig))
-                        .await;
-                }
-                // Forward integrity to ROS node for publishing
-                oxide_gnss::device::DeviceMessage::Integrity(integrity) => {
-                    let _ = supervisor_msg_tx_device
-                        .send(oxide_gnss::state::GnssMessage::Integrity(integrity))
-                        .await;
-                }
-                // Safety-related messages are aggregated by IntegrityAggregator
-                // and published via the Integrity message above
-                oxide_gnss::device::DeviceMessage::Covariance(_)
-                | oxide_gnss::device::DeviceMessage::PosEcef(_)
-                | oxide_gnss::device::DeviceMessage::SecSiglog(_)
-                | oxide_gnss::device::DeviceMessage::RxmCor(_)
-                | oxide_gnss::device::DeviceMessage::MonComms(_)
-                | oxide_gnss::device::DeviceMessage::MonHw(_)
-                | oxide_gnss::device::DeviceMessage::MonRf(_) => {
-                    // These feed into the IntegrityAggregator in DeviceTask
-                }
+            // Convert and forward messages that need to reach ROS/supervisor
+            // Internal messages (Covariance, PosEcef, etc.) return None and are skipped
+            if let Some(gnss_msg) = msg.into_gnss_message() {
+                let _ = supervisor_msg_tx_device.send(gnss_msg).await;
             }
         }
     });
