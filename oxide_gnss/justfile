@@ -21,8 +21,8 @@ fmt-check:
 # Linting & Checks
 # ============================================================================
 
-# Run cargo check
-check:
+# Run all pre-commit checks (format, check, clippy)
+check: fmt-check
     cargo check --features ros2
 
 # Run clippy lints (treats warnings as errors)

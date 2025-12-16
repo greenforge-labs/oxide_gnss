@@ -291,7 +291,6 @@ impl NtripTask {
             .msg_tx
             .send(NtripMessage::RtcmReceived { bytes: data.len() })
             .await;
-
     }
 
     /// Send GGA position if available from device.

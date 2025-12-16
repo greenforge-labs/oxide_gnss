@@ -318,7 +318,6 @@ impl Drop for SerialPort {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -339,5 +338,4 @@ mod tests {
         assert_eq!(builder.baud_rate, 115200);
         assert_eq!(builder.read_buffer_size, 8192);
     }
-
 }

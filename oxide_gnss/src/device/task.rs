@@ -580,11 +580,7 @@ impl DeviceTask {
         // Send PVT message - ownership transferred, no clone needed
         // Note: Integrity is published separately in process_serial_data() via the
         // integrity_updated flag, avoiding duplicate publishing.
-        let _ = self
-            .channels
-            .msg_tx
-            .send(DeviceMessage::Pvt(pvt))
-            .await;
+        let _ = self.channels.msg_tx.send(DeviceMessage::Pvt(pvt)).await;
     }
 
     /// Inject RTCM correction data to the device.
