@@ -247,21 +247,12 @@ The following safety-related messages are supported in upstream ublox-rs (master
 | **Frozen Receiver** | NAV-PVT | Detect if `iTOW` changes but `lat/lon` is identical >1s while moving. | **E-STOP**: Receiver output frozen. |
 | **Correction Heartbeat** | NAV-PVT | Monitor `ageC` (Age of Corrections). | **WARNING**: If >2.0s, accuracy degrades exponentially. |
 
-### 4.2 Cross-Check & Fallback Strategies
+### 4.2 Fallback Strategies
 
-For safety-critical operation, relying on a single position solution is insufficient. `oxide_gnss` implements internal verification layers.
-
-#### 4.2.1 High Precision vs. Standard Solution Cross-Check
-The receiver computes standard precision (SP) and high precision (HP) solutions using different internal engines.
-- **Primary:** `NAV-HPPOSECEF` (High Precision)
-- **Secondary:** `NAV-POSECEF` (Standard Precision)
-- **Check:** The Euclidean distance between HP and SP solutions must be within expected bounds (e.g., < 2.5m).
-- **Rationale:** A large divergence often indicates an internal firmware fault or "false fix".
-
-#### 4.2.2 Fallback Logic
-If the HP solution is flagged invalid (e.g., `invalid_ecef` flag) or exceeds integrity bounds:
-1.  **Revert** to `NAV-POSECEF` if it meets "Safe Stop" criteria (e.g., adequate for emergency braking or lane keeping).
-2.  **Alert** the vehicle supervisor to degrade autonomy level.
+#### 4.2.1 Fallback Logic
+If the primary solution is flagged invalid or exceeds integrity bounds:
+1.  **Alert** the vehicle supervisor to degrade autonomy level.
+2.  **Publish** degraded integrity status via `/gnss/integrity` topic.
 
 ### 4.3 Safety Monitor Architecture
 
@@ -270,14 +261,14 @@ If the HP solution is flagged invalid (e.g., `invalid_ecef` flag) or exceeds int
 │                          GNSS SAFETY MONITOR                                │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐                        │
-│  │  Position   │   │    RTK      │   │  Security   │                        │
-│  │  Quality    │   │  Quality    │   │  Monitor    │                        │
-│  └──────┬──────┘   └──────┬──────┘   └──────┬──────┘                        │
-│         │                 │                 │                               │
-│         └────────────┬────┴────────┬────────┘                               │
-│                      │             │                 │                      │
-│                      ▼             ▼                 ▼                      │
+│          ┌─────────────┐   ┌─────────────┐   ┌─────────────┐                │
+│          │  Position   │   │    RTK      │   │  Security   │                │
+│          │  Quality    │   │  Quality    │   │  Monitor    │                │
+│          └──────┬──────┘   └──────┬──────┘   └──────┬──────┘                │
+│                 │                 │                 │                       │
+│                 └────────────┬────┴────────┬────────┘                       │
+│                              │             │                                │
+│                              ▼             ▼                                │
 │              ┌───────────────────────────────────────────┐                  │
 │              │         INTEGRITY AGGREGATOR              │                  │
 │              │                                           │                  │

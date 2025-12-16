@@ -1092,7 +1092,6 @@ pub fn build_rover_config(nav_rate_hz: u8, persist: bool) -> Vec<u8> {
             // Enable key messages on UART1
             CfgVal::MsgOutUbxNavPvtUart1(1),
             CfgVal::MsgOutUbxNavHpPosLlhUart1(1),
-            CfgVal::MsgOutUbxNavRelposNedUart1(1),
             CfgVal::MsgOutUbxNavSatUart1(1),
         ],
         persist,

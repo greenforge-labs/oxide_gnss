@@ -22,8 +22,6 @@ device:
   frame: ENU
 
   # Operating mode
-  # rover: Standalone rover with NTRIP corrections
-  # moving_base: Moving base station (Phase 2)
   mode: rover
 
   # Navigation settings
@@ -71,7 +69,6 @@ device:
     # CFG_MSGOUT_UBX_RXM_COR_USB: 1     # SPARTN corrections only (not RTCM) - disabled
     CFG_MSGOUT_UBX_MON_COMMS_USB: 1     # Port diagnostics
     CFG_MSGOUT_UBX_SEC_SIGLOG_USB: 1    # Security event log
-    # CFG_MSGOUT_UBX_NAV_RELPOSNED_USB: 1  # Uncomment for dual-antenna heading
 
     # Protocol settings for USB
     CFG_USBINPROT_UBX: true

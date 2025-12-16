@@ -101,7 +101,6 @@ The driver includes built-in safety integrity monitoring that aggregates quality
 **Data Sources:**
 - NAV-PVT: Fix type, satellites, accuracy, PDOP
 - NAV-COV: Position/velocity covariance matrices
-- NAV-RELPOSNED: Heading quality (dual-antenna)
 - SEC-SIG: Jamming/spoofing detection
 - SEC-SIGLOG: Security event log
 - RXM-COR: Differential correction status

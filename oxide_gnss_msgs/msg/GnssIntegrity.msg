@@ -36,14 +36,6 @@ float32 correction_age_s    # Age of differential corrections (-1 if no RTK)
 bool correction_received    # RTCM/correction data received
 bool correction_used        # Correction data was used by receiver
 
-# Heading quality (dual-antenna)
-bool heading_valid          # Heading solution valid
-uint8 heading_carrier_solution  # 0=none, 1=float, 2=fixed
-float32 baseline_m          # Measured baseline length (m)
-float32 baseline_expected_m # Expected baseline length (m)
-float32 baseline_accuracy_m # Baseline accuracy (m)
-float32 heading_accuracy_deg # Heading accuracy (deg)
-
 # Security status
 uint8 jamming_state         # 0=unknown, 1=ok, 2=warning, 3=critical
 uint8 JAMMING_UNKNOWN = 0
