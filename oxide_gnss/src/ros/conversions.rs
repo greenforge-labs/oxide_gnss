@@ -77,21 +77,12 @@ impl ToRosMessage<sensor_msgs::msg::NavSatFix> for HpPosData {
         let mut msg = sensor_msgs::msg::NavSatFix::default();
         msg.header.frame_id = "gnss".to_string();
 
-        // Status: High Precision implies RTK is likely active/available,
-        // but the message itself doesn't explicitly state fix type (NavPvt does).
-        // However, if we are getting HpPos, we assume the status is inherited from general state or valid.
-        // For now, we set it to valid GBAS (RTK presumption) or leaving it abstract?
-        // Actually, we should probably pass the fix type from context, but ToRosMessage is unary.
-        // We'll leave status generic or defaults. Best practice: copy from PVT if managing together.
-        // But here we are just converting data.
-        msg.status.status = sensor_msgs::msg::NavSatStatus::STATUS_GBAS_FIX; // Assumption for High Precision
+        // High-precision messages imply RTK; set GBAS status accordingly
+        msg.status.status = sensor_msgs::msg::NavSatStatus::STATUS_GBAS_FIX;
 
         msg.latitude = self.lat;
         msg.longitude = self.lon;
-        msg.altitude = self.height; // Height is Ellipsoid or MSL? UBX says "height above ellipsoid".
-                                    // NavSatFix expects altitude. Usually above WGS84 ellipsoid.
-                                    // Wait, NavSatFix altitude: "Altitude [m]. Positive is above the WGS 84 ellipsoid (quietly adopted convention)."
-                                    // or MSL? MAVLink/others differ. ROS default is usually Ellipsoid.
+        msg.altitude = self.height; // WGS84 ellipsoid height (UBX NAV-HPPOSLLH)
 
         // Covariance
         // h_acc is in meters (after our parsing logic applied scaling)

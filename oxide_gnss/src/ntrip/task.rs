@@ -292,10 +292,6 @@ impl NtripTask {
             .send(NtripMessage::RtcmReceived { bytes: data.len() })
             .await;
 
-        // Also send GnssMessage for ROS task
-        // Note: We need to convert the message type since msg_tx expects NtripMessage
-        // In a real implementation, we would have separate channels for different message types
-        // or use an enum that encompasses all message types
     }
 
     /// Send GGA position if available from device.

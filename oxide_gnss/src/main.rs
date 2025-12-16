@@ -45,14 +45,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // We treat this as a required parameter
     let config_param_name = "config_file";
 
-    // We cannot easily declare a parameter without a default value in rclrs 0.6 yet in a way that enforces it?
-    // Let's try declaring it with a mandatory flag if possible, or just check if it's set.
-    // rclrs::ParameterValue::String(s)
-
-    // For now, let's look for the parameter.
-    // NOTE: rclrs 0.6 parameter API is basic. We will declare it with a default empty string and check.
-
-    // Safety: we are in the main thread and just created the node.
     let param = node
         .declare_parameter::<std::sync::Arc<str>>(config_param_name)
         .default(std::sync::Arc::from(""))
@@ -83,9 +75,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Create node configuration
-    // Note: The node usage is slightly different now. We passed the existing node to GnssNode.
     let node_config = GnssNodeConfig {
-        node_name: "oxide_gnss".to_string(), // Actually unused by new() when passing node, but good for record
+        node_name: "oxide_gnss".to_string(),
         namespace: node.namespace(),
         device: config.device.clone(),
         ntrip: config.ntrip.clone(),
@@ -150,8 +141,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let supervisor_msg_tx_ntrip = supervisor_msg_tx.clone();
     tokio::spawn(async move {
         while let Some(msg) = ntrip_msg_rx.recv().await {
-            // No need to forward NTRIP messages in this simplified example
-            // But we should probably handle state changes for correct diagnostics
+            // Forward state changes for diagnostics
             if let oxide_gnss::ntrip::NtripMessage::StateChanged(state) = msg {
                 let _ = supervisor_msg_tx_ntrip
                     .send(oxide_gnss::state::GnssMessage::NtripStateChanged(state))

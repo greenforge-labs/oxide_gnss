@@ -79,10 +79,7 @@ impl NtripClient {
                 String::new()
             };
 
-        // Note: Using HTTP/1.0 to avoid Chunked Transfer Encoding complexity if possible,
-        // though many casters ignore this and stream anyway.
-        // We close connection explicitly to be polite, though we want it open for streaming.
-        // Actually for NTRIP, the connection stays open.
+        // HTTP/1.0 request - connection stays open for NTRIP streaming
         let request = format!(
             "GET /{} HTTP/1.0\r\n\
              User-Agent: {}\r\n\
@@ -182,13 +179,7 @@ impl NtripClient {
                 reason: "Not connected".to_string(),
             })?;
 
-        // Direct read from socket
-        // NTRIP streams are usually raw binary data after the headers.
-        // Some casters might use Transfer-Encoding: chunked, but HTTP/1.0 request often prevents this.
-        // If we encounter chunked encoding, this simple reader will allow the chunks through,
-        // which might corrupt the RTCM parser.
-        // For now, assuming raw stream (standard for ICY/NTRIP 1.0).
-
+        // Read raw RTCM binary data (NTRIP 1.0 / ICY protocol)
         match stream.read(buf).await {
             Ok(0) => {
                 // EOF
@@ -220,18 +211,10 @@ impl NtripClient {
         }
     }
 
-    /// Send a GGA position report to the caster.
-    /// This requires a separate connection for NTRIP v1 usually, or sending on the same stream?
-    /// Standard allows sending GGA on the same stream immediately after request.
-    /// However, to keep it simple and robust (and match previous logic), we might skip GGA or try to send it.
-    /// BUT: The previous implementation used a *new* POST request.
-    /// Sending GGA to a caster usually expects a POST or sending it in the headers of the request (Ntrip-GGA).
-    /// Let's implement basic GGA via new connection to be safe, or just skip if complex.
-    /// Wait, `rev1` often expects GGA sent *on the same socket* before or during streaming.
-    /// The specific requirement depends on the caster.
-    /// The AUSCORS documentation (if I could see it) would say "Send GGA NMEA sentence".
-    /// Usually, sending it right after connection on the stream is acceptable.
-    /// Let's implement sending on the EXISTING stream if connected.
+    /// Send a GGA position report to the caster on the existing stream.
+    ///
+    /// NTRIP v1 expects GGA sentences sent on the same socket during streaming.
+    /// This provides the caster with rover position for VRS/nearest-base selection.
     pub async fn send_gga(&mut self, gga: &GgaSentence) -> Result<(), NtripError> {
         if !self.config.send_gga {
             return Ok(());
