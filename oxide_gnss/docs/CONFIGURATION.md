@@ -1,0 +1,457 @@
+# Configuration Reference
+
+This document describes all configuration options for oxide_gnss.
+
+## Configuration File
+
+oxide_gnss uses YAML configuration files. The default configuration is at `config/default.yaml`.
+
+```bash
+ros2 launch oxide_gnss oxide_gnss.launch.py config_file:=/path/to/your/config.yaml
+```
+
+---
+
+## ROS Configuration
+
+```yaml
+ros:
+  rates:
+    diagnostics_hz: 1.0    # /diagnostics publish rate
+    integrity_hz: 1.0      # ~/integrity, ~/operational publish rate
+```
+
+Most topics publish when UBX data arrives (driven by device rate). These rates control timer-based aggregated topics.
+
+---
+
+## Device Configuration
+
+### Basic Settings
+
+```yaml
+device:
+  port: "/dev/gnss_f9p_rover"   # Serial port path
+  baud_rate: 460800              # Baud rate (460800 recommended for high-rate)
+  frame: ENU                     # Velocity frame: ENU or NED
+```
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `port` | Serial port path. Use udev symlinks for stability. | Required |
+| `baud_rate` | Serial baud rate. Must match device configuration. | `460800` |
+| `frame` | Coordinate frame for velocity: `ENU` (ROS convention) or `NED` (aviation) | `ENU` |
+
+### Navigation Settings
+
+```yaml
+device:
+  navigation:
+    rate_hz: 10           # Update rate (1-25 Hz for ZED-F9P)
+    min_satellites: 4     # Minimum satellites for valid fix
+    max_hdop: 5.0         # HDOP warning threshold
+    max_pdop: 10.0        # PDOP warning threshold
+```
+
+### Reconnection Behavior
+
+```yaml
+device:
+  reconnect:
+    enabled: true
+    initial_delay_secs: 1
+    max_delay_secs: 30
+    max_attempts: 0       # 0 = unlimited (recommended for safety-critical)
+```
+
+Reconnection uses exponential backoff. For safety-critical applications, use `max_attempts: 0` to continuously retry.
+
+---
+
+## u-blox Receiver Configuration
+
+The `ublox` section configures the receiver directly via UBX-CFG-VALSET commands.
+
+### Device Family
+
+```yaml
+device:
+  ublox:
+    family: "F9P"    # F9P, F9R, or F9H
+```
+
+Used for validation warnings (e.g., NAV_COV is only available on F9R/F9H).
+
+### Measurement Rate
+
+```yaml
+device:
+  ublox:
+    rate:
+      measurement_ms: 100   # Measurement period (100ms = 10Hz)
+      nav_ratio: 1          # Nav solutions per measurement
+```
+
+### Protocol Settings
+
+Configure which protocols are enabled on each port:
+
+```yaml
+device:
+  ublox:
+    protocols:
+      usb_in: [ubx, rtcm3x]    # Input protocols
+      usb_out: [ubx]            # Output protocols
+      # uart1_in: [ubx, rtcm3x]
+      # uart1_out: [ubx]
+      # uart2_in: [rtcm3x]      # Moving base: receive RTCM
+      # uart2_out: []
+```
+
+Available protocols: `ubx`, `nmea`, `rtcm3x`
+
+### Port Settings (Optional)
+
+```yaml
+device:
+  ublox:
+    ports:
+      uart1:
+        enabled: false
+      uart2:
+        baudrate: 460800
+        enabled: true
+```
+
+### GNSS Signal Selection (Optional)
+
+```yaml
+device:
+  ublox:
+    signals:
+      gps:
+        enabled: true
+        l1: true    # L1C/A
+        l2: true    # L2C
+      glonass:
+        enabled: true
+        l1: true
+        l2: true
+      galileo:
+        enabled: false
+      beidou:
+        enabled: true
+        b1: true
+        b2: true
+      sbas:
+        enabled: false
+      qzss:
+        enabled: false
+```
+
+---
+
+## UBX Message Configuration
+
+### Message Output Rates
+
+```yaml
+device:
+  ublox:
+    messages:
+      usb:
+        NAV_PVT: 1          # Every solution
+        NAV_HPPOSLLH: 1
+        NAV_SAT: 5          # Every 5th solution (reduces bandwidth)
+```
+
+Rate values:
+- `0` = disabled
+- `1` = every solution
+- `N` = every Nth solution
+
+### Message Requirements
+
+The driver validates message configuration at startup. Messages are categorized by importance:
+
+| Level | Behavior | Description |
+|-------|----------|-------------|
+| **Essential** | ERROR + fail | Driver won't work without this |
+| **Recommended** | WARN | Full functionality requires this |
+| **RequiredForFeature** | INFO | Specific topic won't publish without this |
+| **Optional** | (silent) | Nice to have |
+
+### Message Reference
+
+| Message | Level | Purpose | ROS Topics |
+|---------|-------|---------|------------|
+| `NAV_PVT` | Essential | Position/velocity/time | `~/fix`, `~/velocity`, `~/time_reference` |
+| `NAV_HPPOSLLH` | Recommended | High-precision position | `~/hp_pos` |
+| `NAV_POSECEF` | Recommended | ECEF coordinates | `~/fix` |
+| `MON_RF` | RequiredForFeature | Antenna status, jamming indicator | `~/integrity`, `~/diagnostics` |
+| `MON_COMMS` | RequiredForFeature | Communication port health | `~/integrity`, `~/diagnostics` |
+| `SEC_SIG` | RequiredForFeature | Jamming/spoofing detection | `~/integrity`, `~/sec_sig_details` |
+| `NAV_RELPOSNED` | RequiredForFeature | Moving base relative position | `~/baseline_pose` |
+| `NAV_SAT` | Optional | Per-satellite info | `~/satellites` |
+| `NAV_COV` | Optional | Covariance matrix (F9R/F9H only) | — |
+| `SEC_SIGLOG` | Optional | Security event log | — |
+
+### Recommended Configuration
+
+**Minimal (position only):**
+```yaml
+messages:
+  usb:
+    NAV_PVT: 1
+```
+
+**Standard (with integrity monitoring):**
+```yaml
+messages:
+  usb:
+    NAV_PVT: 1
+    NAV_HPPOSLLH: 1
+    NAV_POSECEF: 1
+    MON_RF: 1
+    MON_COMMS: 1
+    SEC_SIG: 1
+```
+
+**Moving Base/Rover RTK:**
+```yaml
+messages:
+  usb:
+    NAV_PVT: 1
+    NAV_HPPOSLLH: 1
+    NAV_RELPOSNED: 1    # Required for ~/baseline_pose
+    MON_RF: 1
+    SEC_SIG: 1
+```
+
+---
+
+## NTRIP Configuration
+
+NTRIP provides RTK corrections for centimeter-level accuracy.
+
+```yaml
+ntrip:
+  host: "ntrip.data.gnss.ga.gov.au"
+  port: 2101
+  use_https: false
+  mountpoint: "SWTC00AUS0"
+  
+  # Authentication
+  username: "${NTRIP_USERNAME}"    # Environment variable
+  password: "${NTRIP_PASSWORD}"
+  
+  # GGA position reporting
+  send_gga: true
+  gga_interval_secs: 10
+  
+  # Connection settings
+  connection:
+    timeout_secs: 10
+    reconnect: true
+    initial_delay_secs: 1
+    max_delay_secs: 60
+    backoff_reset_secs: 3600
+```
+
+### Environment Variables
+
+Credentials can use environment variables with `${VAR_NAME}` syntax:
+
+```bash
+export NTRIP_USERNAME="your_username"
+export NTRIP_PASSWORD="your_password"
+```
+
+### Disabling NTRIP
+
+Comment out or remove the entire `ntrip:` section to disable NTRIP.
+
+---
+
+## ROS2 Topics
+
+### Published Topics
+
+| Topic | Type | Source | Description |
+|-------|------|--------|-------------|
+| `~/fix` | `sensor_msgs/NavSatFix` | NAV_PVT | Position with covariance |
+| `~/velocity` | `geometry_msgs/TwistWithCovarianceStamped` | NAV_PVT | 3D velocity |
+| `~/time_reference` | `sensor_msgs/TimeReference` | NAV_PVT | GPS time |
+| `~/hp_pos` | `sensor_msgs/NavSatFix` | NAV_HPPOSLLH | High-precision position |
+| `~/baseline_pose` | `geometry_msgs/PoseWithCovarianceStamped` | NAV_RELPOSNED | Moving base/rover baseline |
+| `~/satellites` | `std_msgs/String` | NAV_SAT | Satellite info (JSON) |
+| `~/integrity` | `oxide_gnss_msgs/OxideIntegrity` | Multiple | Safety integrity status |
+| `~/operational` | `std_msgs/Bool` | Multiple | Go/no-go signal |
+| `~/sec_sig_details` | `oxide_gnss_msgs/SecSigDetails` | SEC_SIG | Jamming/spoofing details |
+| `/diagnostics` | `diagnostic_msgs/DiagnosticArray` | Multiple | System diagnostics |
+
+---
+
+## Safety Integrity Monitoring
+
+The driver provides safety-critical integrity monitoring by aggregating quality metrics from multiple UBX messages. This enables autonomous systems to make go/no-go decisions based on GNSS solution quality.
+
+### Integrity Levels
+
+| Level | Value | Meaning | Action |
+|-------|-------|---------|--------|
+| **OK** | 0 | All checks pass | Full operation permitted |
+| **DEGRADED** | 1 | Some quality checks failed | Reduced speed/capability recommended |
+| **CRITICAL** | 2 | Critical checks failed | Operation should stop |
+| **FAILED** | 3 | System unavailable or data stale | No GNSS available |
+
+The `~/operational` topic publishes `true` when level is OK or DEGRADED, `false` otherwise.
+
+### Data Sources
+
+Integrity is computed from these UBX messages:
+
+| Message | Data Used | Checks |
+|---------|-----------|--------|
+| **NAV_PVT** | Fix type, satellites, accuracy, PDOP, carrier solution | Fix quality, satellite count, accuracy thresholds |
+| **SEC_SIG** | Jamming state, spoofing state | Jamming/spoofing detection |
+| **MON_RF** | Antenna status, jamming indicator | Antenna faults |
+| **MON_COMMS** | Port errors | Communication health |
+| **NAV_COV** | Covariance matrices | (Optional) Full covariance data |
+| **SEC_SIGLOG** | Security event count | Security event alerting |
+| **RXM_COR** | Correction status | RTCM/SPARTN reception |
+
+### Integrity Checks
+
+#### Critical Checks (Level → CRITICAL)
+
+These indicate the GNSS solution cannot be trusted:
+
+| Check | Condition | Message |
+|-------|-----------|---------|
+| No fix | `fix_type == NoFix` | "No GNSS fix" |
+| Insufficient fix | `fix_type` is 2D, dead-reckoning, or time-only | "Insufficient fix type" |
+| Too few satellites | `num_satellites < min_satellites_critical` | "Too few satellites" |
+| Critical jamming | `jamming_state == Critical` | "Critical jamming detected" |
+| Multiple spoofers | `spoofing_state == Multiple` | "Multiple spoofers detected" |
+| Antenna short | `antenna_status == Short` | "Antenna short circuit" |
+| Antenna open | `antenna_status == Open` | "Antenna open circuit" |
+
+#### Quality Checks (Level → DEGRADED)
+
+These indicate reduced solution quality:
+
+| Check | Condition | Message |
+|-------|-----------|---------|
+| RTK not fixed | `carrier_solution < 2` when differential applied | "RTK not fixed" |
+| Horizontal accuracy | `h_accuracy_m > max_h_accuracy_m` | "Horizontal accuracy exceeded" |
+| Vertical accuracy | `v_accuracy_m > max_v_accuracy_m` | "Vertical accuracy exceeded" |
+| High PDOP | `pdop > max_pdop` | "PDOP too high" |
+| Low satellite count | `num_satellites < min_satellites_high` | "Low satellite count" |
+| Correction age | `correction_age_s > max_correction_age_s` | "Correction age exceeded" |
+
+#### Monitor Checks (No level change, logged only)
+
+| Check | Condition | Message |
+|-------|-----------|---------|
+| Jamming warning | `jamming_state == Warning` | "Jamming warning" |
+| Spoofing indicated | `spoofing_state == Indicated` | "Spoofing indicated" |
+| Security events | `security_events > 0` | "Security events logged" |
+
+### Configurable Thresholds
+
+Thresholds are currently set to defaults in code. Future releases will expose these in config:
+
+| Threshold | Default | Description |
+|-----------|---------|-------------|
+| `min_satellites_critical` | 4 | Below this → CRITICAL |
+| `min_satellites_high` | 6 | Below this → DEGRADED |
+| `max_h_accuracy_m` | 0.10 | Horizontal accuracy (10cm) |
+| `max_v_accuracy_m` | 0.15 | Vertical accuracy (15cm) |
+| `max_pdop` | 3.0 | Position DOP threshold |
+| `max_correction_age_s` | 10.0 | RTK correction age |
+
+### Recommended Message Configuration
+
+For full integrity monitoring, enable these messages:
+
+```yaml
+messages:
+  usb:
+    NAV_PVT: 1        # Essential - position/velocity/time
+    MON_RF: 1         # Antenna status, jamming indicator
+    SEC_SIG: 1        # Jamming/spoofing detection
+    MON_COMMS: 1      # Communication port health
+```
+
+Optional for enhanced monitoring:
+```yaml
+    NAV_COV: 1        # Full covariance (F9R/F9H only)
+    SEC_SIGLOG: 1     # Security event log
+```
+
+### Output Topics
+
+| Topic | Type | Content |
+|-------|------|---------|
+| `~/integrity` | `oxide_gnss_msgs/OxideIntegrity` | Full integrity state with all metrics |
+| `~/operational` | `std_msgs/Bool` | Simple go/no-go signal |
+
+### Example Integrity Message
+
+```json
+{
+  "level": 0,
+  "level_name": "OK",
+  "status_message": "All integrity checks passed",
+  "fix_type": 5,
+  "carrier_solution": 2,
+  "num_satellites": 14,
+  "h_accuracy_m": 0.015,
+  "v_accuracy_m": 0.025,
+  "pdop": 1.2,
+  "jamming_state": "Ok",
+  "spoofing_state": "Ok",
+  "antenna_status": "Ok",
+  "correction_age_s": 1.5,
+  "operational": true
+}
+```
+
+### Integration with Autonomous Systems
+
+```python
+# Example: Subscribe to operational signal
+def operational_callback(msg):
+    if not msg.data:
+        # GNSS not reliable - stop or switch to backup
+        emergency_stop()
+
+# Example: Use integrity level for speed limiting
+def integrity_callback(msg):
+    if msg.level == 0:  # OK
+        max_speed = FULL_SPEED
+    elif msg.level == 1:  # DEGRADED
+        max_speed = REDUCED_SPEED
+    else:  # CRITICAL or FAILED
+        max_speed = 0
+```
+
+---
+
+## Udev Rules
+
+For consistent device naming, install the provided udev rules:
+
+```bash
+sudo cp udev/99-oxide-gnss.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
+This creates symlinks like `/dev/gnss_f9p_SERIAL` for stable device identification.
+
+Ensure your user is in the `dialout` group:
+```bash
+sudo usermod -aG dialout $USER
+# Log out and back in
+```

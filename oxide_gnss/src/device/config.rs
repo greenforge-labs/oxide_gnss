@@ -134,18 +134,37 @@ impl DeviceConfigurator {
                     step: "ublox config missing - add 'ublox:' section to config file".to_string(),
                 })?;
 
-        // Build CfgVal list from the config
-        let cfg_vals = super::cfg_key_mapping::build_cfg_vals(&ublox_config.cfg_keys);
+        // Validate config and emit warnings
+        let validation = ublox_config.validate();
 
-        if cfg_vals.is_empty() {
-            // No CFG keys to send - unusual but valid, just warn
-            warn!("No CFG_* keys in ublox config - device will use its existing settings");
-            info!("Device configuration skipped (no keys to configure)");
-            return Ok(());
+        // Log topic availability warnings
+        for (topic, missing_msgs) in ublox_config.check_topic_availability() {
+            warn!(
+                topic = topic,
+                missing = ?missing_msgs,
+                "ROS topic may be unavailable or degraded due to missing UBX messages"
+            );
         }
 
+        // Fail on missing essential messages (driver won't work correctly)
+        if !validation.is_valid() {
+            return Err(DeviceError::ConfigurationFailed {
+                step: format!(
+                    "Essential UBX messages missing: {:?}",
+                    validation
+                        .missing_essential
+                        .iter()
+                        .map(|m| m.message)
+                        .collect::<Vec<_>>()
+                ),
+            });
+        }
+
+        // Build CfgVal list from the structured config
+        let cfg_vals = super::cfg_key_mapping::build_cfg_vals_from_config(ublox_config);
+
         info!(
-            "Using u-blox config from YAML ({} CFG keys)",
+            "Using u-blox config from YAML ({} settings)",
             cfg_vals.len()
         );
 

@@ -68,12 +68,15 @@ pub struct RosTaskChannels {
 pub struct RosTaskConfig {
     /// Diagnostics publish rate in Hz
     pub diagnostics_rate_hz: f64,
+    /// Integrity/operational publish rate in Hz
+    pub integrity_rate_hz: f64,
 }
 
 impl Default for RosTaskConfig {
     fn default() -> Self {
         Self {
             diagnostics_rate_hz: 1.0,
+            integrity_rate_hz: 1.0,
         }
     }
 }
@@ -94,6 +97,8 @@ pub struct RosTask {
     last_pvt: Option<PvtData>,
     /// Timestamp when last RTCM correction was received
     last_correction_received: Option<Instant>,
+    /// Latest integrity data for rate-limited publishing
+    last_integrity: Option<crate::state::GnssIntegrity>,
 }
 
 impl RosTask {
@@ -116,6 +121,7 @@ impl RosTask {
             last_fix_type: FixType::NoFix,
             last_pvt: None,
             last_correction_received: None,
+            last_integrity: None,
         };
 
         (task, handle)
@@ -131,6 +137,9 @@ impl RosTask {
 
         let diagnostics_interval = Duration::from_secs_f64(1.0 / self.config.diagnostics_rate_hz);
         let mut diagnostics_timer = tokio::time::interval(diagnostics_interval);
+
+        let integrity_interval = Duration::from_secs_f64(1.0 / self.config.integrity_rate_hz);
+        let mut integrity_timer = tokio::time::interval(integrity_interval);
 
         loop {
             tokio::select! {
@@ -156,6 +165,11 @@ impl RosTask {
                 // Periodic diagnostics publishing
                 _ = diagnostics_timer.tick() => {
                     self.publish_diagnostics();
+                }
+
+                // Periodic integrity publishing (rate-limited)
+                _ = integrity_timer.tick() => {
+                    self.publish_integrity();
                 }
             }
         }
@@ -199,11 +213,22 @@ impl RosTask {
                 self.publishers.publish_sat_info(&sat);
             }
             GnssMessage::Integrity(integrity) => {
-                self.publishers.publish_integrity(&integrity);
+                // Store for rate-limited publishing
+                self.last_integrity = Some(integrity);
+            }
+            GnssMessage::RelPosNed(rel_pos) => {
+                self.publishers.publish_baseline_pose(&rel_pos);
             }
             GnssMessage::Shutdown => {
                 info!("Received shutdown message");
             }
+        }
+    }
+
+    /// Publish integrity status (rate-limited).
+    fn publish_integrity(&self) {
+        if let Some(ref integrity) = self.last_integrity {
+            self.publishers.publish_integrity(integrity);
         }
     }
 

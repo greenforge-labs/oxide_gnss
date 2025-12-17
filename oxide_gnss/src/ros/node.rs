@@ -20,9 +20,6 @@ pub struct GnssNodeConfig {
     pub ntrip: Option<NtripConfig>,
     /// Diagnostics publish rate in Hz
     pub diagnostics_rate_hz: f64,
-
-    /// Publish detailed SEC-SIG per-center-frequency data on ~/sec_sig_details.
-    pub publish_sec_sig_details: bool,
 }
 
 impl Default for GnssNodeConfig {
@@ -40,7 +37,6 @@ impl Default for GnssNodeConfig {
             },
             ntrip: None,
             diagnostics_rate_hz: 1.0,
-            publish_sec_sig_details: false,
         }
     }
 }
@@ -63,8 +59,7 @@ pub struct GnssNode {
 impl GnssNode {
     /// Create a new GNSS driver instance using an existing ROS2 node.
     pub fn new(node: Node, config: GnssNodeConfig) -> Result<Self, RclrsError> {
-        let publishers =
-            GnssPublishers::new(&node, config.device.frame, config.publish_sec_sig_details)?;
+        let publishers = GnssPublishers::new(&node, config.device.frame)?;
 
         Ok(Self {
             node,

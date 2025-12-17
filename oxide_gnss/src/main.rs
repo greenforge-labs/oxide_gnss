@@ -80,8 +80,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         namespace: node.namespace(),
         device: config.device.clone(),
         ntrip: config.ntrip.clone(),
-        diagnostics_rate_hz: 1.0,
-        publish_sec_sig_details: config.ros.publish.sec_sig_details,
+        diagnostics_rate_hz: config.ros.rates.diagnostics_hz,
     };
 
     // Create the driver wrapper around the node
@@ -95,6 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Get values we need from node before taking mutable borrow of supervisor
     let diagnostics_rate_hz = gnss_driver.config().diagnostics_rate_hz;
+    let integrity_rate_hz = config.ros.rates.integrity_hz;
     let publishers = gnss_driver.publishers().clone();
 
     // Create supervisor (takes mutable borrow of driver)
@@ -184,6 +184,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let ros_config = RosTaskConfig {
         diagnostics_rate_hz,
+        integrity_rate_hz,
     };
 
     let _ros_handle = spawn_ros_task(publishers, ros_channels, ros_config);

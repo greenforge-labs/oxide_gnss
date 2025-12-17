@@ -20,6 +20,8 @@ pub enum GnssMessage {
     SatInfo(crate::device::ubx::SatInfo),
     /// Security signal status (SEC-SIG)
     SecSig(crate::device::ubx::SecSigData),
+    /// Relative position for moving base/rover (NAV-RELPOSNED)
+    RelPosNed(crate::device::ubx::RelPosNedData),
     /// Integrity status
     Integrity(crate::state::GnssIntegrity),
     /// Device state changed

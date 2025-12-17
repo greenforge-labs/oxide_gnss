@@ -8,7 +8,10 @@ mod ublox;
 
 pub use device::{CoordinateFrame, DeviceConfig, NavigationConfig, ReconnectConfig};
 pub use ntrip::{NtripConfig, NtripConnectionConfig};
-pub use ublox::UbloxConfig;
+pub use ublox::{
+    BeidouConfig, GnssConstellationConfig, MessageConfig, PortSettings, ProtocolConfig, QzssConfig,
+    RateConfig, SbasConfig, SignalConfig, UartPortConfig, UbloxConfig,
+};
 
 use serde::Deserialize;
 use std::path::Path;
@@ -31,17 +34,38 @@ pub struct Config {
 /// ROS-related configuration.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct RosConfig {
-    /// Publisher enable/disable toggles.
+    /// Topic publish rates
     #[serde(default)]
-    pub publish: PublishConfig,
+    pub rates: RosRatesConfig,
 }
 
-/// Per-topic publishing toggles.
-#[derive(Debug, Clone, Deserialize, Default)]
-pub struct PublishConfig {
-    /// Publish detailed SEC-SIG per-center-frequency data on ~/sec_sig_details.
-    #[serde(default)]
-    pub sec_sig_details: bool,
+/// ROS topic publish rate configuration.
+#[derive(Debug, Clone, Deserialize)]
+pub struct RosRatesConfig {
+    /// Diagnostics publish rate in Hz (default: 1.0)
+    #[serde(default = "default_diagnostics_rate")]
+    pub diagnostics_hz: f64,
+
+    /// Integrity/operational publish rate in Hz (default: 1.0)
+    #[serde(default = "default_integrity_rate")]
+    pub integrity_hz: f64,
+}
+
+fn default_diagnostics_rate() -> f64 {
+    1.0
+}
+
+fn default_integrity_rate() -> f64 {
+    1.0
+}
+
+impl Default for RosRatesConfig {
+    fn default() -> Self {
+        Self {
+            diagnostics_hz: 1.0,
+            integrity_hz: 1.0,
+        }
+    }
 }
 
 impl Config {

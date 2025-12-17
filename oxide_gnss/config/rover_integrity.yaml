@@ -1,0 +1,101 @@
+# =============================================================================
+# F9P Rover with Integrity Monitoring
+# =============================================================================
+# Configuration for a ZED-F9P rover receiving RTK corrections via NTRIP.
+# Includes all messages required for safety integrity monitoring.
+#
+# Published topics:
+#   ~/fix               - Position (sensor_msgs/NavSatFix)
+#   ~/velocity          - Velocity (geometry_msgs/TwistWithCovarianceStamped)
+#   ~/time_reference    - GPS time (sensor_msgs/TimeReference)
+#   ~/hp_pos            - High-precision position (sensor_msgs/NavSatFix)
+#   ~/integrity         - Safety integrity status (oxide_gnss_msgs/OxideIntegrity)
+#   ~/operational       - Go/no-go signal (std_msgs/Bool)
+#   ~/sec_sig_details   - Jamming/spoofing details (oxide_gnss_msgs/SecSigDetails)
+#   /diagnostics        - System diagnostics (diagnostic_msgs/DiagnosticArray)
+#
+# NOT included (no NAV_RELPOSNED):
+#   ~/baseline_pose     - Requires moving base configuration
+# =============================================================================
+
+ros:
+  rates:
+    diagnostics_hz: 1.0
+    integrity_hz: 1.0
+
+device:
+  # Serial port - use udev symlink for stability
+  port: "/dev/gnss_f9p_rover"
+  baud_rate: 460800
+  frame: ENU
+
+  navigation:
+    rate_hz: 10
+    min_satellites: 4
+    max_hdop: 5.0
+    max_pdop: 10.0
+
+  reconnect:
+    enabled: true
+    initial_delay_secs: 1
+    max_delay_secs: 30
+    max_attempts: 0       # Unlimited retries for safety-critical operation
+
+  ublox:
+    family: "F9P"
+
+    rate:
+      measurement_ms: 100   # 10 Hz
+      nav_ratio: 1
+
+    protocols:
+      usb_in: [ubx, rtcm3x]   # Accept UBX commands and RTCM corrections
+      usb_out: [ubx]          # UBX output only (no NMEA)
+
+    # -------------------------------------------------------------------------
+    # UBX Message Configuration
+    # -------------------------------------------------------------------------
+    # See docs/CONFIGURATION.md for message requirements and integrity checks.
+    messages:
+      usb:
+        # Essential - position/velocity/time solution
+        NAV_PVT: 1
+
+        # Recommended - high precision position
+        NAV_HPPOSLLH: 1       # High-precision lat/lon/height
+        NAV_POSECEF: 1        # ECEF position for transforms
+
+        # RequiredForFeature - integrity monitoring (~/integrity, ~/operational)
+        MON_RF: 1             # Antenna status, jamming indicator
+        MON_COMMS: 1          # Communication port health
+        SEC_SIG: 1            # Jamming/spoofing detection
+
+        # Optional - additional monitoring
+        SEC_SIGLOG: 1         # Security event log
+        NAV_SAT: 5            # Satellite info (every 5th solution)
+
+# =============================================================================
+# NTRIP Configuration
+# =============================================================================
+# RTK corrections for centimeter-level accuracy.
+# Credentials via environment variables for security.
+ntrip:
+  host: "ntrip.data.gnss.ga.gov.au"
+  port: 2101
+  use_https: false
+  mountpoint: "ALIC00AUS0"    # Change to nearest base station
+
+  # Authentication - use environment variables
+  username: "${NTRIP_USERNAME}"
+  password: "${NTRIP_PASSWORD}"
+
+  # GGA position reporting (required by most VRS networks)
+  send_gga: true
+  gga_interval_secs: 10
+
+  connection:
+    timeout_secs: 10
+    reconnect: true
+    initial_delay_secs: 1
+    max_delay_secs: 60
+    backoff_reset_secs: 3600

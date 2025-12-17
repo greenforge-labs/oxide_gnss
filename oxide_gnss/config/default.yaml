@@ -1,12 +1,20 @@
 # oxide_gnss default configuration
 # Copy this file and customize for your setup
 
-# ROS publishing options
+# =============================================================================
+# ROS Configuration
+# =============================================================================
 ros:
-  publish:
-    sec_sig_details: true
+  # Topic publish rates (Hz)
+  # Most topics publish when UBX data arrives - see messages section below.
+  # These rates are for topics that aggregate multiple sources or are timer-based.
+  rates:
+    diagnostics_hz: 1.0     # /diagnostics - aggregated system status
+    integrity_hz: 1.0       # ~/integrity, ~/operational - integrity status
 
+# =============================================================================
 # GNSS Device Configuration
+# =============================================================================
 device:
   # Serial port path
   # Linux: /dev/ttyACM0, /dev/ttyUSB0, or symlink from udev rule
@@ -23,55 +31,115 @@ device:
 
   # Navigation settings
   navigation:
-    # Update rate in Hz (1-25 for ZED-F9P)
-    rate_hz: 10
-
-    # Minimum satellites for valid fix
-    min_satellites: 4
-
-    # Maximum acceptable HDOP (warning threshold)
-    max_hdop: 5.0
-
-    # Maximum acceptable PDOP (warning threshold)
-    max_pdop: 10.0
+    rate_hz: 10           # Update rate in Hz (1-25 for ZED-F9P)
+    min_satellites: 4     # Minimum satellites for valid fix
+    max_hdop: 5.0         # Maximum acceptable HDOP (warning threshold)
+    max_pdop: 10.0        # Maximum acceptable PDOP (warning threshold)
 
   # Reconnection behavior
   reconnect:
     enabled: true
     initial_delay_secs: 1
     max_delay_secs: 30
-    max_attempts: 0  # 0 = unlimited
+    max_attempts: 0       # 0 = unlimited
 
-  # u-blox specific configuration (optional)
-  # Key names match u-blox documentation CFG_* syntax.
+  # ---------------------------------------------------------------------------
+  # u-blox Receiver Configuration
+  # ---------------------------------------------------------------------------
+  # Structured configuration for u-blox receivers.
   # See: https://content.u-blox.com/sites/default/files/documents/u-blox-F9-HPG-1.32_InterfaceDescription_UBX-22008968.pdf
   ublox:
+    # Device family - used for validation warnings
+    # Supported: F9P, F9R, F9H
     family: "F9P"
 
-    # Measurement/Navigation rates
-    CFG_RATE_MEAS: 100      # Measurement rate in ms (100 = 10Hz)
-    CFG_RATE_NAV: 1         # Navigation rate = measurements required per nav solution
+    # -------------------------------------------------------------------------
+    # Measurement/Navigation Rate
+    # -------------------------------------------------------------------------
+    rate:
+      measurement_ms: 100   # Measurement rate in ms (100 = 10 Hz)
+      nav_ratio: 1          # Nav solutions per measurement (typically 1)
 
-    # Message output rates on USB (0 = disabled, 1 = every solution, N = every Nth)
-    CFG_MSGOUT_UBX_NAV_PVT_USB: 1
-    CFG_MSGOUT_UBX_NAV_HPPOSLLH_USB: 1
-    CFG_MSGOUT_UBX_NAV_SAT_USB: 5       # Every 5th solution (reduce bandwidth)
+    # -------------------------------------------------------------------------
+    # Protocol Settings
+    # -------------------------------------------------------------------------
+    # Enable/disable protocols per port
+    # Available protocols: ubx, nmea, rtcm3x
+    protocols:
+      usb_in: [ubx, rtcm3x]   # Accept UBX commands and RTCM corrections
+      usb_out: [ubx]          # Output UBX messages only (no NMEA)
+      # uart1_in: [ubx, rtcm3x]
+      # uart1_out: [ubx]
+      # uart2_in: [rtcm3x]    # For moving base: receive RTCM from base
+      # uart2_out: []
 
-    # Safety/Integrity messages (for integrity monitoring)
-    # CFG_MSGOUT_UBX_NAV_COV_USB: 1     # NOT supported on ZED-F9P (only F9R/F9H)
-    CFG_MSGOUT_UBX_NAV_POSECEF_USB: 1   # ECEF position (for coordinate transforms)
-    # CFG_MSGOUT_UBX_MON_HW_USB: 1      # Hardware status (antenna, jamming)
-    CFG_MSGOUT_UBX_MON_RF_USB: 1        # RF status (antenna, jamming)
-    CFG_MSGOUT_UBX_SEC_SIG_USB: 1       # Jamming/spoofing detection
-    # CFG_MSGOUT_UBX_RXM_COR_USB: 1     # SPARTN corrections only (not RTCM) - disabled
-    CFG_MSGOUT_UBX_MON_COMMS_USB: 1     # Port diagnostics
-    CFG_MSGOUT_UBX_SEC_SIGLOG_USB: 1    # Security event log
+    # -------------------------------------------------------------------------
+    # Port Settings (optional)
+    # -------------------------------------------------------------------------
+    # ports:
+    #   uart1:
+    #     enabled: false
+    #   uart2:
+    #     baudrate: 460800
+    #     enabled: true
 
-    # Protocol settings for USB
-    CFG_USBINPROT_UBX: true
-    CFG_USBINPROT_RTCM3X: true
-    CFG_USBOUTPROT_UBX: true
-    CFG_USBOUTPROT_NMEA: false
+    # -------------------------------------------------------------------------
+    # GNSS Signal/Constellation Selection (optional)
+    # -------------------------------------------------------------------------
+    # Uncomment to customize which constellations are used.
+    # Default: receiver's factory settings
+    # signals:
+    #   gps:
+    #     enabled: true
+    #     l1: true          # L1C/A
+    #     l2: true          # L2C
+    #   glonass:
+    #     enabled: true
+    #     l1: true
+    #     l2: true
+    #   galileo:
+    #     enabled: false    # Disable to reduce CPU load if not needed
+    #   beidou:
+    #     enabled: true
+    #     b1: true
+    #     b2: true
+    #   sbas:
+    #     enabled: false
+    #   qzss:
+    #     enabled: false
+
+    # -------------------------------------------------------------------------
+    # UBX Message Output Rates
+    # -------------------------------------------------------------------------
+    # Rate values: 0 = disabled, 1 = every solution, N = every Nth solution
+    #
+    # MESSAGE REQUIREMENTS are defined in code: src/config/ublox.rs
+    # The driver validates config at startup and will:
+    #   - ERROR and fail if ESSENTIAL messages are missing
+    #   - WARN if RECOMMENDED messages are missing  
+    #   - Log which ROS topics will be unavailable
+    #
+    # See MESSAGE_REQUIREMENTS in ublox.rs for the authoritative list of:
+    #   - Message levels (Essential/Recommended/Optional)
+    #   - Why each message is needed
+    #   - Which ROS topics depend on each message
+    #
+    messages:
+      usb:
+        # Essential - position/velocity/time
+        NAV_PVT: 1            # Position, velocity, time solution
+
+        # Recommended - high precision and integrity
+        NAV_HPPOSLLH: 1       # High-precision position (for ~/hp_pos)
+        NAV_POSECEF: 1        # ECEF position (for coordinate transforms)
+        MON_RF: 1             # RF/antenna status, jamming indicator
+        MON_COMMS: 1          # Communication port diagnostics
+        SEC_SIG: 1            # Jamming/spoofing detection
+
+        # Optional - additional data
+        NAV_SAT: 5            # Satellite info (every 5th - reduces bandwidth)
+        SEC_SIGLOG: 1         # Security event log
+        # NAV_RELPOSNED: 1    # Relative position (for moving base/rover)
 
 # NTRIP Client Configuration (optional)
 # Comment out this section to disable NTRIP
