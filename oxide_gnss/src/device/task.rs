@@ -8,7 +8,7 @@
 //! - Reporting position data for NTRIP GGA
 
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tokio::sync::{mpsc, watch, Mutex};
 use tokio::time::sleep;
@@ -228,6 +228,8 @@ impl DeviceTask {
 
         // Counts consecutive failures of the state machine (connect/config/active).
         let mut connect_attempt: u32 = 0;
+        // Tracks when we entered Active state for backoff reset logic.
+        let mut last_active_start: Option<Instant> = None;
 
         loop {
             // Check for shutdown
@@ -238,15 +240,25 @@ impl DeviceTask {
             }
 
             // Run the state machine
-            match self.run_state_machine().await {
+            match self.run_state_machine(&mut last_active_start).await {
                 Ok(()) => {
                     // Normal exit (shutdown).
                     break;
                 }
                 Err(e) => {
-                    connect_attempt = connect_attempt.saturating_add(1);
-
                     let reconnect_cfg = &self.config.reconnect;
+
+                    // If we've been running successfully for longer than the
+                    // configured reset period, reset backoff so that
+                    // intermittent long-term dropouts start with a small delay.
+                    if let Some(start) = last_active_start {
+                        let reset_secs = reconnect_cfg.backoff_reset_secs;
+                        if reset_secs > 0 && start.elapsed().as_secs() >= reset_secs as u64 {
+                            connect_attempt = 0;
+                        }
+                    }
+
+                    connect_attempt = connect_attempt.saturating_add(1);
 
                     // If automatic reconnection is disabled, enter a stable waiting state
                     // and stop retrying. Higher-level supervision can decide what to do.
@@ -315,7 +327,14 @@ impl DeviceTask {
     }
 
     /// Run the device state machine.
-    async fn run_state_machine(&mut self) -> Result<(), DeviceError> {
+    async fn run_state_machine(
+        &mut self,
+        last_active_start: &mut Option<Instant>,
+    ) -> Result<(), DeviceError> {
+        // Clear active start so failed connections don't trigger backoff reset
+        // from a stale value. Only successful entry to Active state should set this.
+        *last_active_start = None;
+
         // Phase 1: Connect
         self.set_state(DeviceState::Connecting).await;
         let mut serial = self.connect().await?;
@@ -338,6 +357,7 @@ impl DeviceTask {
 
         // Phase 3: Active - main read loop
         self.set_state(DeviceState::Active).await;
+        *last_active_start = Some(Instant::now());
         self.run_active_loop(&mut serial, &mut ubx).await
     }
 

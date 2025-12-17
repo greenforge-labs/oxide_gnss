@@ -204,6 +204,10 @@ impl NtripTask {
         &mut self,
         last_streaming_start: &mut Option<Instant>,
     ) -> Result<(), NtripError> {
+        // Clear streaming start so failed connections don't trigger backoff reset
+        // from a stale value. Only successful streaming should set this.
+        *last_streaming_start = None;
+
         self.set_state(NtripState::Connecting).await;
 
         let mut client = NtripClient::new(self.config.clone())?;

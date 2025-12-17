@@ -93,6 +93,11 @@ pub struct ReconnectConfig {
     /// Maximum number of reconnection attempts (0 = unlimited)
     #[serde(default)]
     pub max_attempts: u32,
+
+    /// Time in seconds of continuous successful operation after which the
+    /// reconnect backoff is reset (0 = never reset).
+    #[serde(default = "default_backoff_reset_secs")]
+    pub backoff_reset_secs: u32,
 }
 
 impl Default for ReconnectConfig {
@@ -102,6 +107,7 @@ impl Default for ReconnectConfig {
             initial_delay_secs: default_initial_delay(),
             max_delay_secs: default_max_delay(),
             max_attempts: 0,
+            backoff_reset_secs: default_backoff_reset_secs(),
         }
     }
 }
@@ -174,6 +180,10 @@ fn default_initial_delay() -> u32 {
 
 fn default_max_delay() -> u32 {
     30
+}
+
+fn default_backoff_reset_secs() -> u32 {
+    300 // 5 minutes of stable operation resets backoff
 }
 
 #[cfg(test)]
