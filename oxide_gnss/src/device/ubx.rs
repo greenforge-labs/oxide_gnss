@@ -887,25 +887,23 @@ impl UbxHandler {
 
     /// Parse NAV-RELPOSNED (relative position) message.
     fn parse_nav_rel_pos_ned(msg: &NavRelPosNedRef) -> RelPosNedData {
-        // Combine low and high precision components
-        // rel_pos_*_cm is in cm, rel_pos_hp_*_mm is in 0.1mm
-        // Result in meters
-        let rel_pos_n = (msg.rel_pos_n_cm() as f64 + msg.rel_pos_hp_n_mm() as f64 * 0.01) * 0.01;
-        let rel_pos_e = (msg.rel_pos_e_cm() as f64 + msg.rel_pos_hp_e_mm() as f64 * 0.01) * 0.01;
-        let rel_pos_d = (msg.rel_pos_d_cm() as f64 + msg.rel_pos_hp_d_mm() as f64 * 0.01) * 0.01;
-        let rel_pos_length =
-            (msg.rel_pos_length_cm() as f64 + msg.rel_pos_hp_length_mm() as f64 * 0.01) * 0.01;
+        // Combine low and high precision components (all methods return f64)
+        // rel_pos_*_cm is in cm, rel_pos_hp_*_mm is in 0.1mm -> result in meters
+        let rel_pos_n = (msg.rel_pos_n_cm() + msg.rel_pos_hp_n_mm() * 0.01) * 0.01;
+        let rel_pos_e = (msg.rel_pos_e_cm() + msg.rel_pos_hp_e_mm() * 0.01) * 0.01;
+        let rel_pos_d = (msg.rel_pos_d_cm() + msg.rel_pos_hp_d_mm() * 0.01) * 0.01;
+        let rel_pos_length = (msg.rel_pos_length_cm() + msg.rel_pos_hp_length_mm() * 0.01) * 0.01;
 
         // Heading in degrees, convert to radians
-        let rel_pos_heading = msg.rel_pos_heading_degrees() * std::f64::consts::PI / 180.0;
+        let rel_pos_heading = msg.rel_pos_heading_degrees().to_radians();
 
-        // Accuracies are in mm, convert to meters
-        let acc_n = msg.acc_n_mm() as f64 * 0.001;
-        let acc_e = msg.acc_e_mm() as f64 * 0.001;
-        let acc_d = msg.acc_d_mm() as f64 * 0.001;
-        let acc_length = msg.acc_length_mm() as f64 * 0.001;
+        // Accuracies in mm, convert to meters
+        let acc_n = msg.acc_n_mm() * 0.001;
+        let acc_e = msg.acc_e_mm() * 0.001;
+        let acc_d = msg.acc_d_mm() * 0.001;
+        let acc_length = msg.acc_length_mm() * 0.001;
         // Heading accuracy in degrees, convert to radians
-        let acc_heading = msg.acc_heading_degrees() * std::f64::consts::PI / 180.0;
+        let acc_heading = msg.acc_heading_degrees().to_radians();
 
         RelPosNedData {
             itow: msg.itow(),

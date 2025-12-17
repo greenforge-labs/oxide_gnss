@@ -437,6 +437,7 @@ pub fn parse_cfg_key(name: &str, value: &serde_yaml::Value) -> Option<CfgVal> {
 ///
 /// # Returns
 /// Vec of successfully parsed CfgVal entries
+#[allow(deprecated)]
 pub fn build_cfg_vals(
     cfg_keys: &std::collections::HashMap<String, serde_yaml::Value>,
 ) -> Vec<CfgVal> {

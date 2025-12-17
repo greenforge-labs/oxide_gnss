@@ -342,6 +342,7 @@ pub const MESSAGE_REQUIREMENTS: &[MessageRequirement] = &[
 ];
 
 /// Get all messages at a given requirement level.
+#[allow(dead_code)]
 pub fn messages_at_level(level: MessageLevel) -> impl Iterator<Item = &'static MessageRequirement> {
     MESSAGE_REQUIREMENTS
         .iter()
@@ -349,6 +350,7 @@ pub fn messages_at_level(level: MessageLevel) -> impl Iterator<Item = &'static M
 }
 
 /// Get the requirement for a specific message, if known.
+#[allow(dead_code)]
 pub fn get_message_requirement(message: &str) -> Option<&'static MessageRequirement> {
     MESSAGE_REQUIREMENTS.iter().find(|m| m.message == message)
 }
