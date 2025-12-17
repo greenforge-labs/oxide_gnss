@@ -65,7 +65,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config_path = PathBuf::from(config_path_str.as_ref());
     info!("Loading configuration from {}", config_path.display());
 
-    // Load configuration
+    // Load configuration (blocking I/O is acceptable at startup before tasks are spawned)
     let config = match Config::from_file(&config_path) {
         Ok(config) => config,
         Err(e) => {

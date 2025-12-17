@@ -36,8 +36,8 @@ pub enum GnssMessage {
 pub struct SupervisorChannels {
     /// RTCM data from NTRIP to device (sender side)
     pub rtcm_tx: mpsc::Sender<Vec<u8>>,
-    /// RTCM data from NTRIP to device (receiver side)
-    pub rtcm_rx: mpsc::Receiver<Vec<u8>>,
+    /// RTCM data from NTRIP to device (receiver side, taken once by device task)
+    rtcm_rx: Option<mpsc::Receiver<Vec<u8>>>,
 
     /// GGA position from device to NTRIP (sender side)
     pub gga_tx: watch::Sender<Option<GgaData>>,
@@ -46,8 +46,8 @@ pub struct SupervisorChannels {
 
     /// Messages from device/NTRIP to ROS publisher (sender side)
     pub msg_tx: mpsc::Sender<GnssMessage>,
-    /// Messages from device/NTRIP to ROS publisher (receiver side)
-    pub msg_rx: mpsc::Receiver<GnssMessage>,
+    /// Messages from device/NTRIP to ROS publisher (receiver side, taken once by ROS task)
+    msg_rx: Option<mpsc::Receiver<GnssMessage>>,
 
     /// Shutdown signal (sender side)
     pub shutdown_tx: watch::Sender<bool>,
@@ -65,11 +65,11 @@ impl SupervisorChannels {
 
         Self {
             rtcm_tx,
-            rtcm_rx,
+            rtcm_rx: Some(rtcm_rx),
             gga_tx,
             gga_rx,
             msg_tx,
-            msg_rx,
+            msg_rx: Some(msg_rx),
             shutdown_tx,
             shutdown_rx,
         }
@@ -227,15 +227,25 @@ impl Supervisor {
     }
 
     /// Take ownership of the RTCM receiver (for device task).
+    ///
+    /// # Panics
+    /// Panics if called more than once.
     pub fn take_rtcm_rx(&mut self) -> mpsc::Receiver<Vec<u8>> {
-        let (_, rx) = mpsc::channel(1);
-        std::mem::replace(&mut self.channels.rtcm_rx, rx)
+        self.channels
+            .rtcm_rx
+            .take()
+            .expect("take_rtcm_rx called more than once")
     }
 
     /// Take ownership of the message receiver (for ROS publisher task).
+    ///
+    /// # Panics
+    /// Panics if called more than once.
     pub fn take_msg_rx(&mut self) -> mpsc::Receiver<GnssMessage> {
-        let (_, rx) = mpsc::channel(1);
-        std::mem::replace(&mut self.channels.msg_rx, rx)
+        self.channels
+            .msg_rx
+            .take()
+            .expect("take_msg_rx called more than once")
     }
 }
 

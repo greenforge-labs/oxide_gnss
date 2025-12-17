@@ -196,12 +196,18 @@ However, I recommend a **debug-level log** during development builds via `#[cfg(
 
 ### 2.3 Items Identified by Only One Reviewer
 
-| Issue | Identified By | Included in Final? | Rationale |
-|-------|---------------|-------------------|-----------|
-| `#[must_use]` attributes missing | Opus only | Yes (LOW) | Valid Rust idiom |
-| Potential deadlock in `take_rtcm_rx` | Opus only | Yes (LOW) | Edge case worth documenting |
-| Blocking parameter retrieval | Gemini only | Yes (LOW) | Valid startup concern |
-| Unused `last_mon_rf` field | Opus only | Yes (LOW) | Dead code |
+| Issue | Identified By | Status | Resolution |
+|-------|---------------|--------|------------|
+| `#[must_use]` attributes missing | Opus only | CLOSED | Valid Rust idiom but low priority; not pursued |
+| Potential deadlock in `take_rtcm_rx` | Opus only | ✅ FIXED | Changed to `Option::take()` with panic on double-call |
+| Blocking parameter retrieval | Gemini only | CLOSED | Not a real problem—see rationale below |
+| Unused `last_mon_rf` field | Opus only | INVALID | Field no longer exists in codebase |
+
+#### Resolution Details
+
+**`take_rtcm_rx` fix:** The original implementation created a dummy channel on each call, meaning a second caller would silently receive a dead receiver. Fixed by wrapping receivers in `Option` and using `.take()`, which panics if called twice—converting a silent deadlock into an immediate, debuggable failure.
+
+**Blocking parameter retrieval rationale:** This was flagged as a concern about blocking I/O (`std::fs::read_to_string`) in an async context. However, this occurs at startup *before* any async tasks are spawned, and the GNSS device isn't configured yet anyway. Any messages received during config loading would be meaningless since the device is in an unknown state. Blocking here is architecturally correct—we intentionally wait for configuration before proceeding.
 
 ---
 
@@ -228,8 +234,9 @@ Both reviewers independently identified strong indicators of AI/LLM-generated co
 | **CRITICAL** | 0 | — |
 | **HIGH** | 0 | ~~Duplicate integrity publishing~~ ✅ |
 | **MEDIUM** | 0 | ~~Correction age stub~~ ✅, ~~Doc mismatch~~ ✅, ~~Duplicate backoff~~ ✅, ~~Message forwarding~~ ✅, ~~Excessive cloning~~ ✅ |
-| **LOW** | 8+ | Y2038, Hardcoded topics, Missing QoS, PendingAck, Empty config, State tracking, Error handling, Deadlock risk |
-| **RETRACTED** | 1 | ~~Covariance transformation~~ (not a bug) |
+| **LOW** | 7+ | Y2038, Hardcoded topics, Missing QoS, PendingAck, Empty config, State tracking, Error handling |
+| **FIXED** | 1 | ~~Deadlock risk in take_rtcm_rx~~ ✅ |
+| **RETRACTED** | 2 | ~~Covariance transformation~~ (not a bug), ~~Blocking parameter retrieval~~ (not a problem) |
 
 ---
 
