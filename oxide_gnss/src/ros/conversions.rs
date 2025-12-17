@@ -296,9 +296,9 @@ mod tests {
 }
 
 impl GnssIntegrity {
-    /// Convert GnssIntegrity to oxide_gnss_msgs/GnssIntegrity message.
-    pub fn to_ros_msg(&self, operational: bool) -> oxide_gnss_msgs::msg::GnssIntegrity {
-        use oxide_gnss_msgs::msg::GnssIntegrity as Msg;
+    /// Convert GnssIntegrity to oxide_gnss_msgs/OxideIntegrity message.
+    pub fn to_ros_msg(&self, operational: bool) -> oxide_gnss_msgs::msg::OxideIntegrity {
+        use oxide_gnss_msgs::msg::OxideIntegrity as Msg;
 
         let mut msg = Msg::default();
 

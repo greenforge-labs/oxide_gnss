@@ -199,7 +199,6 @@ impl RosTask {
                 self.publishers.publish_sat_info(&sat);
             }
             GnssMessage::Integrity(integrity) => {
-                debug!(level = ?integrity.level, "Publishing integrity");
                 self.publishers.publish_integrity(&integrity);
             }
             GnssMessage::Shutdown => {

@@ -29,7 +29,7 @@ pub struct GnssPublishers {
     /// Satellite Info publisher (~/satellites)
     sat_pub: Publisher<std_msgs::msg::String>,
     /// Integrity status publisher (~/integrity) - typed message
-    integrity_pub: Publisher<oxide_gnss_msgs::msg::GnssIntegrity>,
+    integrity_pub: Publisher<oxide_gnss_msgs::msg::OxideIntegrity>,
     /// Operational go/no-go publisher (~/operational)
     operational_pub: Publisher<std_msgs::msg::Bool>,
 
