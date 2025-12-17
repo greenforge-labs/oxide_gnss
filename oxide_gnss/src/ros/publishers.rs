@@ -38,6 +38,9 @@ pub struct GnssPublishers {
 
     /// Baseline pose publisher for moving base/rover (~/baseline_pose)
     baseline_pose_pub: Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>,
+
+    /// Use high-precision position data for ~/fix when available
+    use_hp_for_fix: bool,
 }
 
 impl GnssPublishers {
@@ -46,7 +49,12 @@ impl GnssPublishers {
     /// # Arguments
     /// * `node` - The ROS2 node to create publishers on
     /// * `frame` - Coordinate frame for velocity output (ENU or NED)
-    pub fn new(node: &Node, frame: CoordinateFrame) -> Result<Self, rclrs::RclrsError> {
+    /// * `use_hp_for_fix` - Use high-precision position for ~/fix when available
+    pub fn new(
+        node: &Node,
+        frame: CoordinateFrame,
+        use_hp_for_fix: bool,
+    ) -> Result<Self, rclrs::RclrsError> {
         // QoS profiles for different topic types:
         // - Sensor data: Best effort, keep last (high-rate position/velocity)
         // - Reliable: For safety-critical topics that must not be lost
@@ -96,6 +104,7 @@ impl GnssPublishers {
             operational_pub,
             sec_sig_details_pub,
             baseline_pose_pub,
+            use_hp_for_fix,
         })
     }
 
@@ -183,15 +192,36 @@ impl GnssPublishers {
     }
 
     /// Publish PVT data to all relevant topics.
-    pub fn publish_pvt(&self, pvt: &PvtData) {
+    ///
+    /// If `hp_pos` is provided and `use_hp_for_fix` is enabled, the ~/fix topic
+    /// will use the high-precision position (lat/lon/alt and accuracy) from
+    /// NAV-HPPOSLLH instead of standard NAV-PVT coordinates.
+    pub fn publish_pvt(&self, pvt: &PvtData, hp_pos: Option<&HpPosData>) {
         let stamp = now_timestamp();
 
-        // Publish NavSatFix
+        // Publish NavSatFix - use HP position if available and configured
         let mut fix_msg: sensor_msgs::msg::NavSatFix = pvt.to_ros_msg();
+        if self.use_hp_for_fix {
+            if let Some(hp) = hp_pos {
+                // Override position with high-precision data
+                fix_msg.latitude = hp.lat;
+                fix_msg.longitude = hp.lon;
+                fix_msg.altitude = hp.height;
+                // Override covariance with HP accuracy
+                let h_var = (hp.h_acc as f64).powi(2);
+                let v_var = (hp.v_acc as f64).powi(2);
+                fix_msg.position_covariance = [
+                    h_var, 0.0, 0.0, // East
+                    0.0, h_var, 0.0, // North
+                    0.0, 0.0, v_var, // Up
+                ];
+                debug!("Published NavSatFix with HP position");
+            }
+        }
         fix_msg.header.stamp = stamp.clone();
         if let Err(e) = self.fix_pub.publish(fix_msg) {
             error!(error = %e, "Failed to publish NavSatFix");
-        } else {
+        } else if !self.use_hp_for_fix || hp_pos.is_none() {
             debug!("Published NavSatFix");
         }
 

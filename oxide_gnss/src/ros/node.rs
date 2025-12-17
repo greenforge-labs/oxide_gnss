@@ -59,7 +59,15 @@ pub struct GnssNode {
 impl GnssNode {
     /// Create a new GNSS driver instance using an existing ROS2 node.
     pub fn new(node: Node, config: GnssNodeConfig) -> Result<Self, RclrsError> {
-        let publishers = GnssPublishers::new(&node, config.device.frame)?;
+        // Enable HP position for ~/fix if NAV_HPPOSLLH is configured
+        let use_hp_for_fix = config
+            .device
+            .ublox
+            .as_ref()
+            .map(|u| u.is_message_enabled("NAV_HPPOSLLH"))
+            .unwrap_or(false);
+
+        let publishers = GnssPublishers::new(&node, config.device.frame, use_hp_for_fix)?;
 
         Ok(Self {
             node,

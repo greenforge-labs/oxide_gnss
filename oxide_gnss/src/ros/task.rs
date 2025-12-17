@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, watch};
 use tracing::{debug, info, warn};
 
+use crate::device::ubx::HpPosData;
 use crate::state::{DeviceState, FixType, GnssMessage, NtripState, PvtData};
 
 use super::publishers::GnssPublishers;
@@ -95,6 +96,8 @@ pub struct RosTask {
     last_ntrip_state: NtripState,
     last_fix_type: FixType,
     last_pvt: Option<PvtData>,
+    /// Last received high-precision position for use in ~/fix
+    last_hp_pos: Option<HpPosData>,
     /// Timestamp when last RTCM correction was received
     last_correction_received: Option<Instant>,
     /// Latest integrity data for rate-limited publishing
@@ -120,6 +123,7 @@ impl RosTask {
             last_ntrip_state: NtripState::default(),
             last_fix_type: FixType::NoFix,
             last_pvt: None,
+            last_hp_pos: None,
             last_correction_received: None,
             last_integrity: None,
         };
@@ -187,7 +191,7 @@ impl RosTask {
             GnssMessage::Pvt(pvt) => {
                 debug!("Publishing PVT data");
                 self.last_fix_type = pvt.fix_type;
-                self.publishers.publish_pvt(&pvt);
+                self.publishers.publish_pvt(&pvt, self.last_hp_pos.as_ref());
                 self.last_pvt = Some(pvt);
             }
             GnssMessage::SecSig(sig) => {
@@ -208,6 +212,7 @@ impl RosTask {
             }
             GnssMessage::HpPos(hp) => {
                 self.publishers.publish_hp_pos(&hp);
+                self.last_hp_pos = Some(hp);
             }
             GnssMessage::SatInfo(sat) => {
                 self.publishers.publish_sat_info(&sat);
