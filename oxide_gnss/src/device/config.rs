@@ -134,18 +134,14 @@ impl DeviceConfigurator {
                     step: "ublox config missing - add 'ublox:' section to config file".to_string(),
                 })?;
 
-        // Build CfgVal list from the config
-        let cfg_vals = super::cfg_key_mapping::build_cfg_vals(&ublox_config.cfg_keys);
+        // Validate config and emit warnings
+        ublox_config.validate();
 
-        if cfg_vals.is_empty() {
-            // No CFG keys to send - unusual but valid, just warn
-            warn!("No CFG_* keys in ublox config - device will use its existing settings");
-            info!("Device configuration skipped (no keys to configure)");
-            return Ok(());
-        }
+        // Build CfgVal list from the structured config
+        let cfg_vals = super::cfg_key_mapping::build_cfg_vals_from_config(ublox_config);
 
         info!(
-            "Using u-blox config from YAML ({} CFG keys)",
+            "Using u-blox config from YAML ({} settings)",
             cfg_vals.len()
         );
 

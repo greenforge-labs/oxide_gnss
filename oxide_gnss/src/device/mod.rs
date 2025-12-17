@@ -9,6 +9,8 @@ mod serial;
 mod task;
 pub mod ubx;
 
+pub use cfg_key_mapping::build_cfg_vals_from_config;
+#[allow(deprecated)]
 pub use cfg_key_mapping::{build_cfg_vals, parse_cfg_key};
 pub use config::{ConfigStep, ConfiguratorOptions, DeviceConfigurator};
 pub use serial::{SerialPort, SerialPortBuilder};

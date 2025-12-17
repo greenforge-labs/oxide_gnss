@@ -34,7 +34,7 @@ pub struct GnssPublishers {
     operational_pub: Publisher<std_msgs::msg::Bool>,
 
     /// Detailed SEC-SIG per-center-frequency publisher (~/sec_sig_details)
-    sec_sig_details_pub: Option<Publisher<oxide_gnss_msgs::msg::SecSigDetails>>,
+    sec_sig_details_pub: Publisher<oxide_gnss_msgs::msg::SecSigDetails>,
 }
 
 impl GnssPublishers {
@@ -43,11 +43,7 @@ impl GnssPublishers {
     /// # Arguments
     /// * `node` - The ROS2 node to create publishers on
     /// * `frame` - Coordinate frame for velocity output (ENU or NED)
-    pub fn new(
-        node: &Node,
-        frame: CoordinateFrame,
-        publish_sec_sig_details: bool,
-    ) -> Result<Self, rclrs::RclrsError> {
+    pub fn new(node: &Node, frame: CoordinateFrame) -> Result<Self, rclrs::RclrsError> {
         // QoS profiles for different topic types:
         // - Sensor data: Best effort, keep last (high-rate position/velocity)
         // - Reliable: For safety-critical topics that must not be lost
@@ -75,15 +71,9 @@ impl GnssPublishers {
         let operational_pub = node
             .create_publisher("~/operational".qos(reliable_qos))
             .expect("Failed to create operational publisher");
-
-        let sec_sig_details_pub = if publish_sec_sig_details {
-            Some(
-                node.create_publisher("~/sec_sig_details".qos(reliable_qos))
-                    .expect("Failed to create sec_sig_details publisher"),
-            )
-        } else {
-            None
-        };
+        let sec_sig_details_pub = node
+            .create_publisher("~/sec_sig_details".qos(reliable_qos))
+            .expect("Failed to create sec_sig_details publisher");
 
         Ok(Self {
             fix_pub,
@@ -100,17 +90,13 @@ impl GnssPublishers {
         })
     }
 
-    /// Publish detailed SEC-SIG per-center-frequency data to ~/sec_sig_details (if enabled).
+    /// Publish detailed SEC-SIG per-center-frequency data to ~/sec_sig_details.
     pub fn publish_sec_sig_details(&self, sig: &SecSigData) {
-        let Some(pub_) = &self.sec_sig_details_pub else {
-            return;
-        };
-
         let mut msg: oxide_gnss_msgs::msg::SecSigDetails = sig.to_ros_msg();
         msg.header.stamp = now_timestamp();
         msg.header.frame_id = "gnss".to_string();
 
-        if let Err(e) = pub_.publish(msg) {
+        if let Err(e) = self.sec_sig_details_pub.publish(msg) {
             error!(error = %e, "Failed to publish SecSigDetails");
         }
     }

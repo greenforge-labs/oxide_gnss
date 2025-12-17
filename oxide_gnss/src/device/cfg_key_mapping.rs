@@ -1,21 +1,133 @@
-//! Mapping from u-blox CFG_* key names to ublox crate CfgVal enum variants.
+//! Mapping from structured u-blox config to ublox crate CfgVal enum variants.
 //!
-//! This module provides translation between the u-blox documentation naming convention
-//! (e.g., `CFG_MSGOUT_UBX_NAV_PVT_USB`) and the `ublox` crate's `CfgVal` enum variants
-//! (e.g., `CfgVal::MsgOutUbxNavPvtUsb`).
+//! This module provides translation between the structured YAML configuration
+//! and the `ublox` crate's `CfgVal` enum variants.
 
 use tracing::warn;
 use ublox::cfg_val::CfgVal;
 
+use crate::config::UbloxConfig;
+
+/// Build a list of CfgVal from the structured UbloxConfig.
+pub fn build_cfg_vals_from_config(config: &UbloxConfig) -> Vec<CfgVal> {
+    let mut vals = Vec::new();
+
+    // Rate settings
+    vals.push(CfgVal::RateMeas(config.rate.measurement_ms));
+    vals.push(CfgVal::RateNav(config.rate.nav_ratio));
+
+    // Protocol settings
+    for proto in &config.protocols.usb_in {
+        if let Some(val) = parse_protocol_in("usb", proto) {
+            vals.push(val);
+        }
+    }
+    for proto in &config.protocols.usb_out {
+        if let Some(val) = parse_protocol_out("usb", proto) {
+            vals.push(val);
+        }
+    }
+    for proto in &config.protocols.uart1_in {
+        if let Some(val) = parse_protocol_in("uart1", proto) {
+            vals.push(val);
+        }
+    }
+    for proto in &config.protocols.uart1_out {
+        if let Some(val) = parse_protocol_out("uart1", proto) {
+            vals.push(val);
+        }
+    }
+
+    // Message output rates
+    for (msg, rate) in &config.messages.usb {
+        if let Some(val) = parse_message_rate("usb", msg, *rate) {
+            vals.push(val);
+        }
+    }
+    for (msg, rate) in &config.messages.uart1 {
+        if let Some(val) = parse_message_rate("uart1", msg, *rate) {
+            vals.push(val);
+        }
+    }
+
+    vals
+}
+
+/// Parse input protocol setting.
+fn parse_protocol_in(port: &str, protocol: &str) -> Option<CfgVal> {
+    match (port, protocol.to_lowercase().as_str()) {
+        ("usb", "ubx") => Some(CfgVal::UsbInProtUbx(true)),
+        ("usb", "nmea") => Some(CfgVal::UsbInProtNmea(true)),
+        ("usb", "rtcm3x") => Some(CfgVal::UsbInProtRtcm3x(true)),
+        ("uart1", "ubx") => Some(CfgVal::Uart1InProtUbx(true)),
+        ("uart1", "nmea") => Some(CfgVal::Uart1InProtNmea(true)),
+        ("uart1", "rtcm3x") => Some(CfgVal::Uart1InProtRtcm3x(true)),
+        _ => {
+            warn!("Unknown protocol '{}' for port '{}'", protocol, port);
+            None
+        }
+    }
+}
+
+/// Parse output protocol setting.
+fn parse_protocol_out(port: &str, protocol: &str) -> Option<CfgVal> {
+    match (port, protocol.to_lowercase().as_str()) {
+        ("usb", "ubx") => Some(CfgVal::UsbOutProtUbx(true)),
+        ("usb", "nmea") => Some(CfgVal::UsbOutProtNmea(true)),
+        ("uart1", "ubx") => Some(CfgVal::Uart1OutProtUbx(true)),
+        ("uart1", "nmea") => Some(CfgVal::Uart1OutProtNmea(true)),
+        ("uart1", "rtcm3x") => Some(CfgVal::Uart1OutProtRtcm3x(true)),
+        _ => {
+            warn!("Unknown protocol '{}' for port '{}'", protocol, port);
+            None
+        }
+    }
+}
+
+/// Parse message output rate setting.
+fn parse_message_rate(port: &str, msg: &str, rate: u8) -> Option<CfgVal> {
+    match (port, msg) {
+        // USB messages
+        ("usb", "NAV_PVT") => Some(CfgVal::MsgOutUbxNavPvtUsb(rate)),
+        ("usb", "NAV_HPPOSLLH") => Some(CfgVal::MsgOutUbxNavHpPosLlhUsb(rate)),
+        ("usb", "NAV_HPPOSECEF") => Some(CfgVal::MsgOutUbxNavHpPosEcefUsb(rate)),
+        ("usb", "NAV_SAT") => Some(CfgVal::MsgOutUbxNavSatUsb(rate)),
+        ("usb", "NAV_SIG") => Some(CfgVal::MsgOutUbxNavSigUsb(rate)),
+        ("usb", "NAV_STATUS") => Some(CfgVal::MsgOutUbxNavStatusUsb(rate)),
+        ("usb", "NAV_DOP") => Some(CfgVal::MsgOutUbxNavDopUsb(rate)),
+        ("usb", "NAV_CLOCK") => Some(CfgVal::MsgOutUbxNavClockUsb(rate)),
+        ("usb", "NAV_EOE") => Some(CfgVal::MsgOutUbxNavEoeUsb(rate)),
+        ("usb", "NAV_POSLLH") => Some(CfgVal::MsgOutUbxNavPosLlhUsb(rate)),
+        ("usb", "NAV_POSECEF") => Some(CfgVal::MsgOutUbxNavPosEcefUsb(rate)),
+        ("usb", "NAV_ODO") => Some(CfgVal::MsgOutUbxNavOdoUsb(rate)),
+        ("usb", "MON_RF") => Some(CfgVal::MsgOutUbxMonRfUsb(rate)),
+        ("usb", "MON_COMMS") => Some(CfgVal::MsgOutUbxMoncommsUsb(rate)),
+        ("usb", "SEC_SIG") => Some(CfgVal::MsgOutUbxSecSigUsb(rate)),
+        ("usb", "SEC_SIGLOG") => Some(CfgVal::MsgOutUbxSecSiglogUsb(rate)),
+        ("usb", "RXM_COR") => Some(CfgVal::MsgOutUbxRxmCorUsb(rate)),
+
+        // UART1 messages
+        ("uart1", "NAV_PVT") => Some(CfgVal::MsgOutUbxNavPvtUart1(rate)),
+        ("uart1", "NAV_HPPOSLLH") => Some(CfgVal::MsgOutUbxNavHpPosLlhUart1(rate)),
+        ("uart1", "NAV_SAT") => Some(CfgVal::MsgOutUbxNavSatUart1(rate)),
+        ("uart1", "NAV_STATUS") => Some(CfgVal::MsgOutUbxNavStatusUart1(rate)),
+        ("uart1", "MON_RF") => Some(CfgVal::MsgOutUbxMonRfUart1(rate)),
+        ("uart1", "MON_COMMS") => Some(CfgVal::MsgOutUbxMoncommsUart1(rate)),
+        ("uart1", "SEC_SIG") => Some(CfgVal::MsgOutUbxSecSigUart1(rate)),
+        ("uart1", "SEC_SIGLOG") => Some(CfgVal::MsgOutUbxSecSiglogUart1(rate)),
+        ("uart1", "RXM_COR") => Some(CfgVal::MsgOutUbxRxmCorUart1(rate)),
+
+        _ => {
+            warn!("Unknown message '{}' for port '{}'", msg, port);
+            None
+        }
+    }
+}
+
+// Legacy support for old CFG_* format (deprecated)
 /// Parse a CFG_* key name and value into a CfgVal.
-///
-/// # Arguments
-/// * `name` - CFG_* key name from u-blox documentation (e.g., "CFG_MSGOUT_UBX_NAV_PVT_USB")
-/// * `value` - The configuration value (integer or boolean)
-///
-/// # Returns
-/// * `Some(CfgVal)` if the key is recognized
-/// * `None` if the key is unknown or the value type is incorrect
+/// This is for backward compatibility with the old config format.
+#[deprecated(note = "Use structured config format instead")]
 pub fn parse_cfg_key(name: &str, value: &serde_yaml::Value) -> Option<CfgVal> {
     match name {
         // Skip non-CFG keys (like "family")
