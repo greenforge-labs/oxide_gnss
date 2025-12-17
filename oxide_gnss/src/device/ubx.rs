@@ -17,6 +17,7 @@ use ublox::{
     nav_cov::NavCovRef,
     nav_hp_pos_llh::NavHpPosLlhRef,
     nav_pos_ecef::NavPosEcefRef,
+    nav_rel_pos_ned::{common::NavRelPosNedFlags, proto27_31::NavRelPosNedRef},
     nav_sat::NavSatRef,
     packets::cfg_val::{CfgLayerSet, CfgValSetBuilder},
     proto27::Proto27,
@@ -56,6 +57,8 @@ pub struct UbxHandler {
     pub mon_hw: Option<MonHwData>,
     /// Last received RF status (replaces mon_hw)
     pub mon_rf: Option<MonRfData>,
+    /// Last received relative position (moving base/rover)
+    pub rel_pos_ned: Option<RelPosNedData>,
 }
 
 /// Parsed High Precision Position (NAV-HPPOSLLH).
@@ -114,6 +117,76 @@ pub struct PosEcefData {
     pub ecef_z: f64,
     /// Position accuracy estimate (m)
     pub p_acc: f64,
+}
+
+/// Parsed Relative Position (NAV-RELPOSNED) for moving base/rover.
+#[derive(Debug, Clone)]
+pub struct RelPosNedData {
+    /// GPS time of week (ms)
+    pub itow: u32,
+    /// Reference station ID
+    pub ref_station_id: u16,
+    /// North component of baseline vector (m)
+    pub rel_pos_n: f64,
+    /// East component of baseline vector (m)
+    pub rel_pos_e: f64,
+    /// Down component of baseline vector (m)
+    pub rel_pos_d: f64,
+    /// Length of baseline vector (m)
+    pub rel_pos_length: f64,
+    /// Heading of baseline vector (radians)
+    pub rel_pos_heading: f64,
+    /// Accuracy of North component (m)
+    pub acc_n: f64,
+    /// Accuracy of East component (m)
+    pub acc_e: f64,
+    /// Accuracy of Down component (m)
+    pub acc_d: f64,
+    /// Accuracy of baseline length (m)
+    pub acc_length: f64,
+    /// Accuracy of heading (radians)
+    pub acc_heading: f64,
+    /// Flags indicating validity and fix status
+    pub flags: RelPosNedFlags,
+}
+
+/// Flags for NAV-RELPOSNED message.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RelPosNedFlags {
+    /// Valid fix (within DOP & accuracy masks)
+    pub gnss_fix_ok: bool,
+    /// Differential corrections applied
+    pub diff_soln: bool,
+    /// Relative position components valid
+    pub rel_pos_valid: bool,
+    /// Carrier phase solution: 0=none, 1=float, 2=fixed
+    pub carr_soln: u8,
+    /// Receiver is in moving base mode
+    pub is_moving: bool,
+    /// Reference position was extrapolated
+    pub ref_pos_miss: bool,
+    /// Reference observations were extrapolated
+    pub ref_obs_miss: bool,
+}
+
+impl From<NavRelPosNedFlags> for RelPosNedFlags {
+    fn from(flags: NavRelPosNedFlags) -> Self {
+        use ublox::nav_rel_pos_ned::common::CarrierPhaseRangeSolutionStatus;
+        let carr_soln = match flags.carr_soln() {
+            CarrierPhaseRangeSolutionStatus::NoSolution => 0,
+            CarrierPhaseRangeSolutionStatus::SolutionWithFloatingAmbiguities => 1,
+            CarrierPhaseRangeSolutionStatus::SolutionWithFixedAmbiguities => 2,
+        };
+        Self {
+            gnss_fix_ok: flags.gnss_fix_ok(),
+            diff_soln: flags.diff_soln(),
+            rel_pos_valid: flags.rel_pos_valid(),
+            carr_soln,
+            is_moving: flags.is_moving(),
+            ref_pos_miss: flags.ref_pos_miss(),
+            ref_obs_miss: flags.ref_obs_miss(),
+        }
+    }
 }
 
 /// Parsed Signal Security Status (SEC-SIG).
@@ -434,6 +507,8 @@ pub struct ProcessResult {
     pub mon_hw: Option<MonHwData>,
     /// RF status (antenna, jamming indicator) - replaces mon_hw
     pub mon_rf: Option<MonRfData>,
+    /// Relative position for moving base/rover
+    pub rel_pos_ned: Option<RelPosNedData>,
 }
 
 impl UbxHandler {
@@ -456,6 +531,7 @@ impl UbxHandler {
             mon_comms: None,
             mon_hw: None,
             mon_rf: None,
+            rel_pos_ned: None,
         }
     }
 
@@ -493,6 +569,7 @@ impl UbxHandler {
         let mut new_mon_comms = None;
         let mut new_mon_hw = None;
         let mut new_mon_rf = None;
+        let mut new_rel_pos_ned = None;
         let mut ack_result = None;
         let mut nav_pvt_count = 0u64;
         let mut other_count = 0u64;
@@ -601,6 +678,15 @@ impl UbxHandler {
                                 new_mon_rf = Some(rf);
                             }
                         }
+                        ublox::proto27::PacketRef::NavRelPosNed(msg) => {
+                            let rel_pos = Self::parse_nav_rel_pos_ned(&msg);
+                            debug!(
+                                carr_soln = rel_pos.flags.carr_soln,
+                                length_m = rel_pos.rel_pos_length,
+                                "NAV-RELPOSNED received"
+                            );
+                            new_rel_pos_ned = Some(rel_pos);
+                        }
                         _ => {
                             other_count += 1;
                         }
@@ -657,6 +743,9 @@ impl UbxHandler {
         if let Some(ref rf) = new_mon_rf {
             self.mon_rf = Some(rf.clone());
         }
+        if let Some(ref rel_pos) = new_rel_pos_ned {
+            self.rel_pos_ned = Some(rel_pos.clone());
+        }
 
         ProcessResult {
             pvt: new_pvt,
@@ -672,6 +761,7 @@ impl UbxHandler {
             mon_comms: new_mon_comms,
             mon_hw: new_mon_hw,
             mon_rf: new_mon_rf,
+            rel_pos_ned: new_rel_pos_ned,
         }
     }
 
@@ -792,6 +882,45 @@ impl UbxHandler {
             ecef_y: msg.ecef_y_meters(),
             ecef_z: msg.ecef_z_meters(),
             p_acc: msg.p_acc_meters(),
+        }
+    }
+
+    /// Parse NAV-RELPOSNED (relative position) message.
+    fn parse_nav_rel_pos_ned(msg: &NavRelPosNedRef) -> RelPosNedData {
+        // Combine low and high precision components
+        // rel_pos_*_cm is in cm, rel_pos_hp_*_mm is in 0.1mm
+        // Result in meters
+        let rel_pos_n = (msg.rel_pos_n_cm() as f64 + msg.rel_pos_hp_n_mm() as f64 * 0.01) * 0.01;
+        let rel_pos_e = (msg.rel_pos_e_cm() as f64 + msg.rel_pos_hp_e_mm() as f64 * 0.01) * 0.01;
+        let rel_pos_d = (msg.rel_pos_d_cm() as f64 + msg.rel_pos_hp_d_mm() as f64 * 0.01) * 0.01;
+        let rel_pos_length =
+            (msg.rel_pos_length_cm() as f64 + msg.rel_pos_hp_length_mm() as f64 * 0.01) * 0.01;
+
+        // Heading in degrees, convert to radians
+        let rel_pos_heading = msg.rel_pos_heading_degrees() * std::f64::consts::PI / 180.0;
+
+        // Accuracies are in mm, convert to meters
+        let acc_n = msg.acc_n_mm() as f64 * 0.001;
+        let acc_e = msg.acc_e_mm() as f64 * 0.001;
+        let acc_d = msg.acc_d_mm() as f64 * 0.001;
+        let acc_length = msg.acc_length_mm() as f64 * 0.001;
+        // Heading accuracy in degrees, convert to radians
+        let acc_heading = msg.acc_heading_degrees() * std::f64::consts::PI / 180.0;
+
+        RelPosNedData {
+            itow: msg.itow(),
+            ref_station_id: msg.ref_station_id(),
+            rel_pos_n,
+            rel_pos_e,
+            rel_pos_d,
+            rel_pos_length,
+            rel_pos_heading,
+            acc_n,
+            acc_e,
+            acc_d,
+            acc_length,
+            acc_heading,
+            flags: msg.flags().into(),
         }
     }
 

@@ -21,8 +21,8 @@ use crate::state::{DeviceState, FixType, GnssIntegrity, IntegrityAggregator};
 use super::config::{ConfigStep, ConfiguratorOptions, DeviceConfigurator};
 use super::serial::SerialPortBuilder;
 use super::ubx::{
-    CovData, HpPosData, MonCommsData, MonHwData, MonRfData, PosEcefData, PvtData, RxmCorData,
-    SatInfo, SecSigData, SecSiglogData, UbxHandler,
+    CovData, HpPosData, MonCommsData, MonHwData, MonRfData, PosEcefData, PvtData, RelPosNedData,
+    RxmCorData, SatInfo, SecSigData, SecSiglogData, UbxHandler,
 };
 
 /// Channels required by the device task.
@@ -104,6 +104,8 @@ pub enum DeviceMessage {
     MonHw(MonHwData),
     /// RF status (antenna, jamming indicator) - replaces MonHw
     MonRf(MonRfData),
+    /// Relative position for moving base/rover
+    RelPosNed(RelPosNedData),
 }
 
 impl DeviceMessage {
@@ -121,6 +123,7 @@ impl DeviceMessage {
             DeviceMessage::SatInfo(sat) => Some(GnssMessage::SatInfo(sat)),
             DeviceMessage::SecSig(sig) => Some(GnssMessage::SecSig(sig)),
             DeviceMessage::Integrity(integrity) => Some(GnssMessage::Integrity(integrity)),
+            DeviceMessage::RelPosNed(rel_pos) => Some(GnssMessage::RelPosNed(rel_pos)),
             // Internal messages processed by IntegrityAggregator - not forwarded
             DeviceMessage::FixTypeChanged(_)
             | DeviceMessage::Covariance(_)
@@ -536,6 +539,15 @@ impl DeviceTask {
                 .send(DeviceMessage::MonRf(rf.clone()))
                 .await;
             integrity_updated = true;
+        }
+
+        // Handle NAV-RELPOSNED (relative position for moving base/rover)
+        if let Some(ref rel_pos) = result.rel_pos_ned {
+            let _ = self
+                .channels
+                .msg_tx
+                .send(DeviceMessage::RelPosNed(rel_pos.clone()))
+                .await;
         }
 
         // Compute and send integrity update if any relevant data changed

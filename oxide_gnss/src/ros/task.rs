@@ -216,6 +216,9 @@ impl RosTask {
                 // Store for rate-limited publishing
                 self.last_integrity = Some(integrity);
             }
+            GnssMessage::RelPosNed(rel_pos) => {
+                self.publishers.publish_baseline_pose(&rel_pos);
+            }
             GnssMessage::Shutdown => {
                 info!("Received shutdown message");
             }

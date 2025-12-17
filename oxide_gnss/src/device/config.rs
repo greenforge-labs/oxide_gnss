@@ -135,7 +135,30 @@ impl DeviceConfigurator {
                 })?;
 
         // Validate config and emit warnings
-        ublox_config.validate();
+        let validation = ublox_config.validate();
+
+        // Log topic availability warnings
+        for (topic, missing_msgs) in ublox_config.check_topic_availability() {
+            warn!(
+                topic = topic,
+                missing = ?missing_msgs,
+                "ROS topic may be unavailable or degraded due to missing UBX messages"
+            );
+        }
+
+        // Fail on missing essential messages (driver won't work correctly)
+        if !validation.is_valid() {
+            return Err(DeviceError::ConfigurationFailed {
+                step: format!(
+                    "Essential UBX messages missing: {:?}",
+                    validation
+                        .missing_essential
+                        .iter()
+                        .map(|m| m.message)
+                        .collect::<Vec<_>>()
+                ),
+            });
+        }
 
         // Build CfgVal list from the structured config
         let cfg_vals = super::cfg_key_mapping::build_cfg_vals_from_config(ublox_config);

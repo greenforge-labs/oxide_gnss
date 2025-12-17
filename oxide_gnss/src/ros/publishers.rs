@@ -4,7 +4,7 @@ use rclrs::{IntoPrimitiveOptions, Node, Publisher, QoSProfile};
 use tracing::{debug, error};
 
 use crate::config::CoordinateFrame;
-use crate::device::ubx::{HpPosData, PvtData, SatInfo, SecSigData};
+use crate::device::ubx::{HpPosData, PvtData, RelPosNedData, SatInfo, SecSigData};
 use crate::state::{DeviceState, FixType, GnssIntegrity, IntegrityLevel, NtripState};
 
 use super::conversions::{now_timestamp, pvt_to_twist, ToRosMessage};
@@ -35,6 +35,9 @@ pub struct GnssPublishers {
 
     /// Detailed SEC-SIG per-center-frequency publisher (~/sec_sig_details)
     sec_sig_details_pub: Publisher<oxide_gnss_msgs::msg::SecSigDetails>,
+
+    /// Baseline pose publisher for moving base/rover (~/baseline_pose)
+    baseline_pose_pub: Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>,
 }
 
 impl GnssPublishers {
@@ -75,6 +78,11 @@ impl GnssPublishers {
             .create_publisher("~/sec_sig_details".qos(reliable_qos))
             .expect("Failed to create sec_sig_details publisher");
 
+        // Moving base/rover baseline pose - sensor data QoS
+        let baseline_pose_pub = node
+            .create_publisher("~/baseline_pose".qos(sensor_qos))
+            .expect("Failed to create baseline_pose publisher");
+
         Ok(Self {
             fix_pub,
             velocity_pub,
@@ -87,6 +95,7 @@ impl GnssPublishers {
             integrity_pub,
             operational_pub,
             sec_sig_details_pub,
+            baseline_pose_pub,
         })
     }
 
@@ -98,6 +107,78 @@ impl GnssPublishers {
 
         if let Err(e) = self.sec_sig_details_pub.publish(msg) {
             error!(error = %e, "Failed to publish SecSigDetails");
+        }
+    }
+
+    /// Publish baseline pose from NAV-RELPOSNED for moving base/rover.
+    ///
+    /// Converts the relative position (N/E/D baseline vector) and heading
+    /// to a PoseWithCovarianceStamped message.
+    pub fn publish_baseline_pose(&self, rel_pos: &RelPosNedData) {
+        // Only publish if relative position is valid
+        if !rel_pos.flags.rel_pos_valid {
+            debug!("Skipping baseline_pose publish: rel_pos not valid");
+            return;
+        }
+
+        let stamp = now_timestamp();
+
+        // Build pose message
+        let mut msg = geometry_msgs::msg::PoseWithCovarianceStamped::default();
+        msg.header.stamp = stamp;
+        msg.header.frame_id = "gnss_base".to_string();
+
+        // Position: baseline vector in meters (NED frame)
+        // Convert to ENU for ROS convention: x=East, y=North, z=Up
+        msg.pose.pose.position.x = rel_pos.rel_pos_e;
+        msg.pose.pose.position.y = rel_pos.rel_pos_n;
+        msg.pose.pose.position.z = -rel_pos.rel_pos_d;
+
+        // Orientation: heading from baseline
+        // Heading is valid when baseline length is > 0 and we have a good solution
+        let heading_valid = rel_pos.rel_pos_length > 0.1 && rel_pos.flags.carr_soln > 0;
+        if heading_valid {
+            // Convert heading (radians, from North) to quaternion
+            // Heading is clockwise from North, we need to convert to ENU yaw (CCW from East)
+            let yaw = std::f64::consts::FRAC_PI_2 - rel_pos.rel_pos_heading;
+            let (sin_half, cos_half) = (yaw / 2.0).sin_cos();
+            msg.pose.pose.orientation.x = 0.0;
+            msg.pose.pose.orientation.y = 0.0;
+            msg.pose.pose.orientation.z = sin_half;
+            msg.pose.pose.orientation.w = cos_half;
+        } else {
+            // Identity quaternion if heading not valid
+            msg.pose.pose.orientation.w = 1.0;
+        }
+
+        // Covariance (6x6 row-major: x, y, z, roll, pitch, yaw)
+        // Position covariance from accuracy estimates (variance = acc^2)
+        let var_e = rel_pos.acc_e * rel_pos.acc_e;
+        let var_n = rel_pos.acc_n * rel_pos.acc_n;
+        let var_d = rel_pos.acc_d * rel_pos.acc_d;
+        let var_yaw = if heading_valid {
+            rel_pos.acc_heading * rel_pos.acc_heading
+        } else {
+            999.0 // Large variance if heading not valid
+        };
+
+        // Set diagonal elements (row-major 6x6)
+        msg.pose.covariance[0] = var_e; // x (East)
+        msg.pose.covariance[7] = var_n; // y (North)
+        msg.pose.covariance[14] = var_d; // z (Up)
+        msg.pose.covariance[21] = 999.0; // roll (unknown)
+        msg.pose.covariance[28] = 999.0; // pitch (unknown)
+        msg.pose.covariance[35] = var_yaw; // yaw
+
+        if let Err(e) = self.baseline_pose_pub.publish(msg) {
+            error!(error = %e, "Failed to publish baseline_pose");
+        } else {
+            debug!(
+                length = rel_pos.rel_pos_length,
+                heading_valid = heading_valid,
+                carr_soln = rel_pos.flags.carr_soln,
+                "Published baseline_pose"
+            );
         }
     }
 
