@@ -198,7 +198,11 @@ impl DeviceTask {
     /// * `config` - Device configuration (port, baud rate, etc.)
     /// * `ublox_config` - Resolved u-blox configuration (from mode + features or legacy)
     /// * `channels` - Communication channels for the task
-    pub fn new(config: DeviceConfig, ublox_config: UbloxConfig, channels: DeviceTaskChannels) -> Self {
+    pub fn new(
+        config: DeviceConfig,
+        ublox_config: UbloxConfig,
+        channels: DeviceTaskChannels,
+    ) -> Self {
         Self {
             config,
             ublox_config,

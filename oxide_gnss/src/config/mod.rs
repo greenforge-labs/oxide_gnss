@@ -136,7 +136,7 @@ impl Config {
 
     /// Check if this config uses legacy UBX message configuration.
     pub fn is_legacy(&self) -> bool {
-        self.mode.is_none() && self.device.ublox.as_ref().map_or(false, |u| u.has_config())
+        self.mode.is_none() && self.device.ublox.as_ref().is_some_and(|u| u.has_config())
     }
 
     /// Validate the configuration.
@@ -280,11 +280,8 @@ impl Config {
 
         if let Some(mode) = self.mode {
             // Add topics based on mode
-            match mode {
-                OperatingMode::MovingBaseRover => {
-                    topics.push("~/baseline_pose");
-                }
-                _ => {}
+            if mode == OperatingMode::MovingBaseRover {
+                topics.push("~/baseline_pose");
             }
 
             // Add topics based on features

@@ -202,7 +202,11 @@ impl FeaturesConfig {
 
     /// Check if any features are enabled.
     pub fn has_features(&self) -> bool {
-        self.high_precision || self.integrity || self.satellites || self.heading || self.dead_reckoning
+        self.high_precision
+            || self.integrity
+            || self.satellites
+            || self.heading
+            || self.dead_reckoning
     }
 }
 
@@ -480,7 +484,10 @@ mod tests {
     fn test_mode_preset_rover_ntrip() {
         let preset = OperatingMode::RoverNtrip.preset();
         assert!(preset.usb.rtcm3x_in);
-        assert!(preset.base_messages.iter().any(|(m, _)| *m == "NAV_HPPOSLLH"));
+        assert!(preset
+            .base_messages
+            .iter()
+            .any(|(m, _)| *m == "NAV_HPPOSLLH"));
     }
 
     #[test]
