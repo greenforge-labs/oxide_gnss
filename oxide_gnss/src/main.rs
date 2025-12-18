@@ -74,6 +74,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
+    // Log effective configuration (mode, features, topics, messages)
+    config.log_effective_config();
+
+    // Resolve the u-blox configuration from mode + features (or legacy config)
+    let ublox_config = config.resolve_ublox_config();
+
     // Create node configuration
     let node_config = GnssNodeConfig {
         node_name: "oxide_gnss".to_string(),
@@ -158,8 +164,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         shutdown_rx: supervisor.shutdown_rx(),
     };
 
-    // Spawn device task
-    let (_, _device_handle) = spawn_device_task(config.device, device_channels);
+    // Spawn device task with resolved u-blox config
+    let (_, _device_handle) = spawn_device_task(config.device, ublox_config, device_channels);
 
     // Spawn NTRIP task if configured
     let _ntrip_handle = if let Some(ntrip_config) = config.ntrip {

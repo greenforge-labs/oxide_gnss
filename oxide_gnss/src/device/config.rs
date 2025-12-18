@@ -11,7 +11,7 @@ use std::time::Duration;
 use tokio::time::timeout;
 use tracing::{debug, info, warn};
 
-use crate::config::DeviceConfig;
+use crate::config::UbloxConfig;
 use crate::error::DeviceError;
 
 use super::serial::SerialPort;
@@ -113,26 +113,16 @@ impl DeviceConfigurator {
 
     /// Run the full configuration sequence.
     ///
-    /// Requires `config.ublox` section to be present in config file.
-    /// If no CFG_* keys are provided, no configuration is sent to the device.
+    /// Takes a resolved UbloxConfig (from mode + features or legacy config).
     ///
     /// Returns Ok on success, or an error describing what failed.
     pub async fn configure(
         &self,
         serial: &mut SerialPort,
         ubx: &mut UbxHandler,
-        config: &DeviceConfig,
+        ublox_config: &UbloxConfig,
     ) -> Result<(), DeviceError> {
         info!("Starting device configuration sequence");
-
-        // Require u-blox configuration section - no silent defaults
-        let ublox_config =
-            config
-                .ublox
-                .as_ref()
-                .ok_or_else(|| DeviceError::ConfigurationFailed {
-                    step: "ublox config missing - add 'ublox:' section to config file".to_string(),
-                })?;
 
         // Validate config and emit warnings
         let validation = ublox_config.validate();
