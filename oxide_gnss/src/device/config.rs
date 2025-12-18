@@ -114,6 +114,7 @@ impl DeviceConfigurator {
     /// Run the full configuration sequence.
     ///
     /// Takes a resolved UbloxConfig (from mode + features or legacy config).
+    /// If `enabled_topics` is provided, validation only checks those topics.
     ///
     /// Returns Ok on success, or an error describing what failed.
     pub async fn configure(
@@ -121,14 +122,15 @@ impl DeviceConfigurator {
         serial: &mut SerialPort,
         ubx: &mut UbxHandler,
         ublox_config: &UbloxConfig,
+        enabled_topics: Option<&[&str]>,
     ) -> Result<(), DeviceError> {
         info!("Starting device configuration sequence");
 
-        // Validate config and emit warnings
-        let validation = ublox_config.validate();
+        // Validate config and emit warnings (mode-aware if enabled_topics provided)
+        let validation = ublox_config.validate(enabled_topics);
 
-        // Log topic availability warnings
-        for (topic, missing_msgs) in ublox_config.check_topic_availability() {
+        // Log topic availability warnings (only for enabled topics)
+        for (topic, missing_msgs) in ublox_config.check_topic_availability(enabled_topics) {
             warn!(
                 topic = topic,
                 missing = ?missing_msgs,

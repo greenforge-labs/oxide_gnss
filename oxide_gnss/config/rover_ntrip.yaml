@@ -11,7 +11,7 @@ features:
   satellites: false       # Disable to reduce bandwidth
 
 device:
-  port: "/dev/gnss_f9p"
+  port: "/dev/gnss_f9p_rover"
   baud_rate: 460800
   frame: ENU
 

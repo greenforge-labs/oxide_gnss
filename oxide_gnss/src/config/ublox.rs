@@ -292,9 +292,9 @@ pub const MESSAGE_REQUIREMENTS: &[MessageRequirement] = &[
     },
     MessageRequirement {
         message: "NAV_POSECEF",
-        level: MessageLevel::Recommended,
-        reason: "ECEF coordinates for coordinate transforms",
-        ros_topics: &["~/fix"],
+        level: MessageLevel::Optional,
+        reason: "ECEF coordinates for coordinate transforms (optional)",
+        ros_topics: &[],
     },
     MessageRequirement {
         message: "MON_RF",
@@ -382,8 +382,12 @@ impl UbloxConfig {
 
     /// Validate configuration and emit warnings for issues.
     ///
+    /// If `enabled_topics` is provided, only checks messages relevant to those topics.
+    /// This makes validation mode-aware - it won't warn about messages for features
+    /// that aren't enabled.
+    ///
     /// Returns a ValidationResult with details about missing messages.
-    pub fn validate(&self) -> ValidationResult {
+    pub fn validate(&self, enabled_topics: Option<&[&str]>) -> ValidationResult {
         use tracing::{error, info};
 
         let mut result = ValidationResult::default();
@@ -392,6 +396,17 @@ impl UbloxConfig {
             let enabled = self.is_message_enabled(req.message);
 
             if !enabled {
+                // For RequiredForFeature messages, only warn if one of its topics is enabled
+                if req.level == MessageLevel::RequiredForFeature {
+                    if let Some(topics) = enabled_topics {
+                        let is_relevant = req.ros_topics.iter().any(|t| topics.contains(t));
+                        if !is_relevant {
+                            // Skip - this feature isn't enabled
+                            continue;
+                        }
+                    }
+                }
+
                 match req.level {
                     MessageLevel::Essential => {
                         error!(
@@ -403,13 +418,22 @@ impl UbloxConfig {
                         result.missing_essential.push(req);
                     }
                     MessageLevel::Recommended => {
-                        warn!(
-                            message = req.message,
-                            reason = req.reason,
-                            topics = ?req.ros_topics,
-                            "Recommended message not enabled - some features will be unavailable"
-                        );
-                        result.missing_recommended.push(req);
+                        // Only warn about recommended messages if their topics are enabled
+                        let is_relevant = if let Some(topics) = enabled_topics {
+                            req.ros_topics.is_empty()
+                                || req.ros_topics.iter().any(|t| topics.contains(t))
+                        } else {
+                            true
+                        };
+                        if is_relevant {
+                            warn!(
+                                message = req.message,
+                                reason = req.reason,
+                                topics = ?req.ros_topics,
+                                "Recommended message not enabled - some features will be unavailable"
+                            );
+                            result.missing_recommended.push(req);
+                        }
                     }
                     MessageLevel::RequiredForFeature => {
                         info!(
@@ -447,16 +471,31 @@ impl UbloxConfig {
     }
 
     /// Check which ROS topics will be unavailable due to missing messages.
-    pub fn check_topic_availability(&self) -> Vec<(&'static str, Vec<&'static str>)> {
+    ///
+    /// If `enabled_topics` is provided, only checks those topics.
+    /// Otherwise checks all possible topics (legacy behavior).
+    pub fn check_topic_availability(
+        &self,
+        enabled_topics: Option<&[&str]>,
+    ) -> Vec<(&'static str, Vec<&'static str>)> {
         let mut unavailable = Vec::new();
 
-        // Collect all topics and their missing dependencies
-        let all_topics: std::collections::HashSet<&str> = MESSAGE_REQUIREMENTS
+        // Collect all known topics from requirements (these are 'static)
+        let all_topics: Vec<&'static str> = MESSAGE_REQUIREMENTS
             .iter()
             .flat_map(|m| m.ros_topics.iter().copied())
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
             .collect();
 
         for topic in all_topics {
+            // If enabled_topics is provided, skip topics not in the list
+            if let Some(enabled) = enabled_topics {
+                if !enabled.contains(&topic) {
+                    continue;
+                }
+            }
+
             let missing: Vec<&'static str> = messages_for_topic(topic)
                 .into_iter()
                 .filter(|req| !self.is_message_enabled(req.message))
@@ -566,7 +605,7 @@ messages:
     NAV_HPPOSLLH: 1
 "#;
         let config: UbloxConfig = serde_yaml::from_str(yaml).unwrap();
-        let result = config.validate();
+        let result = config.validate(None);
         assert!(!result.is_valid());
         assert_eq!(result.missing_essential.len(), 1);
         assert_eq!(result.missing_essential[0].message, "NAV_PVT");
@@ -587,7 +626,7 @@ messages:
     SEC_SIGLOG: 1
 "#;
         let config: UbloxConfig = serde_yaml::from_str(yaml).unwrap();
-        let result = config.validate();
+        let result = config.validate(None);
         assert!(result.is_valid());
         assert!(result.is_complete());
     }
@@ -600,7 +639,7 @@ messages:
     NAV_PVT: 1
 "#;
         let config: UbloxConfig = serde_yaml::from_str(yaml).unwrap();
-        let result = config.validate();
+        let result = config.validate(None);
         assert!(result.is_valid());
         assert!(!result.is_complete());
         assert!(!result.missing_recommended.is_empty());
@@ -631,7 +670,7 @@ messages:
     NAV_PVT: 1
 "#;
         let config: UbloxConfig = serde_yaml::from_str(yaml).unwrap();
-        let unavailable = config.check_topic_availability();
+        let unavailable = config.check_topic_availability(None);
         // ~/hp_pos should be unavailable (needs NAV_HPPOSLLH)
         let hp_pos = unavailable.iter().find(|(t, _)| *t == "~/hp_pos");
         assert!(hp_pos.is_some());

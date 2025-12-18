@@ -1981,6 +1981,14 @@ name = "example_interfaces"
 version = "0.12.0"
 
 [[patch.unused]]
+name = "ferrous_gnss"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "oxide_gnss"
+version = "0.1.0"
+
+[[patch.unused]]
 name = "rcl_interfaces"
 version = "2.0.3"
 
