@@ -312,7 +312,7 @@ pub const MESSAGE_REQUIREMENTS: &[MessageRequirement] = &[
         message: "SEC_SIG",
         level: MessageLevel::RequiredForFeature,
         reason: "Required for ~/integrity (jamming/spoofing detection)",
-        ros_topics: &["~/integrity", "~/sec_sig_details"],
+        ros_topics: &["~/integrity"],
     },
     // Optional messages - nice to have
     MessageRequirement {

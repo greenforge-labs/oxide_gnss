@@ -194,8 +194,9 @@ impl RosTask {
                 self.publishers.publish_pvt(&pvt, self.last_hp_pos.as_ref());
                 self.last_pvt = Some(pvt);
             }
-            GnssMessage::SecSig(sig) => {
-                self.publishers.publish_sec_sig_details(&sig);
+            GnssMessage::SecSig(_sig) => {
+                // SEC_SIG data is used internally for integrity calculation
+                // No separate topic - integrity status published via ~/integrity
             }
             GnssMessage::DeviceStateChanged(state) => {
                 info!(state = %state, "Device state changed");
@@ -211,7 +212,7 @@ impl RosTask {
                 self.last_correction_received = Some(Instant::now());
             }
             GnssMessage::HpPos(hp) => {
-                self.publishers.publish_hp_pos(&hp);
+                // Store HP position for use in publish_pvt (enhances ~/fix)
                 self.last_hp_pos = Some(hp);
             }
             GnssMessage::SatInfo(sat) => {

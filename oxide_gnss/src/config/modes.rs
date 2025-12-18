@@ -139,8 +139,8 @@ impl Feature {
     /// Get the ROS topics enabled by this feature.
     pub fn enabled_topics(&self) -> &'static [&'static str] {
         match self {
-            Self::HighPrecision => &["~/fix (HP)", "~/hp_pos"],
-            Self::Integrity => &["~/integrity", "~/operational", "~/sec_sig_details"],
+            Self::HighPrecision => &["~/fix (HP)"],
+            Self::Integrity => &["~/integrity", "~/operational"],
             Self::Satellites => &["~/satellites"],
             Self::Heading => &["~/baseline_pose"],
             Self::DeadReckoning => &[],

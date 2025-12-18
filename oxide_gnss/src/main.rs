@@ -87,6 +87,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|s| s.to_string())
         .collect();
 
+    // Determine if HP data should be used for ~/fix
+    let use_hp_for_fix = config.features.high_precision
+        || config
+            .device
+            .ublox
+            .as_ref()
+            .is_some_and(|u| u.is_message_enabled("NAV_HPPOSLLH"));
+
     // Create node configuration
     let node_config = GnssNodeConfig {
         node_name: "oxide_gnss".to_string(),
@@ -94,6 +102,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         device: config.device.clone(),
         ntrip: config.ntrip.clone(),
         diagnostics_rate_hz: config.ros.rates.diagnostics_hz,
+        enabled_topics: enabled_topics.clone(),
+        use_hp_for_fix,
     };
 
     // Create the driver wrapper around the node

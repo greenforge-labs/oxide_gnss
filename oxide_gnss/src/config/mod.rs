@@ -288,12 +288,11 @@ impl Config {
             for feature in self.features.enabled_features() {
                 match feature {
                     Feature::HighPrecision => {
-                        topics.push("~/hp_pos");
+                        // HP data enhances ~/fix, no separate topic needed
                     }
                     Feature::Integrity => {
                         topics.push("~/integrity");
                         topics.push("~/operational");
-                        topics.push("~/sec_sig_details");
                     }
                     Feature::Satellites => {
                         topics.push("~/satellites");
@@ -304,13 +303,10 @@ impl Config {
         } else {
             // Legacy mode - check explicit messages
             if let Some(ref ublox) = self.device.ublox {
-                if ublox.is_message_enabled("NAV_HPPOSLLH") {
-                    topics.push("~/hp_pos");
-                }
+                // NAV_HPPOSLLH just enhances ~/fix, no separate topic
                 if ublox.is_message_enabled("SEC_SIG") {
                     topics.push("~/integrity");
                     topics.push("~/operational");
-                    topics.push("~/sec_sig_details");
                 }
                 if ublox.is_message_enabled("NAV_SAT") {
                     topics.push("~/satellites");
