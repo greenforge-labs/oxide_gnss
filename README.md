@@ -36,57 +36,78 @@ Then follow the [Launching](#launching) instructions below.
 
 ## Configuration
 
-Configuration is via YAML files. See `config/` directory for examples.
+Configuration is via YAML files. See `oxide_gnss/config/` directory for examples.
 
-### Device Configuration
+### Mode-Based Configuration (Recommended)
+
+The simplest way to configure oxide_gnss is using **modes** and **features**:
 
 ```yaml
+# RTK rover with NTRIP corrections
+mode: rover_ntrip
+
+features:
+  high_precision: true    # Use HP data in ~/fix topic
+  integrity: true         # Enable ~/integrity monitoring
+  satellites: false       # Disable to reduce bandwidth
+
 device:
-  port: "/dev/ttyACM0"
+  port: "/dev/gnss_f9p"
   baud_rate: 460800
-  frame: "ENU"  # or "NED"
-  reconnect:
-    enabled: true
-    initial_delay_secs: 1
-    max_delay_secs: 30
-    max_attempts: 0  # 0 = unlimited retries with exponential backoff
-    # Recommended settings for safety-critical use:
-    # - enabled: true
-    # - initial_delay_secs: 1
-    # - max_delay_secs: 30
-    # - max_attempts: 0 (unlimited retries)
-    # This configuration allows the driver to continuously attempt to reconnect to the device
-    # with an exponential backoff strategy, ensuring that the system can recover from temporary
-    # device disconnections or communication errors.
-```
+  frame: ENU
 
-### NTRIP Configuration
-
-```yaml
 ntrip:
-  enabled: true
-  host: "auscors.ga.gov.au"
+  host: "ntrip.data.gnss.ga.gov.au"
   port: 2101
   mountpoint: "ALIC00AUS0"
-  username: "your_username"
-  password: "your_password"
-  gga_interval_sec: 10
+  username: "${NTRIP_USERNAME}"
+  password: "${NTRIP_PASSWORD}"
 ```
+
+### Available Modes
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| `standalone` | Basic GPS without RTK | Testing, low-accuracy applications |
+| `rover_ntrip` | RTK rover with NTRIP corrections | Most common RTK setup |
+| `rover_radio` | RTK rover with radio/serial corrections | Remote areas without internet |
+| `moving_base` | Moving base in MB+R pair | Heading from dual receivers |
+| `moving_base_rover` | Rover in MB+R pair | Heading from dual receivers |
+| `static_base` | Static base station | Providing corrections |
+
+### Feature Flags
+
+| Feature | Description | Topics Enabled |
+|---------|-------------|----------------|
+| `high_precision` | Use HP position in ~/fix | Enhanced ~/fix accuracy |
+| `integrity` | Jamming/spoofing detection | `~/integrity`, `~/operational` |
+| `satellites` | Per-satellite info | `~/satellites` |
+
+See [CONFIGURATION.md](oxide_gnss/docs/CONFIGURATION.md) for full details.
 
 ## ROS2 Interface
 
 ### Published Topics
 
+Topics are created based on your mode and feature configuration:
+
+**Core Topics (always enabled):**
+
 | Topic | Type | Description |
 |-------|------|-------------|
-| `~/fix` | `sensor_msgs/NavSatFix` | Position with covariance |
+| `~/fix` | `sensor_msgs/NavSatFix` | Position with covariance (HP-enhanced if `high_precision: true`) |
 | `~/velocity` | `geometry_msgs/TwistWithCovarianceStamped` | 3D velocity |
 | `~/time_reference` | `sensor_msgs/TimeReference` | GPS time |
-| `~/diagnostics` | `diagnostic_msgs/DiagnosticArray` | Device status |
-| `~/hp_pos` | `sensor_msgs/NavSatFix` | High-precision position (UBX-NAV-HPPOSLLH) |
-| `~/satellites` | `std_msgs/String` | Satellite visibility info (UBX-NAV-SAT) |
-| `~/integrity` | `oxide_gnss_msgs/GnssIntegrity` | Safety integrity status (Typed Message) |
-| `~/operational` | `std_msgs/Bool` | Go/no-go signal for safety-critical operation |
+| `/diagnostics` | `diagnostic_msgs/DiagnosticArray` | Device status |
+
+**Optional Topics (based on mode/features):**
+
+| Topic | Type | Requires |
+|-------|------|----------|
+| `~/integrity` | `oxide_gnss_msgs/OxideIntegrity` | `integrity: true` |
+| `~/operational` | `std_msgs/Bool` | `integrity: true` |
+| `~/satellites` | `std_msgs/String` | `satellites: true` |
+| `~/baseline_pose` | `geometry_msgs/PoseWithCovarianceStamped` | `mode: moving_base_rover` |
 
 ### Safety Integrity Monitoring
 
@@ -300,12 +321,12 @@ allow all users to access the device.
 **Option 1: From Workspace Root (Recommended)**
 ```bash
 cd ~/ros2_ws
-ros2 launch oxide_gnss oxide_gnss.launch.py config_file:=src/oxide_gnss/config/default.yaml
+ros2 launch oxide_gnss oxide_gnss.launch.py config_file:=src/oxide_gnss/oxide_gnss/config/rover_ntrip.yaml
 ```
 
 **Option 2: Using Absolute Path (Safest)**
 ```bash
-ros2 launch oxide_gnss oxide_gnss.launch.py config_file:=/home/gtec/ros2_ws/src/oxide_gnss/config/default.yaml
+ros2 launch oxide_gnss oxide_gnss.launch.py config_file:=/home/user/ros2_ws/src/oxide_gnss/oxide_gnss/config/rover_ntrip.yaml
 ```
 
 ## License

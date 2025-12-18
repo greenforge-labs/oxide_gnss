@@ -230,6 +230,8 @@ pub struct ModePreset {
     pub uart1: PortProtocols,
     /// UART2 port protocol configuration
     pub uart2: PortProtocols,
+    /// I2C (DDC) port protocol configuration - disabled by default to reduce CPU load
+    pub i2c: PortProtocols,
     /// Base UBX messages (always enabled for this mode)
     pub base_messages: Vec<(&'static str, u8)>,
     /// RTCM messages to output (for base modes)
@@ -322,6 +324,7 @@ pub mod presets {
             },
             uart1: PortProtocols::default(),
             uart2: PortProtocols::default(),
+            i2c: PortProtocols::default(), // Disabled to reduce CPU load
             base_messages: vec![("NAV_PVT", 1)],
             rtcm_output_uart2: vec![],
             allowed_features: vec![Feature::Satellites],
@@ -339,6 +342,7 @@ pub mod presets {
             },
             uart1: PortProtocols::default(),
             uart2: PortProtocols::default(),
+            i2c: PortProtocols::default(), // Disabled to reduce CPU load
             base_messages: vec![("NAV_PVT", 1), ("NAV_HPPOSLLH", 1)],
             rtcm_output_uart2: vec![],
             allowed_features: vec![
@@ -362,6 +366,7 @@ pub mod presets {
                 rtcm3x_in: true, // Corrections from radio
                 ..Default::default()
             },
+            i2c: PortProtocols::default(), // Disabled to reduce CPU load
             base_messages: vec![("NAV_PVT", 1), ("NAV_HPPOSLLH", 1)],
             rtcm_output_uart2: vec![],
             allowed_features: vec![
@@ -386,6 +391,7 @@ pub mod presets {
                 rtcm3x_out: true, // RTCM to rover
                 ..Default::default()
             },
+            i2c: PortProtocols::default(), // Disabled to reduce CPU load
             base_messages: vec![
                 ("NAV_PVT", 1),
                 ("NAV_HPPOSLLH", 1),
@@ -421,6 +427,7 @@ pub mod presets {
                 rtcm3x_in: true, // RTCM from moving base
                 ..Default::default()
             },
+            i2c: PortProtocols::default(), // Disabled to reduce CPU load
             base_messages: vec![
                 ("NAV_PVT", 1),
                 ("NAV_HPPOSLLH", 1),
@@ -452,6 +459,7 @@ pub mod presets {
                 rtcm3x_out: true, // Alternative RTCM output
                 ..Default::default()
             },
+            i2c: PortProtocols::default(), // Disabled to reduce CPU load
             base_messages: vec![("NAV_PVT", 1), ("NAV_SVIN", 1)], // Survey-in status
             rtcm_output_uart2: vec![
                 "RTCM_3X_TYPE1005", // Stationary RTK reference station ARP
