@@ -1,0 +1,21 @@
+# oxide_gnss configuration: Standalone GPS
+#
+# Basic GPS operation without RTK corrections.
+# Suitable for applications that don't require centimeter-level accuracy.
+
+mode: standalone
+
+features:
+  satellites: true        # Enable satellite info
+
+device:
+  port: "/dev/ttyACM0"
+  baud_rate: 460800
+  frame: ENU
+
+  navigation:
+    rate_hz: 10
+    min_satellites: 4
+    max_hdop: 5.0
+
+# No NTRIP needed for standalone mode
