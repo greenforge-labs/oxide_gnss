@@ -1535,7 +1535,7 @@ checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
 [[package]]
 name = "ublox"
 version = "0.8.0"
-source = "git+https://github.com/ublox-rs/ublox.git?branch=master#2d02da8b5de4f8becfd74b5b902583668bae60ff"
+source = "git+https://github.com/ublox-rs/ublox.git#8fbc6fc3c6a8c94b4e53df7c4f0cf4f67ce3a296"
 dependencies = [
  "bitflags",
  "chrono",
@@ -1546,7 +1546,7 @@ dependencies = [
 [[package]]
 name = "ublox_derive"
 version = "0.4.0"
-source = "git+https://github.com/ublox-rs/ublox.git?branch=master#2d02da8b5de4f8becfd74b5b902583668bae60ff"
+source = "git+https://github.com/ublox-rs/ublox.git#8fbc6fc3c6a8c94b4e53df7c4f0cf4f67ce3a296"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1985,6 +1985,10 @@ name = "ferrous_gnss"
 version = "0.1.0"
 
 [[patch.unused]]
+name = "ferrous_gnss_msgs"
+version = "0.1.0"
+
+[[patch.unused]]
 name = "oxide_gnss"
 version = "0.1.0"
 
@@ -2003,3 +2007,8 @@ version = "2.0.3"
 [[patch.unused]]
 name = "unique_identifier_msgs"
 version = "2.5.0"
+
+[[patch.unused]]
+name = "ublox"
+version = "0.8.0"
+source = "git+https://github.com/ublox-rs/ublox.git?branch=master#8fbc6fc3c6a8c94b4e53df7c4f0cf4f67ce3a296"

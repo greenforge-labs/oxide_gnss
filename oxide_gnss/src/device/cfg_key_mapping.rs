@@ -180,11 +180,14 @@ fn parse_protocol_in(port: &str, protocol: &str) -> Option<CfgVal> {
         ("uart2", "ubx") => Some(CfgVal::Uart2InProtUbx(true)),
         ("uart2", "nmea") => Some(CfgVal::Uart2InProtNmea(true)),
         ("uart2", "rtcm3x") => Some(CfgVal::Uart2InProtRtcm3x(true)),
-        // I2C - protocol variants not available in ublox crate
-        ("i2c", _) => {
-            warn!("I2C protocol configuration not supported by ublox crate");
-            None
-        }
+        // I2C (DDC)
+        ("i2c", "ubx") => Some(CfgVal::I2cInProtUbx(true)),
+        ("i2c", "nmea") => Some(CfgVal::I2cInProtNmea(true)),
+        ("i2c", "rtcm3x") => Some(CfgVal::I2cInProtRtcm3x(true)),
+        // SPI
+        ("spi", "ubx") => Some(CfgVal::SpiInProtUbx(true)),
+        ("spi", "nmea") => Some(CfgVal::SpiInProtNmea(true)),
+        ("spi", "rtcm3x") => Some(CfgVal::SpiInProtRtcm3x(true)),
         _ => {
             warn!("Unknown protocol '{}' for port '{}'", protocol, port);
             None
@@ -207,11 +210,14 @@ fn parse_protocol_out(port: &str, protocol: &str) -> Option<CfgVal> {
         ("uart2", "ubx") => Some(CfgVal::Uart2OutProtUbx(true)),
         ("uart2", "nmea") => Some(CfgVal::Uart2OutProtNmea(true)),
         ("uart2", "rtcm3x") => Some(CfgVal::Uart2OutProtRtcm3x(true)),
-        // I2C - protocol variants not available in ublox crate
-        ("i2c", _) => {
-            warn!("I2C protocol configuration not supported by ublox crate");
-            None
-        }
+        // I2C (DDC)
+        ("i2c", "ubx") => Some(CfgVal::I2cOutProtUbx(true)),
+        ("i2c", "nmea") => Some(CfgVal::I2cOutProtNmea(true)),
+        ("i2c", "rtcm3x") => Some(CfgVal::I2cOutProtRtcm3x(true)),
+        // SPI
+        ("spi", "ubx") => Some(CfgVal::SpiOutProtUbx(true)),
+        ("spi", "nmea") => Some(CfgVal::SpiOutProtNmea(true)),
+        ("spi", "rtcm3x") => Some(CfgVal::SpiOutProtRtcm3x(true)),
         _ => {
             warn!("Unknown protocol '{}' for port '{}'", protocol, port);
             None

@@ -16,10 +16,10 @@ mode: rover_ntrip
 features:
   high_precision: true    # Use HP position data in ~/fix
   integrity: true         # Enable ~/integrity and ~/operational topics
-  satellites: true        # Enable ~/satellites topic (higher bandwidth)
+  satellites: false        # Enable ~/satellites topic (higher bandwidth)
 
 device:
-  port: "/dev/gnss_f9p"
+  port: "/dev/gnss_f9p_rover"
   baud_rate: 460800
   frame: ENU
 
@@ -52,9 +52,9 @@ device:
         l2: true            # L2OF signal
 
       galileo:
-        enabled: true
-        l1: true            # E1 signal
-        l2: true            # E5b signal
+        enabled: false
+        l1: false            # E1 signal
+        l2: false            # E5b signal
 
       beidou:
         enabled: true
@@ -75,13 +75,13 @@ device:
     # Additional UBX messages (merged with mode defaults)
     # Use this to add messages not included in the mode preset
     # or to change output rates (rate 0 = disabled)
-    messages:
-      usb:
+    # messages:
+    #   usb:
         # Example: Add covariance output (F9R/F9H only, not F9P)
         # NAV_COV: 1
 
         # Example: Increase satellite info rate (default is 1)
-        NAV_SAT: 5
+        # NAV_SAT: 5
 
         # Example: Add event logging for debugging
         # SEC_SIGLOG: 1
@@ -93,7 +93,7 @@ ntrip:
   host: "ntrip.data.gnss.ga.gov.au"
   port: 2101
   use_https: false
-  mountpoint: "ALIC00AUS0"
+  mountpoint: "SWTC00AUS0"
   username: "${NTRIP_USERNAME}"
   password: "${NTRIP_PASSWORD}"
   send_gga: true
