@@ -91,7 +91,13 @@ impl NtripClient {
             mountpoint, user_agent, host, port, auth_header
         );
 
-        debug!(request = ?request, "Sending NTRIP request");
+        // Log request with Authorization header redacted for security
+        let redacted_request = if auth_header.is_empty() {
+            request.clone()
+        } else {
+            request.replace(&auth_header, "Authorization: Basic [REDACTED]\r\n")
+        };
+        debug!(request = %redacted_request, "Sending NTRIP request");
 
         // 3. Send Request
         if let Err(e) = stream.write_all(request.as_bytes()).await {
@@ -170,7 +176,7 @@ impl NtripClient {
         }
     }
 
-    /// Read a chunk of RTCM data from the stream.
+    /// Read a chunk of RTCM data from the stream with timeout.
     pub async fn read_chunk(&mut self, buf: &mut [u8]) -> Result<usize, NtripError> {
         let stream = self
             .stream
@@ -179,22 +185,34 @@ impl NtripClient {
                 reason: "Not connected".to_string(),
             })?;
 
-        // Read raw RTCM binary data (NTRIP 1.0 / ICY protocol)
-        match stream.read(buf).await {
-            Ok(0) => {
+        let read_timeout_secs = self.config.connection.read_timeout_secs;
+        let timeout_duration = Duration::from_secs(read_timeout_secs as u64);
+
+        // Read raw RTCM binary data (NTRIP 1.0 / ICY protocol) with timeout
+        let read_result = tokio::time::timeout(timeout_duration, stream.read(buf)).await;
+
+        match read_result {
+            Ok(Ok(0)) => {
                 // EOF
                 self.stream = None;
                 Err(NtripError::StreamDisconnected {
                     reason: "Server closed connection".to_string(),
                 })
             }
-            Ok(n) => {
+            Ok(Ok(n)) => {
                 debug!(bytes = n, "Received data");
                 Ok(n)
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 self.stream = None;
                 Err(NtripError::NetworkError { source: e })
+            }
+            Err(_) => {
+                // Timeout elapsed
+                self.stream = None;
+                Err(NtripError::ReadTimeout {
+                    timeout_secs: read_timeout_secs,
+                })
             }
         }
     }

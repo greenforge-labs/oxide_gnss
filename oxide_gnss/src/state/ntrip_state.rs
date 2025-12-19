@@ -28,6 +28,9 @@ pub enum NtripState {
         reason: String,
     },
 
+    /// Read timeout - no data received within configured period.
+    TimedOut,
+
     /// Shutting down gracefully.
     ShuttingDown,
 }
@@ -61,7 +64,7 @@ impl NtripState {
     pub fn diagnostic_level(&self) -> DiagnosticLevel {
         match self {
             Self::Disabled | Self::Streaming => DiagnosticLevel::Ok,
-            Self::Connecting | Self::Backoff { .. } => DiagnosticLevel::Warn,
+            Self::Connecting | Self::Backoff { .. } | Self::TimedOut => DiagnosticLevel::Warn,
             Self::ShuttingDown => DiagnosticLevel::Stale,
         }
     }
@@ -73,6 +76,7 @@ impl NtripState {
             Self::Connecting => "Connecting",
             Self::Streaming => "Streaming",
             Self::Backoff { .. } => "Backoff",
+            Self::TimedOut => "TimedOut",
             Self::ShuttingDown => "ShuttingDown",
         }
     }
@@ -93,6 +97,7 @@ impl fmt::Display for NtripState {
                 "Backoff (attempt {}, {}s delay, {})",
                 attempt, delay_secs, reason
             ),
+            Self::TimedOut => write!(f, "Timed Out"),
             Self::ShuttingDown => write!(f, "Shutting Down"),
         }
     }

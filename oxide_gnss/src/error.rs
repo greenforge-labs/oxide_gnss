@@ -195,6 +195,10 @@ pub enum NtripError {
     #[error("NTRIP connection timed out after {timeout_secs} seconds")]
     Timeout { timeout_secs: u32 },
 
+    /// Read timed out - no data received within configured period
+    #[error("NTRIP read timed out after {timeout_secs} seconds - no data received")]
+    ReadTimeout { timeout_secs: u32 },
+
     /// Stream disconnected
     #[error("NTRIP stream disconnected: {reason}")]
     StreamDisconnected { reason: String },

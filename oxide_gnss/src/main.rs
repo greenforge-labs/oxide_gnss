@@ -164,11 +164,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let supervisor_msg_tx_ntrip = supervisor_msg_tx.clone();
     tokio::spawn(async move {
         while let Some(msg) = ntrip_msg_rx.recv().await {
-            // Forward state changes for diagnostics
-            if let oxide_gnss::ntrip::NtripMessage::StateChanged(state) = msg {
-                let _ = supervisor_msg_tx_ntrip
-                    .send(oxide_gnss::state::GnssMessage::NtripStateChanged(state))
-                    .await;
+            match msg {
+                oxide_gnss::ntrip::NtripMessage::StateChanged(state) => {
+                    let _ = supervisor_msg_tx_ntrip
+                        .send(oxide_gnss::state::GnssMessage::NtripStateChanged(state))
+                        .await;
+                }
+                oxide_gnss::ntrip::NtripMessage::RtcmReceived { bytes } => {
+                    let _ = supervisor_msg_tx_ntrip
+                        .send(oxide_gnss::state::GnssMessage::RtcmReceived { bytes })
+                        .await;
+                }
+                _ => {}
             }
         }
     });

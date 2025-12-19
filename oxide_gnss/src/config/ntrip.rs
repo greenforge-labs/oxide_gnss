@@ -49,6 +49,11 @@ pub struct NtripConnectionConfig {
     #[serde(default = "default_timeout")]
     pub timeout_secs: u32,
 
+    /// Read timeout for data reception (seconds). If no data is received
+    /// within this period, the connection is considered lost.
+    #[serde(default = "default_read_timeout")]
+    pub read_timeout_secs: u32,
+
     /// Enable automatic reconnection
     #[serde(default = "default_true")]
     pub reconnect: bool,
@@ -71,6 +76,7 @@ impl Default for NtripConnectionConfig {
     fn default() -> Self {
         Self {
             timeout_secs: default_timeout(),
+            read_timeout_secs: default_read_timeout(),
             reconnect: true,
             initial_delay_secs: default_initial_delay(),
             max_delay_secs: default_max_delay(),
@@ -103,6 +109,13 @@ impl NtripConfig {
         if self.gga_interval_secs == 0 {
             return Err(ConfigError::Validation {
                 message: "GGA interval must be greater than 0".to_string(),
+            });
+        }
+
+        // TLS/HTTPS is not yet implemented - fail fast with clear message
+        if self.use_https {
+            return Err(ConfigError::Validation {
+                message: "NTRIP HTTPS/TLS is not yet implemented. Set use_https: false or wait for TLS support.".to_string(),
             });
         }
 
@@ -155,6 +168,10 @@ fn default_max_delay() -> u32 {
 
 fn default_backoff_reset_secs() -> u32 {
     3600
+}
+
+fn default_read_timeout() -> u32 {
+    30
 }
 
 #[cfg(test)]
