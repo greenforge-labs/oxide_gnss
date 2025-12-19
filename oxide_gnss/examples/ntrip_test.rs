@@ -111,7 +111,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         "connect" => {
             if args.len() < 4 {
-                eprintln!("Usage: ntrip_test connect <host> <mountpoint> [port] [--https] [--v1|--v2]");
+                eprintln!("Usage: ntrip_test connect <host> <mountpoint> [port] [--user=X] [--pass=X] [--https] [--v1|--v2]");
+                eprintln!();
+                eprintln!("Note: Most public casters require registration for stream access.");
+                eprintln!("      RTK2go accepts email as username, no password needed.");
                 return Ok(());
             }
             let host = &args[2];
@@ -119,7 +122,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let port: u16 = args.get(4).and_then(|p| p.parse().ok()).unwrap_or(2101);
             let use_https = args.iter().any(|a| a == "--https");
             let version = parse_version(&args);
-            cmd_connect(host, port, mountpoint, None, None, use_https, version).await?;
+            let user = parse_arg(&args, "--user=");
+            let pass = parse_arg(&args, "--pass=");
+            cmd_connect(host, port, mountpoint, user.as_deref(), pass.as_deref(), use_https, version).await?;
         }
         "test-casters" => {
             cmd_test_casters().await?;
@@ -168,8 +173,8 @@ fn print_usage() {
     println!("  nearest <host> <lat> <lon> [port]");
     println!("      Find nearest RTCM mountpoint to given coordinates");
     println!();
-    println!("  connect <host> <mountpoint> [port] [--https] [--v1|--v2]");
-    println!("      Test connection to a specific mountpoint");
+    println!("  connect <host> <mountpoint> [port] [--user=X] [--pass=X] [--https] [--v1|--v2]");
+    println!("      Test connection to a specific mountpoint (may require credentials)");
     println!();
     println!("  test-casters");
     println!("      Test sourcetable retrieval against all known public casters");
@@ -187,9 +192,11 @@ fn print_usage() {
     println!("      List all test locations");
     println!();
     println!("Options:");
-    println!("  --https    Use HTTPS/TLS connection");
-    println!("  --v1       Force NTRIP v1 protocol");
-    println!("  --v2       Force NTRIP v2 protocol");
+    println!("  --https      Use HTTPS/TLS connection");
+    println!("  --v1         Force NTRIP v1 protocol");
+    println!("  --v2         Force NTRIP v2 protocol");
+    println!("  --user=EMAIL Username for authentication");
+    println!("  --pass=PASS  Password for authentication");
     println!();
     println!("Examples:");
     println!("  cargo run --example ntrip_test -- sourcetable rtk2go.com");
@@ -198,6 +205,16 @@ fn print_usage() {
     println!("  cargo run --example ntrip_test -- test-casters");
     println!("  cargo run --example ntrip_test -- test-versions rtk2go.com");
     println!("  cargo run --example ntrip_test -- test-locations rtk2go.com");
+    println!();
+    println!("  # Connect to RTK2go stream (use email as username):");
+    println!("  cargo run --example ntrip_test -- connect rtk2go.com MOUNTPOINT --user=you@email.com");
+    println!();
+    println!("Authentication Notes:");
+    println!("  - Sourcetable access is typically open (no auth needed)");
+    println!("  - Stream connections usually require registration");
+    println!("  - RTK2go: Use email as username, password can be blank or email");
+    println!("  - EUREF/IGS/AUSCORS: Require formal registration");
+    println!("  - Centipede: Open community network (France)");
 }
 
 fn parse_version(args: &[String]) -> NtripVersion {
@@ -208,6 +225,12 @@ fn parse_version(args: &[String]) -> NtripVersion {
     } else {
         NtripVersion::Auto
     }
+}
+
+fn parse_arg(args: &[String], prefix: &str) -> Option<String> {
+    args.iter()
+        .find(|a| a.starts_with(prefix))
+        .map(|a| a[prefix.len()..].to_string())
 }
 
 fn make_config(

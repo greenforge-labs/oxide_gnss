@@ -1,0 +1,15 @@
+# Build artifacts
+/target/
+
+# Credentials (DO NOT COMMIT)
+examples/ntrip_credentials.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
