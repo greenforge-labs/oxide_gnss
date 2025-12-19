@@ -2,7 +2,7 @@
 
 **Date:** December 2024  
 **Author:** Cascade  
-**Status:** Phases 1-3 Complete
+**Status:** Phases 1-4 Complete
 
 ---
 
@@ -59,15 +59,15 @@ Then use `pin_project` or manual trait impls to unify the read/write interface.
 
 ---
 
-### **Phase 4: NTRIP v2 Protocol** *(~4 hr)*
+### **Phase 4: NTRIP v2 Protocol** *(~4 hr)* ✅ COMPLETE
 Lower priority than TLS but needed for some modern casters.
 
-| Task | Description |
-|------|-------------|
-| **4.1** | Add `ntrip_version` config: `"1"`, `"2"`, or `"auto"` (default: `"auto"`) |
-| **4.2** | Modify request builder for v2 headers (`Ntrip-Version: Ntrip/2.0`, HTTP/1.1) |
-| **4.3** | Implement chunked transfer-encoding decoder |
-| **4.4** | Auto-detect version from response (`ICY` vs `HTTP/1.1`) |
+| Task | Description | Status |
+|------|-------------|--------|
+| **4.1** | Add `ntrip_version` config: `"1"`, `"2"`, or `"auto"` (default: `"auto"`) | ✅ |
+| **4.2** | Modify request builder for v2 headers (`Ntrip-Version: Ntrip/2.0`, HTTP/1.1) | ✅ |
+| **4.3** | Implement chunked transfer-encoding decoder | ✅ |
+| **4.4** | Auto-detect version from response (`ICY` vs `HTTP/1.1`) | ✅ |
 
 **Complexity note:** Chunked decoding requires a small state machine. Create a `ChunkedDecoder` struct rather than inline logic.
 
@@ -140,3 +140,4 @@ Start with **Phases 1-3** as a coherent unit. These address the security concern
 |------|--------|---------|
 | 2024-12-20 | Cascade | Initial implementation plan |
 | 2024-12-20 | Cascade | Completed Phases 1-3 |
+| 2024-12-20 | Cascade | Completed Phase 4 (NTRIP v2) |
