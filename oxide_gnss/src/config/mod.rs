@@ -19,7 +19,7 @@ mod ublox;
 
 pub use device::{CoordinateFrame, DeviceConfig, NavigationConfig, ReconnectConfig};
 pub use modes::{Feature, FeaturesConfig, ModePreset, OperatingMode};
-pub use ntrip::{NtripConfig, NtripConnectionConfig};
+pub use ntrip::{NtripConfig, NtripConnectionConfig, NtripVersion};
 pub use ublox::{
     BeidouConfig, GnssConstellationConfig, MessageConfig, PortSettings, ProtocolConfig, QzssConfig,
     RateConfig, SbasConfig, SignalConfig, UartPortConfig, UbloxConfig,

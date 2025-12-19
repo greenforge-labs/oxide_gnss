@@ -1,8 +1,50 @@
 //! NTRIP client configuration.
 
+use std::fmt;
+
 use serde::Deserialize;
 
 use super::ConfigError;
+
+/// NTRIP protocol version.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum NtripVersion {
+    /// NTRIP v1 - Legacy ICY protocol (HTTP/1.0, ICY 200 OK response)
+    V1,
+    /// NTRIP v2 - Standard HTTP/1.1 with chunked transfer encoding
+    V2,
+    /// Auto-detect version from server response (default)
+    #[default]
+    Auto,
+}
+
+impl fmt::Display for NtripVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::V1 => write!(f, "1"),
+            Self::V2 => write!(f, "2"),
+            Self::Auto => write!(f, "auto"),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for NtripVersion {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        match s.to_lowercase().as_str() {
+            "1" | "v1" | "ntrip1" => Ok(Self::V1),
+            "2" | "v2" | "ntrip2" => Ok(Self::V2),
+            "auto" | "" => Ok(Self::Auto),
+            _ => Err(serde::de::Error::custom(format!(
+                "Invalid NTRIP version '{}'. Use '1', '2', or 'auto'",
+                s
+            ))),
+        }
+    }
+}
 
 /// NTRIP client configuration for receiving RTK corrections.
 #[derive(Debug, Clone, Deserialize)]
@@ -21,6 +63,10 @@ pub struct NtripConfig {
     /// Skip TLS certificate verification (for self-signed certs, testing only)
     #[serde(default = "default_false")]
     pub tls_skip_verify: bool,
+
+    /// NTRIP protocol version: "1", "2", or "auto" (default: auto)
+    #[serde(default)]
+    pub ntrip_version: NtripVersion,
 
     /// Mountpoint name
     pub mountpoint: String,

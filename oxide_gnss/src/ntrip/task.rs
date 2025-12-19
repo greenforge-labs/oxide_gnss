@@ -374,6 +374,7 @@ mod tests {
             connection: Default::default(),
             use_https: false,
             tls_skip_verify: false,
+            ntrip_version: Default::default(),
         }
     }
 
