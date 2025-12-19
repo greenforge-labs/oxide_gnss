@@ -2,7 +2,7 @@
 
 **Date:** December 2024  
 **Author:** Cascade  
-**Status:** Ready to implement
+**Status:** Phases 1-3 Complete
 
 ---
 
@@ -14,39 +14,39 @@ The existing implementation in `src/ntrip/client.rs` is well-structured with cle
 
 ## Proposed Implementation Plan
 
-### **Phase 1: Critical Security Fixes** *(~30 min)*
+### **Phase 1: Critical Security Fixes** *(~30 min)* ✅ COMPLETE
 Do this immediately before any other work.
 
-| Task | Description |
-|------|-------------|
-| **1.1** | Redact `Authorization` header in debug log at line 94 of `client.rs` |
-| **1.2** | Add validation error in `ntrip.rs` when `use_https: true` (TLS not yet implemented) |
-| **1.3** | Trace `NtripMessage::RtcmReceived` to supervisor for `correction_age` diagnostics |
+| Task | Description | Status |
+|------|-------------|--------|
+| **1.1** | Redact `Authorization` header in debug log at line 94 of `client.rs` | ✅ |
+| **1.2** | Add validation error in `ntrip.rs` when `use_https: true` (temporary until TLS implemented) | ✅ |
+| **1.3** | Trace `NtripMessage::RtcmReceived` to supervisor for `correction_age` diagnostics | ✅ |
 
 ---
 
-### **Phase 2: Read Timeout** *(~1 hr)*
+### **Phase 2: Read Timeout** *(~1 hr)* ✅ COMPLETE
 Critical for robustness—silent disconnects are a real operational problem.
 
-| Task | Description |
-|------|-------------|
-| **2.1** | Add `read_timeout_secs: u32` to `NtripConnectionConfig` (default: 30) |
-| **2.2** | Wrap `read_chunk()` in `tokio::time::timeout()` |
-| **2.3** | Add `TimedOut` variant to `NtripState` for observability |
-| **2.4** | Treat timeout as disconnect → triggers existing reconnect logic |
+| Task | Description | Status |
+|------|-------------|--------|
+| **2.1** | Add `read_timeout_secs: u32` to `NtripConnectionConfig` (default: 30) | ✅ |
+| **2.2** | Wrap `read_chunk()` in `tokio::time::timeout()` | ✅ |
+| **2.3** | Add `TimedOut` variant to `NtripState` for observability | ✅ |
+| **2.4** | Treat timeout as disconnect → triggers existing reconnect logic | ✅ |
 
 ---
 
-### **Phase 3: TLS/HTTPS Support** *(~3 hr)*
+### **Phase 3: TLS/HTTPS Support** *(~3 hr)* ✅ COMPLETE
 This unlocks commercial casters and secures credentials.
 
-| Task | Description |
-|------|-------------|
-| **3.1** | Add `tokio-rustls` + `webpki-roots` to `Cargo.toml` |
-| **3.2** | Create `NtripStream` enum abstracting `TcpStream` vs `TlsStream` |
-| **3.3** | Implement `AsyncRead`/`AsyncWrite` for `NtripStream` |
-| **3.4** | Add `tls_skip_verify` config option for self-signed certs |
-| **3.5** | Remove validation error from Phase 1.2, wire up real TLS |
+| Task | Description | Status |
+|------|-------------|--------|
+| **3.1** | Add `tokio-rustls` + `webpki-roots` to `Cargo.toml` | ✅ |
+| **3.2** | Create `NtripStream` enum abstracting `TcpStream` vs `TlsStream` | ✅ |
+| **3.3** | Implement `AsyncRead`/`AsyncWrite` for `NtripStream` | ✅ |
+| **3.4** | Add `tls_skip_verify` config option for self-signed certs | ✅ |
+| **3.5** | Remove validation error from Phase 1.2, wire up real TLS | ✅ |
 
 **Key design decision:** Implement the stream abstraction like this:
 ```rust
@@ -138,4 +138,5 @@ Start with **Phases 1-3** as a coherent unit. These address the security concern
 
 | Date | Author | Changes |
 |------|--------|---------|
-| 2024-12 | Cascade | Initial implementation plan |
+| 2024-12-20 | Cascade | Initial implementation plan |
+| 2024-12-20 | Cascade | Completed Phases 1-3 |
