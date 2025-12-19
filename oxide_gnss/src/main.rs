@@ -74,6 +74,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
+    // Log effective configuration (mode, features, topics, messages)
+    config.log_effective_config();
+
+    // Resolve the u-blox configuration from mode + features (or legacy config)
+    let ublox_config = config.resolve_ublox_config();
+
+    // Get enabled topics for mode-aware validation
+    let enabled_topics: Vec<String> = config
+        .enabled_topics()
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+
+    // Determine if HP data should be used for ~/fix
+    let use_hp_for_fix = config.features.high_precision
+        || config
+            .device
+            .ublox
+            .as_ref()
+            .is_some_and(|u| u.is_message_enabled("NAV_HPPOSLLH"));
+
     // Create node configuration
     let node_config = GnssNodeConfig {
         node_name: "oxide_gnss".to_string(),
@@ -81,6 +102,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         device: config.device.clone(),
         ntrip: config.ntrip.clone(),
         diagnostics_rate_hz: config.ros.rates.diagnostics_hz,
+        enabled_topics: enabled_topics.clone(),
+        use_hp_for_fix,
     };
 
     // Create the driver wrapper around the node
@@ -158,8 +181,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         shutdown_rx: supervisor.shutdown_rx(),
     };
 
-    // Spawn device task
-    let (_, _device_handle) = spawn_device_task(config.device, device_channels);
+    // Spawn device task with resolved u-blox config and enabled topics
+    let (_, _device_handle) =
+        spawn_device_task(config.device, ublox_config, enabled_topics, device_channels);
 
     // Spawn NTRIP task if configured
     let _ntrip_handle = if let Some(ntrip_config) = config.ntrip {

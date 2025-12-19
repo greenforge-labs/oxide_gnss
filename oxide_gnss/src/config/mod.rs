@@ -1,12 +1,24 @@
 //! Configuration module for oxide_gnss.
 //!
 //! Handles loading and validation of device and NTRIP configuration from YAML files.
+//!
+//! ## Configuration Modes
+//!
+//! The driver supports two configuration styles:
+//!
+//! 1. **Mode-based** (recommended): Specify an operating mode and optional features.
+//!    The driver automatically configures the required UBX messages.
+//!
+//! 2. **Legacy**: Explicitly specify UBX messages in the `ublox.messages` section.
+//!    This is still supported for advanced users.
 
 mod device;
+mod modes;
 mod ntrip;
 mod ublox;
 
 pub use device::{CoordinateFrame, DeviceConfig, NavigationConfig, ReconnectConfig};
+pub use modes::{Feature, FeaturesConfig, ModePreset, OperatingMode};
 pub use ntrip::{NtripConfig, NtripConnectionConfig};
 pub use ublox::{
     BeidouConfig, GnssConstellationConfig, MessageConfig, PortSettings, ProtocolConfig, QzssConfig,
@@ -19,6 +31,14 @@ use std::path::Path;
 /// Root configuration structure containing all settings.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
+    /// Operating mode (optional - if not set, uses legacy ublox config)
+    #[serde(default)]
+    pub mode: Option<OperatingMode>,
+
+    /// Feature flags (only used with mode-based config)
+    #[serde(default)]
+    pub features: FeaturesConfig,
+
     /// Device configuration
     pub device: DeviceConfig,
 
@@ -109,6 +129,16 @@ impl Config {
         .to_string()
     }
 
+    /// Check if this config uses mode-based configuration.
+    pub fn is_mode_based(&self) -> bool {
+        self.mode.is_some()
+    }
+
+    /// Check if this config uses legacy UBX message configuration.
+    pub fn is_legacy(&self) -> bool {
+        self.mode.is_none() && self.device.ublox.as_ref().is_some_and(|u| u.has_config())
+    }
+
     /// Validate the configuration.
     pub fn validate(&self) -> Result<(), ConfigError> {
         self.device.validate()?;
@@ -117,7 +147,216 @@ impl Config {
             ntrip.validate()?;
         }
 
+        // Validate mode-based configuration
+        if let Some(mode) = self.mode {
+            self.validate_mode_config(mode)?;
+        }
+
         Ok(())
+    }
+
+    /// Validate mode-based configuration.
+    fn validate_mode_config(&self, mode: OperatingMode) -> Result<(), ConfigError> {
+        // Check NTRIP requirement
+        if mode.requires_ntrip() && self.ntrip.is_none() {
+            return Err(ConfigError::Validation {
+                message: format!(
+                    "Mode '{}' requires NTRIP configuration, but 'ntrip' section is missing",
+                    mode
+                ),
+            });
+        }
+
+        // Validate feature compatibility
+        for feature in self.features.enabled_features() {
+            if !mode.allows_feature(feature) {
+                return Err(ConfigError::Validation {
+                    message: format!(
+                        "Feature '{}' is not compatible with mode '{}'. Allowed features: {:?}",
+                        feature,
+                        mode,
+                        mode.preset()
+                            .allowed_features
+                            .iter()
+                            .map(|f| f.name())
+                            .collect::<Vec<_>>()
+                    ),
+                });
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Resolve the effective UBX configuration.
+    ///
+    /// For mode-based config, this generates the UbloxConfig from mode + features.
+    /// For legacy config, this returns the explicit ublox config.
+    pub fn resolve_ublox_config(&self) -> UbloxConfig {
+        if let Some(mode) = self.mode {
+            self.generate_ublox_config_from_mode(mode)
+        } else {
+            // Legacy mode - use explicit config or defaults
+            self.device.ublox.clone().unwrap_or_default()
+        }
+    }
+
+    /// Generate UbloxConfig from mode and features.
+    fn generate_ublox_config_from_mode(&self, mode: OperatingMode) -> UbloxConfig {
+        use std::collections::HashMap;
+
+        let preset = mode.preset();
+
+        // Build protocol config
+        let protocols = ProtocolConfig {
+            usb_in: preset.usb_in_protocols(),
+            usb_out: preset.usb_out_protocols(),
+            uart1_in: vec![],
+            uart1_out: vec![],
+            uart2_in: preset.uart2_in_protocols(),
+            uart2_out: preset.uart2_out_protocols(),
+            i2c_in: vec![],
+            i2c_out: vec![],
+        };
+
+        // Build message config: start with mode base messages
+        let mut usb_messages: HashMap<String, u8> = preset.messages_as_map();
+
+        // Add feature-required messages
+        for feature in self.features.enabled_features() {
+            for msg in feature.required_messages() {
+                usb_messages.entry(msg.to_string()).or_insert(1);
+            }
+        }
+
+        // Add any overrides from explicit ublox config
+        if let Some(ref ublox_override) = self.device.ublox {
+            for (msg, rate) in &ublox_override.messages.usb {
+                usb_messages.insert(msg.clone(), *rate);
+            }
+        }
+
+        // Build UART2 RTCM message config for base modes
+        let mut uart2_messages: HashMap<String, u8> = HashMap::new();
+        for rtcm_msg in &preset.rtcm_output_uart2 {
+            uart2_messages.insert(rtcm_msg.to_string(), 1);
+        }
+
+        let messages = MessageConfig {
+            usb: usb_messages,
+            uart1: HashMap::new(),
+            uart2: uart2_messages,
+        };
+
+        // Use rate config from device if specified, otherwise defaults
+        let rate = self
+            .device
+            .ublox
+            .as_ref()
+            .map(|u| u.rate.clone())
+            .unwrap_or_default();
+
+        // Use signal config from device if specified
+        let signals = self
+            .device
+            .ublox
+            .as_ref()
+            .map(|u| u.signals.clone())
+            .unwrap_or_default();
+
+        UbloxConfig {
+            family: self.device.ublox.as_ref().and_then(|u| u.family.clone()),
+            rate,
+            protocols,
+            messages,
+            ports: PortSettings::default(),
+            signals,
+        }
+    }
+
+    /// Get the list of ROS topics that will be published based on configuration.
+    pub fn enabled_topics(&self) -> Vec<&'static str> {
+        let mut topics = vec!["~/fix", "~/velocity", "~/time_reference"];
+
+        if let Some(mode) = self.mode {
+            // Add topics based on mode
+            if mode == OperatingMode::MovingBaseRover {
+                topics.push("~/baseline_pose");
+            }
+
+            // Add topics based on features
+            for feature in self.features.enabled_features() {
+                match feature {
+                    Feature::HighPrecision => {
+                        // HP data enhances ~/fix, no separate topic needed
+                    }
+                    Feature::Integrity => {
+                        topics.push("~/integrity");
+                        topics.push("~/operational");
+                    }
+                    Feature::Satellites => {
+                        topics.push("~/satellites");
+                    }
+                    _ => {}
+                }
+            }
+        } else {
+            // Legacy mode - check explicit messages
+            if let Some(ref ublox) = self.device.ublox {
+                // NAV_HPPOSLLH just enhances ~/fix, no separate topic
+                if ublox.is_message_enabled("SEC_SIG") {
+                    topics.push("~/integrity");
+                    topics.push("~/operational");
+                }
+                if ublox.is_message_enabled("NAV_SAT") {
+                    topics.push("~/satellites");
+                }
+                if ublox.is_message_enabled("NAV_RELPOSNED") {
+                    topics.push("~/baseline_pose");
+                }
+            }
+        }
+
+        topics
+    }
+
+    /// Log the effective configuration at startup.
+    pub fn log_effective_config(&self) {
+        use tracing::info;
+
+        if let Some(mode) = self.mode {
+            info!("Configuration mode: {}", mode);
+            info!("Mode description: {}", mode.description());
+
+            let features: Vec<_> = self
+                .features
+                .enabled_features()
+                .iter()
+                .map(|f| f.name())
+                .collect();
+            if features.is_empty() {
+                info!("Features: (none)");
+            } else {
+                info!("Features: {:?}", features);
+            }
+        } else if self.is_legacy() {
+            info!("Configuration mode: legacy (explicit UBX messages)");
+        } else {
+            info!("Configuration mode: minimal (defaults)");
+        }
+
+        let topics = self.enabled_topics();
+        info!("Enabled topics: {:?}", topics);
+
+        let resolved = self.resolve_ublox_config();
+        let messages: Vec<_> = resolved.messages.usb.keys().collect();
+        info!("UBX messages (USB): {:?}", messages);
+
+        if self.ntrip.is_some() {
+            info!("NTRIP: enabled");
+        } else {
+            info!("NTRIP: disabled");
+        }
     }
 }
 

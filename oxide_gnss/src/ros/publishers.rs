@@ -4,7 +4,7 @@ use rclrs::{IntoPrimitiveOptions, Node, Publisher, QoSProfile};
 use tracing::{debug, error};
 
 use crate::config::CoordinateFrame;
-use crate::device::ubx::{HpPosData, PvtData, RelPosNedData, SatInfo, SecSigData};
+use crate::device::ubx::{HpPosData, PvtData, RelPosNedData, SatInfo};
 use crate::state::{DeviceState, FixType, GnssIntegrity, IntegrityLevel, NtripState};
 
 use super::conversions::{now_timestamp, pvt_to_twist, ToRosMessage};
@@ -12,32 +12,28 @@ use super::conversions::{now_timestamp, pvt_to_twist, ToRosMessage};
 /// Collection of ROS2 publishers for GNSS data.
 #[derive(Clone)]
 pub struct GnssPublishers {
-    /// NavSatFix publisher (~/fix)
+    /// NavSatFix publisher (~/fix) - always enabled
     fix_pub: Publisher<sensor_msgs::msg::NavSatFix>,
-    /// TwistWithCovarianceStamped publisher (~/velocity)
+    /// TwistWithCovarianceStamped publisher (~/velocity) - always enabled
     velocity_pub: Publisher<geometry_msgs::msg::TwistWithCovarianceStamped>,
-    /// TimeReference publisher (~/time_reference)
+    /// TimeReference publisher (~/time_reference) - always enabled
     time_ref_pub: Publisher<sensor_msgs::msg::TimeReference>,
-    /// DiagnosticArray publisher (/diagnostics)
+    /// DiagnosticArray publisher (/diagnostics) - always enabled
     diagnostics_pub: Publisher<diagnostic_msgs::msg::DiagnosticArray>,
     /// Node name for diagnostics
     node_name: String,
     /// Coordinate frame for velocity output
     frame: CoordinateFrame,
-    /// High Precision Position publisher (~/hp_pos)
-    hp_pos_pub: Publisher<sensor_msgs::msg::NavSatFix>,
-    /// Satellite Info publisher (~/satellites)
-    sat_pub: Publisher<std_msgs::msg::String>,
-    /// Integrity status publisher (~/integrity) - typed message
-    integrity_pub: Publisher<oxide_gnss_msgs::msg::OxideIntegrity>,
-    /// Operational go/no-go publisher (~/operational)
-    operational_pub: Publisher<std_msgs::msg::Bool>,
 
-    /// Detailed SEC-SIG per-center-frequency publisher (~/sec_sig_details)
-    sec_sig_details_pub: Publisher<oxide_gnss_msgs::msg::SecSigDetails>,
-
-    /// Baseline pose publisher for moving base/rover (~/baseline_pose)
-    baseline_pose_pub: Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>,
+    // Optional publishers - only created if topic is enabled
+    /// Satellite Info publisher (~/satellites) - requires satellites feature
+    sat_pub: Option<Publisher<std_msgs::msg::String>>,
+    /// Integrity status publisher (~/integrity) - requires integrity feature
+    integrity_pub: Option<Publisher<oxide_gnss_msgs::msg::OxideIntegrity>>,
+    /// Operational go/no-go publisher (~/operational) - requires integrity feature
+    operational_pub: Option<Publisher<std_msgs::msg::Bool>>,
+    /// Baseline pose publisher for moving base/rover (~/baseline_pose) - moving_base_rover only
+    baseline_pose_pub: Option<Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>>,
 
     /// Use high-precision position data for ~/fix when available
     use_hp_for_fix: bool,
@@ -46,50 +42,65 @@ pub struct GnssPublishers {
 impl GnssPublishers {
     /// Create publishers on the given node.
     ///
+    /// Only creates publishers for topics that are in `enabled_topics`.
+    /// Core topics (fix, velocity, time_reference, diagnostics) are always created.
+    ///
     /// # Arguments
     /// * `node` - The ROS2 node to create publishers on
     /// * `frame` - Coordinate frame for velocity output (ENU or NED)
     /// * `use_hp_for_fix` - Use high-precision position for ~/fix when available
+    /// * `enabled_topics` - List of enabled topic names (from Config::enabled_topics())
     pub fn new(
         node: &Node,
         frame: CoordinateFrame,
         use_hp_for_fix: bool,
+        enabled_topics: &[String],
     ) -> Result<Self, rclrs::RclrsError> {
+        use tracing::info;
+
         // QoS profiles for different topic types:
         // - Sensor data: Best effort, keep last (high-rate position/velocity)
         // - Reliable: For safety-critical topics that must not be lost
         let sensor_qos = QoSProfile::sensor_data_default();
         let reliable_qos = QoSProfile::topics_default().reliable();
 
-        // High-rate sensor data topics - best effort, latest sample matters
+        // Helper to check if a topic is enabled
+        let is_enabled = |topic: &str| enabled_topics.iter().any(|t| t == topic);
+
+        // Core topics - always created
         let fix_pub = node.create_publisher("~/fix".qos(sensor_qos))?;
         let velocity_pub = node.create_publisher("~/velocity".qos(sensor_qos))?;
-        let hp_pos_pub = node
-            .create_publisher("~/hp_pos".qos(sensor_qos))
-            .expect("Failed to create hp_pos publisher");
-
-        // Standard topics
         let time_ref_pub = node.create_publisher("~/time_reference")?;
         let diagnostics_pub = node.create_publisher("/diagnostics")?;
-        let sat_pub = node
-            .create_publisher("~/satellites")
-            .expect("Failed to create satellites publisher");
 
-        // Safety-critical topics - reliable delivery
-        let integrity_pub = node
-            .create_publisher("~/integrity".qos(reliable_qos))
-            .expect("Failed to create integrity publisher");
-        let operational_pub = node
-            .create_publisher("~/operational".qos(reliable_qos))
-            .expect("Failed to create operational publisher");
-        let sec_sig_details_pub = node
-            .create_publisher("~/sec_sig_details".qos(reliable_qos))
-            .expect("Failed to create sec_sig_details publisher");
+        // Optional topics - only created if enabled
+        let sat_pub = if is_enabled("~/satellites") {
+            info!("Creating ~/satellites publisher");
+            Some(node.create_publisher("~/satellites")?)
+        } else {
+            None
+        };
 
-        // Moving base/rover baseline pose - sensor data QoS
-        let baseline_pose_pub = node
-            .create_publisher("~/baseline_pose".qos(sensor_qos))
-            .expect("Failed to create baseline_pose publisher");
+        let integrity_pub = if is_enabled("~/integrity") {
+            info!("Creating ~/integrity publisher");
+            Some(node.create_publisher("~/integrity".qos(reliable_qos))?)
+        } else {
+            None
+        };
+
+        let operational_pub = if is_enabled("~/operational") {
+            info!("Creating ~/operational publisher");
+            Some(node.create_publisher("~/operational".qos(reliable_qos))?)
+        } else {
+            None
+        };
+
+        let baseline_pose_pub = if is_enabled("~/baseline_pose") {
+            info!("Creating ~/baseline_pose publisher");
+            Some(node.create_publisher("~/baseline_pose".qos(sensor_qos))?)
+        } else {
+            None
+        };
 
         Ok(Self {
             fix_pub,
@@ -98,32 +109,25 @@ impl GnssPublishers {
             diagnostics_pub,
             node_name: node.name().to_string(),
             frame,
-            hp_pos_pub,
             sat_pub,
             integrity_pub,
             operational_pub,
-            sec_sig_details_pub,
             baseline_pose_pub,
             use_hp_for_fix,
         })
-    }
-
-    /// Publish detailed SEC-SIG per-center-frequency data to ~/sec_sig_details.
-    pub fn publish_sec_sig_details(&self, sig: &SecSigData) {
-        let mut msg: oxide_gnss_msgs::msg::SecSigDetails = sig.to_ros_msg();
-        msg.header.stamp = now_timestamp();
-        msg.header.frame_id = "gnss".to_string();
-
-        if let Err(e) = self.sec_sig_details_pub.publish(msg) {
-            error!(error = %e, "Failed to publish SecSigDetails");
-        }
     }
 
     /// Publish baseline pose from NAV-RELPOSNED for moving base/rover.
     ///
     /// Converts the relative position (N/E/D baseline vector) and heading
     /// to a PoseWithCovarianceStamped message.
+    ///
+    /// Only publishes if the ~/baseline_pose topic is enabled.
     pub fn publish_baseline_pose(&self, rel_pos: &RelPosNedData) {
+        let Some(ref pub_) = self.baseline_pose_pub else {
+            return; // Topic not enabled
+        };
+
         // Only publish if relative position is valid
         if !rel_pos.flags.rel_pos_valid {
             debug!("Skipping baseline_pose publish: rel_pos not valid");
@@ -179,7 +183,7 @@ impl GnssPublishers {
         msg.pose.covariance[28] = 999.0; // pitch (unknown)
         msg.pose.covariance[35] = var_yaw; // yaw
 
-        if let Err(e) = self.baseline_pose_pub.publish(msg) {
+        if let Err(e) = pub_.publish(msg) {
             error!(error = %e, "Failed to publish baseline_pose");
         } else {
             debug!(
@@ -240,44 +244,45 @@ impl GnssPublishers {
         }
     }
 
-    /// Publish HP Position
-    pub fn publish_hp_pos(&self, data: &HpPosData) {
-        let stamp = now_timestamp();
-        let mut msg: sensor_msgs::msg::NavSatFix = data.to_ros_msg();
-        msg.header.stamp = stamp;
-        if let Err(e) = self.hp_pos_pub.publish(msg) {
-            error!(error = %e, "Failed to publish HP Position");
-        }
-    }
-
-    /// Publish Satellite Info
+    /// Publish Satellite Info (only if ~/satellites topic is enabled)
     pub fn publish_sat_info(&self, info: &SatInfo) {
+        let Some(ref pub_) = self.sat_pub else {
+            return; // Topic not enabled
+        };
+
         let msg = std_msgs::msg::String {
             data: format!(
                 "{{\"num_svs\": {}, \"active_svs\": {}}}",
                 info.num_sats,
-                info.sats.iter().filter(|s| (s.flags & 0x1) == 0x1).count() // Example flag check for 'used'
+                info.sats.iter().filter(|s| (s.flags & 0x1) == 0x1).count()
             ),
         };
-        let _ = self.sat_pub.publish(msg);
+        let _ = pub_.publish(msg);
     }
 
     /// Publish integrity status to ~/integrity and ~/operational (Bool).
+    /// Only publishes if the integrity topics are enabled.
     pub fn publish_integrity(&self, integrity: &GnssIntegrity) {
-        // Publish operational status (true if Ok or Degraded)
+        // Calculate operational status
         let operational = matches!(
             integrity.level,
             IntegrityLevel::Ok | IntegrityLevel::Degraded
         );
-        let op_msg = std_msgs::msg::Bool { data: operational };
-        if let Err(e) = self.operational_pub.publish(op_msg) {
-            error!(error = %e, "Failed to publish operational status");
+
+        // Publish operational status if topic is enabled
+        if let Some(ref pub_) = self.operational_pub {
+            let op_msg = std_msgs::msg::Bool { data: operational };
+            if let Err(e) = pub_.publish(op_msg) {
+                error!(error = %e, "Failed to publish operational status");
+            }
         }
 
-        // Publish integrity as typed message
-        let msg = integrity.to_ros_msg(operational);
-        if let Err(e) = self.integrity_pub.publish(msg) {
-            error!(error = %e, "Failed to publish integrity");
+        // Publish integrity as typed message if topic is enabled
+        if let Some(ref pub_) = self.integrity_pub {
+            let msg = integrity.to_ros_msg(operational);
+            if let Err(e) = pub_.publish(msg) {
+                error!(error = %e, "Failed to publish integrity");
+            }
         }
     }
 

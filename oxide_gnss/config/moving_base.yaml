@@ -1,0 +1,35 @@
+# oxide_gnss configuration: Moving Base
+#
+# Moving base in a moving base + rover pair.
+# Outputs RTCM corrections to the rover via UART2.
+# Optionally receives NTRIP corrections for absolute position.
+
+mode: moving_base
+
+features:
+  high_precision: true
+  integrity: true
+
+device:
+  port: "/dev/gnss_base"
+  baud_rate: 460800
+  frame: ENU
+
+  navigation:
+    rate_hz: 5            # 5 Hz for moving base
+
+  # Optional: Override UART2 baud rate for RTCM output
+  ublox:
+    ports:
+      uart2:
+        baudrate: 460800
+
+# Optional: NTRIP for absolute position (comment out if not needed)
+ntrip:
+  host: "ntrip.data.gnss.ga.gov.au"
+  port: 2101
+  mountpoint: "ALIC00AUS0"
+  username: "${NTRIP_USERNAME}"
+  password: "${NTRIP_PASSWORD}"
+  send_gga: true
+  gga_interval_secs: 10

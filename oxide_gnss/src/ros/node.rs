@@ -20,6 +20,10 @@ pub struct GnssNodeConfig {
     pub ntrip: Option<NtripConfig>,
     /// Diagnostics publish rate in Hz
     pub diagnostics_rate_hz: f64,
+    /// Enabled ROS topics (from Config::enabled_topics())
+    pub enabled_topics: Vec<String>,
+    /// Use high-precision data in ~/fix topic
+    pub use_hp_for_fix: bool,
 }
 
 impl Default for GnssNodeConfig {
@@ -37,6 +41,12 @@ impl Default for GnssNodeConfig {
             },
             ntrip: None,
             diagnostics_rate_hz: 1.0,
+            enabled_topics: vec![
+                "~/fix".to_string(),
+                "~/velocity".to_string(),
+                "~/time_reference".to_string(),
+            ],
+            use_hp_for_fix: false,
         }
     }
 }
@@ -59,15 +69,12 @@ pub struct GnssNode {
 impl GnssNode {
     /// Create a new GNSS driver instance using an existing ROS2 node.
     pub fn new(node: Node, config: GnssNodeConfig) -> Result<Self, RclrsError> {
-        // Enable HP position for ~/fix if NAV_HPPOSLLH is configured
-        let use_hp_for_fix = config
-            .device
-            .ublox
-            .as_ref()
-            .map(|u| u.is_message_enabled("NAV_HPPOSLLH"))
-            .unwrap_or(false);
-
-        let publishers = GnssPublishers::new(&node, config.device.frame, use_hp_for_fix)?;
+        let publishers = GnssPublishers::new(
+            &node,
+            config.device.frame,
+            config.use_hp_for_fix,
+            &config.enabled_topics,
+        )?;
 
         Ok(Self {
             node,

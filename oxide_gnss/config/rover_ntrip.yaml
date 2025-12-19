@@ -1,0 +1,31 @@
+# oxide_gnss configuration: RTK Rover with NTRIP
+#
+# This is the most common RTK configuration - a rover receiving corrections
+# from an NTRIP caster over the network.
+
+mode: rover_ntrip
+
+features:
+  high_precision: true    # Use HP position in ~/fix topic
+  integrity: true         # Enable integrity monitoring
+  satellites: false       # Disable to reduce bandwidth
+
+device:
+  port: "/dev/gnss_f9p_rover"
+  baud_rate: 460800
+  frame: ENU
+
+  navigation:
+    rate_hz: 10
+    min_satellites: 4
+    max_hdop: 5.0
+
+ntrip:
+  host: "ntrip.data.gnss.ga.gov.au"
+  port: 2101
+  use_https: false
+  mountpoint: "ALIC00AUS0"
+  username: "${NTRIP_USERNAME}"
+  password: "${NTRIP_PASSWORD}"
+  send_gga: true
+  gga_interval_secs: 10

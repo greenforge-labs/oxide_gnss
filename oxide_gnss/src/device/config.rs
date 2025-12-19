@@ -11,7 +11,7 @@ use std::time::Duration;
 use tokio::time::timeout;
 use tracing::{debug, info, warn};
 
-use crate::config::DeviceConfig;
+use crate::config::UbloxConfig;
 use crate::error::DeviceError;
 
 use super::serial::SerialPort;
@@ -113,32 +113,24 @@ impl DeviceConfigurator {
 
     /// Run the full configuration sequence.
     ///
-    /// Requires `config.ublox` section to be present in config file.
-    /// If no CFG_* keys are provided, no configuration is sent to the device.
+    /// Takes a resolved UbloxConfig (from mode + features or legacy config).
+    /// If `enabled_topics` is provided, validation only checks those topics.
     ///
     /// Returns Ok on success, or an error describing what failed.
     pub async fn configure(
         &self,
         serial: &mut SerialPort,
         ubx: &mut UbxHandler,
-        config: &DeviceConfig,
+        ublox_config: &UbloxConfig,
+        enabled_topics: Option<&[&str]>,
     ) -> Result<(), DeviceError> {
         info!("Starting device configuration sequence");
 
-        // Require u-blox configuration section - no silent defaults
-        let ublox_config =
-            config
-                .ublox
-                .as_ref()
-                .ok_or_else(|| DeviceError::ConfigurationFailed {
-                    step: "ublox config missing - add 'ublox:' section to config file".to_string(),
-                })?;
+        // Validate config and emit warnings (mode-aware if enabled_topics provided)
+        let validation = ublox_config.validate(enabled_topics);
 
-        // Validate config and emit warnings
-        let validation = ublox_config.validate();
-
-        // Log topic availability warnings
-        for (topic, missing_msgs) in ublox_config.check_topic_availability() {
+        // Log topic availability warnings (only for enabled topics)
+        for (topic, missing_msgs) in ublox_config.check_topic_availability(enabled_topics) {
             warn!(
                 topic = topic,
                 missing = ?missing_msgs,

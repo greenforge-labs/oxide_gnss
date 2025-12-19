@@ -186,28 +186,36 @@ oxide_gnss/
 │   ├── main.rs           # Entry point (ROS2 node)
 │   ├── lib.rs            # Library root
 │   ├── config/           # Configuration parsing
-│   │   ├── mod.rs
-│   │   └── ublox.rs      # u-blox config + message requirements
+│   │   ├── mod.rs        # Config loading, mode resolution
+│   │   ├── modes.rs      # Operating modes and features
+│   │   ├── ublox.rs      # UbloxConfig, message requirements
+│   │   ├── device.rs     # DeviceConfig
+│   │   └── ntrip.rs      # NtripConfig
 │   ├── device/           # Hardware interface
 │   │   ├── mod.rs
 │   │   ├── task.rs       # Device communication task
 │   │   ├── ubx.rs        # UBX protocol parser
 │   │   ├── serial.rs     # Serial port handling
-│   │   └── config.rs     # Device configurator
+│   │   ├── config.rs     # Device configurator
+│   │   └── cfg_key_mapping.rs  # UbloxConfig -> CfgVal
 │   ├── ntrip/            # NTRIP client
 │   │   ├── mod.rs
 │   │   └── task.rs       # NTRIP communication task
 │   ├── ros/              # ROS2 interface
 │   │   ├── mod.rs
+│   │   ├── node.rs       # GnssNode, GnssNodeConfig
 │   │   ├── task.rs       # ROS publisher task
-│   │   ├── publishers.rs # Topic publishers
+│   │   ├── publishers.rs # Topic publishers (mode-aware)
 │   │   └── conversions.rs # UBX -> ROS message conversion
 │   └── state/            # State management
 │       ├── mod.rs
 │       ├── supervisor.rs # Task coordination
 │       └── integrity.rs  # Safety integrity aggregation
 ├── config/
-│   └── default.yaml      # Example configuration
+│   ├── rover_ntrip.yaml  # RTK rover with NTRIP
+│   ├── standalone.yaml   # Basic GPS
+│   ├── moving_base.yaml  # Moving base station
+│   └── advanced_rover.yaml # Advanced customization
 ├── launch/
 │   └── oxide_gnss.launch.py
 └── docs/
@@ -323,7 +331,7 @@ colcon build --packages-up-to oxide_gnss
    - Forward in device task
 
 3. **Publish to ROS**:
-   - Add publisher in `ros/publishers.rs`
+   - Add publisher in `ros/publishers.rs` (optional if mode-aware)
    - Add conversion in `ros/conversions.rs`
    - Handle in `ros/task.rs`
 
@@ -333,10 +341,31 @@ colcon build --packages-up-to oxide_gnss
 
 ### Adding a New ROS Topic
 
-1. Add publisher in `GnssPublishers::new()`
-2. Add publish method
-3. Call from `RosTask::handle_message()`
-4. Document in `CONFIGURATION.md`
+1. Add optional publisher in `GnssPublishers` struct
+2. Check `enabled_topics` in `GnssPublishers::new()` before creating
+3. Add publish method with `Option` check
+4. Call from `RosTask::handle_message()`
+5. Update `Config::enabled_topics()` in `config/mod.rs`
+6. Document in `CONFIGURATION.md`
+
+### Adding a New Feature Flag
+
+1. Add variant to `Feature` enum in `config/modes.rs`
+2. Implement `required_messages()` for the feature
+3. Implement `enabled_topics()` for the feature
+4. Update `FeaturesConfig` with new field
+5. Update `enabled_features()` to include it
+6. Add to mode presets' `allowed_features` if appropriate
+7. Document in `CONFIGURATION.md`
+
+### Adding a New Operating Mode
+
+1. Add variant to `OperatingMode` enum in `config/modes.rs`
+2. Add preset function in `presets` module
+3. Update `ModePreset::for_mode()` match
+4. Update `Config::enabled_topics()` if mode has special topics
+5. Create example config file in `config/`
+6. Document in `CONFIGURATION.md`
 
 ---
 

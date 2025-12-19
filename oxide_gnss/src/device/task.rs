@@ -14,7 +14,7 @@ use tokio::sync::{mpsc, watch, Mutex};
 use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
 
-use crate::config::DeviceConfig;
+use crate::config::{DeviceConfig, UbloxConfig};
 use crate::error::DeviceError;
 use crate::state::{DeviceState, FixType, GnssIntegrity, IntegrityAggregator};
 
@@ -182,6 +182,10 @@ impl DeviceTaskHandle {
 /// The device task runner.
 pub struct DeviceTask {
     config: DeviceConfig,
+    /// Resolved u-blox configuration (from mode + features or legacy)
+    ublox_config: UbloxConfig,
+    /// Enabled ROS topics (for mode-aware validation)
+    enabled_topics: Vec<String>,
     channels: DeviceTaskChannels,
     state: Arc<Mutex<DeviceTaskState>>,
     configurator_options: ConfiguratorOptions,
@@ -191,9 +195,22 @@ pub struct DeviceTask {
 
 impl DeviceTask {
     /// Create a new device task.
-    pub fn new(config: DeviceConfig, channels: DeviceTaskChannels) -> Self {
+    ///
+    /// # Arguments
+    /// * `config` - Device configuration (port, baud rate, etc.)
+    /// * `ublox_config` - Resolved u-blox configuration (from mode + features or legacy)
+    /// * `enabled_topics` - List of enabled ROS topics (for mode-aware validation)
+    /// * `channels` - Communication channels for the task
+    pub fn new(
+        config: DeviceConfig,
+        ublox_config: UbloxConfig,
+        enabled_topics: Vec<String>,
+        channels: DeviceTaskChannels,
+    ) -> Self {
         Self {
             config,
+            ublox_config,
+            enabled_topics,
             channels,
             state: Arc::new(Mutex::new(DeviceTaskState::default())),
             configurator_options: ConfiguratorOptions::default(),
@@ -204,11 +221,15 @@ impl DeviceTask {
     /// Create a device task with custom configurator options.
     pub fn with_configurator_options(
         config: DeviceConfig,
+        ublox_config: UbloxConfig,
+        enabled_topics: Vec<String>,
         channels: DeviceTaskChannels,
         configurator_options: ConfiguratorOptions,
     ) -> Self {
         Self {
             config,
+            ublox_config,
+            enabled_topics,
             channels,
             state: Arc::new(Mutex::new(DeviceTaskState::default())),
             configurator_options,
@@ -350,8 +371,16 @@ impl DeviceTask {
         let mut ubx = UbxHandler::new();
         let configurator = DeviceConfigurator::with_options(self.configurator_options.clone());
 
+        // Convert enabled topics to slice of &str for validation
+        let topic_refs: Vec<&str> = self.enabled_topics.iter().map(|s| s.as_str()).collect();
+        let enabled_topics = if topic_refs.is_empty() {
+            None
+        } else {
+            Some(topic_refs.as_slice())
+        };
+
         if let Err(e) = configurator
-            .configure(&mut serial, &mut ubx, &self.config)
+            .configure(&mut serial, &mut ubx, &self.ublox_config, enabled_topics)
             .await
         {
             error!(error = %e, "Device configuration failed");
@@ -655,14 +684,22 @@ impl DeviceTask {
 /// Spawn a device task and return a handle.
 ///
 /// This is a convenience function for spawning the task.
+///
+/// # Arguments
+/// * `config` - Device configuration (port, baud rate, etc.)
+/// * `ublox_config` - Resolved u-blox configuration (from mode + features or legacy)
+/// * `enabled_topics` - List of enabled ROS topics (for mode-aware validation)
+/// * `channels` - Communication channels for the task
 pub fn spawn_device_task(
     config: DeviceConfig,
+    ublox_config: UbloxConfig,
+    enabled_topics: Vec<String>,
     channels: DeviceTaskChannels,
 ) -> (
     tokio::task::JoinHandle<Result<(), DeviceError>>,
     DeviceTaskHandle,
 ) {
-    let task = DeviceTask::new(config, channels);
+    let task = DeviceTask::new(config, ublox_config, enabled_topics, channels);
     let handle = task.handle();
     let join_handle = tokio::spawn(task.run());
     (join_handle, handle)

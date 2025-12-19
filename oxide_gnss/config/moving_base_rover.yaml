@@ -1,0 +1,28 @@
+# oxide_gnss configuration: Moving Base Rover
+#
+# Rover in a moving base + rover pair.
+# Receives RTCM corrections from the moving base via UART2.
+# Outputs absolute position and baseline (relative) position.
+
+mode: moving_base_rover
+
+features:
+  high_precision: true
+  integrity: true
+  heading: true           # Get heading from baseline vector
+
+device:
+  port: "/dev/gnss_rover"
+  baud_rate: 460800
+  frame: ENU
+
+  navigation:
+    rate_hz: 5            # Match base rate
+
+  # UART2 receives RTCM from the moving base
+  ublox:
+    ports:
+      uart2:
+        baudrate: 460800
+
+# No NTRIP - corrections come from the moving base via UART2

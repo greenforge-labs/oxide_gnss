@@ -180,11 +180,14 @@ fn parse_protocol_in(port: &str, protocol: &str) -> Option<CfgVal> {
         ("uart2", "ubx") => Some(CfgVal::Uart2InProtUbx(true)),
         ("uart2", "nmea") => Some(CfgVal::Uart2InProtNmea(true)),
         ("uart2", "rtcm3x") => Some(CfgVal::Uart2InProtRtcm3x(true)),
-        // I2C - protocol variants not available in ublox crate
-        ("i2c", _) => {
-            warn!("I2C protocol configuration not supported by ublox crate");
-            None
-        }
+        // I2C (DDC)
+        ("i2c", "ubx") => Some(CfgVal::I2cInProtUbx(true)),
+        ("i2c", "nmea") => Some(CfgVal::I2cInProtNmea(true)),
+        ("i2c", "rtcm3x") => Some(CfgVal::I2cInProtRtcm3x(true)),
+        // SPI
+        ("spi", "ubx") => Some(CfgVal::SpiInProtUbx(true)),
+        ("spi", "nmea") => Some(CfgVal::SpiInProtNmea(true)),
+        ("spi", "rtcm3x") => Some(CfgVal::SpiInProtRtcm3x(true)),
         _ => {
             warn!("Unknown protocol '{}' for port '{}'", protocol, port);
             None
@@ -207,11 +210,14 @@ fn parse_protocol_out(port: &str, protocol: &str) -> Option<CfgVal> {
         ("uart2", "ubx") => Some(CfgVal::Uart2OutProtUbx(true)),
         ("uart2", "nmea") => Some(CfgVal::Uart2OutProtNmea(true)),
         ("uart2", "rtcm3x") => Some(CfgVal::Uart2OutProtRtcm3x(true)),
-        // I2C - protocol variants not available in ublox crate
-        ("i2c", _) => {
-            warn!("I2C protocol configuration not supported by ublox crate");
-            None
-        }
+        // I2C (DDC)
+        ("i2c", "ubx") => Some(CfgVal::I2cOutProtUbx(true)),
+        ("i2c", "nmea") => Some(CfgVal::I2cOutProtNmea(true)),
+        ("i2c", "rtcm3x") => Some(CfgVal::I2cOutProtRtcm3x(true)),
+        // SPI
+        ("spi", "ubx") => Some(CfgVal::SpiOutProtUbx(true)),
+        ("spi", "nmea") => Some(CfgVal::SpiOutProtNmea(true)),
+        ("spi", "rtcm3x") => Some(CfgVal::SpiOutProtRtcm3x(true)),
         _ => {
             warn!("Unknown protocol '{}' for port '{}'", protocol, port);
             None
@@ -275,12 +281,22 @@ fn parse_message_rate(port: &str, msg: &str, rate: u8) -> Option<CfgVal> {
         ("uart2", "NAV_POSECEF") => Some(CfgVal::MsgOutUbxNavPosEcefUart2(rate)),
         ("uart2", "NAV_COV") => Some(CfgVal::MsgOutUbxNavCovUart2(rate)),
         ("uart2", "NAV_RELPOSNED") => Some(CfgVal::MsgOutUbxNavRelposNedUart2(rate)),
+        ("uart2", "NAV_SVIN") => Some(CfgVal::MsgOutUbxNavSvinUart2(rate)),
         ("uart2", "MON_RF") => Some(CfgVal::MsgOutUbxMonRfUart2(rate)),
         ("uart2", "MON_COMMS") => Some(CfgVal::MsgOutUbxMoncommsUart2(rate)),
         ("uart2", "MON_HW") => Some(CfgVal::MsgOutUbxMonHwUart2(rate)),
         ("uart2", "SEC_SIG") => Some(CfgVal::MsgOutUbxSecSigUart2(rate)),
         ("uart2", "SEC_SIGLOG") => Some(CfgVal::MsgOutUbxSecSiglogUart2(rate)),
         ("uart2", "RXM_COR") => Some(CfgVal::MsgOutUbxRxmCorUart2(rate)),
+
+        // ====== RTCM3 output messages (UART2 - for moving base) ======
+        ("uart2", "RTCM_3X_TYPE4072_0") => Some(CfgVal::MsgOutRtcm3Xtype40720Uart2(rate)),
+        ("uart2", "RTCM_3X_TYPE1005") => Some(CfgVal::MsgOutRtcm3Xtype1005Uart2(rate)),
+        ("uart2", "RTCM_3X_TYPE1074") => Some(CfgVal::MsgOutRtcm3Xtype1074Uart2(rate)),
+        ("uart2", "RTCM_3X_TYPE1084") => Some(CfgVal::MsgOutRtcm3Xtype1084Uart2(rate)),
+        ("uart2", "RTCM_3X_TYPE1094") => Some(CfgVal::MsgOutRtcm3Xtype1094Uart2(rate)),
+        ("uart2", "RTCM_3X_TYPE1124") => Some(CfgVal::MsgOutRtcm3Xtype1124Uart2(rate)),
+        ("uart2", "RTCM_3X_TYPE1230") => Some(CfgVal::MsgOutRtcm3Xtype1230Uart2(rate)),
 
         _ => {
             warn!("Unknown message '{}' for port '{}'", msg, port);

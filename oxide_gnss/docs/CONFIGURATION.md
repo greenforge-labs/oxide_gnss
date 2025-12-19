@@ -4,11 +4,61 @@ This document describes all configuration options for oxide_gnss.
 
 ## Configuration File
 
-oxide_gnss uses YAML configuration files. The default configuration is at `config/default.yaml`.
+oxide_gnss uses YAML configuration files. Example configs are in `config/`:
+
+| File | Description |
+|------|-------------|
+| `rover_ntrip.yaml` | RTK rover with NTRIP corrections (most common) |
+| `standalone.yaml` | Basic GPS without RTK |
+| `moving_base.yaml` | Moving base in MB+R pair |
+| `moving_base_rover.yaml` | Rover in MB+R pair |
+| `advanced_rover.yaml` | Advanced config with custom messages/signals |
 
 ```bash
 ros2 launch oxide_gnss oxide_gnss.launch.py config_file:=/path/to/your/config.yaml
 ```
+
+---
+
+## Mode-Based Configuration
+
+The recommended way to configure oxide_gnss is using **modes** and **features**. This provides sensible defaults without requiring detailed UBX message knowledge.
+
+### Operating Modes
+
+```yaml
+mode: rover_ntrip
+```
+
+| Mode | Description | Protocols | Base Messages |
+|------|-------------|-----------|---------------|
+| `standalone` | Basic GPS without RTK | USB: UBX in/out | NAV_PVT |
+| `rover_ntrip` | RTK rover with NTRIP | USB: UBX, RTCM3X in | NAV_PVT, NAV_HPPOSLLH |
+| `rover_radio` | RTK rover with radio corrections | UART2: RTCM3X in | NAV_PVT, NAV_HPPOSLLH |
+| `moving_base` | Moving base station | UART2: RTCM3X out | NAV_PVT, NAV_HPPOSLLH, NAV_COV, NAV_STATUS |
+| `moving_base_rover` | Rover in MB+R pair | UART2: RTCM3X in | NAV_PVT, NAV_HPPOSLLH, NAV_RELPOSNED |
+| `static_base` | Static base station | UART2: RTCM3X out | NAV_PVT, NAV_HPPOSLLH |
+
+### Feature Flags
+
+```yaml
+features:
+  high_precision: true    # Use HP position data in ~/fix
+  integrity: true         # Enable ~/integrity, ~/operational topics
+  satellites: false       # Enable ~/satellites topic
+```
+
+| Feature | Description | Messages Added | Topics Enabled |
+|---------|-------------|----------------|----------------|
+| `high_precision` | HP data enhances ~/fix accuracy | NAV_HPPOSLLH | (enhances ~/fix) |
+| `integrity` | Jamming/spoofing detection | SEC_SIG, MON_RF, MON_COMMS | ~/integrity, ~/operational |
+| `satellites` | Per-satellite visibility info | NAV_SAT | ~/satellites |
+
+### How Mode + Features Work
+
+1. **Mode** sets base protocols and messages for your operating scenario
+2. **Features** add optional functionality on top
+3. **device.ublox** overrides allow fine-tuning (see Advanced Configuration)
 
 ---
 
@@ -186,11 +236,11 @@ The driver validates message configuration at startup. Messages are categorized 
 | Message | Level | Purpose | ROS Topics |
 |---------|-------|---------|------------|
 | `NAV_PVT` | Essential | Position/velocity/time | `~/fix`, `~/velocity`, `~/time_reference` |
-| `NAV_HPPOSLLH` | Recommended | High-precision position | `~/hp_pos` |
-| `NAV_POSECEF` | Recommended | ECEF coordinates | `~/fix` |
-| `MON_RF` | RequiredForFeature | Antenna status, jamming indicator | `~/integrity`, `~/diagnostics` |
-| `MON_COMMS` | RequiredForFeature | Communication port health | `~/integrity`, `~/diagnostics` |
-| `SEC_SIG` | RequiredForFeature | Jamming/spoofing detection | `~/integrity`, `~/sec_sig_details` |
+| `NAV_HPPOSLLH` | Recommended | High-precision position | Enhances `~/fix` |
+| `NAV_POSECEF` | Optional | ECEF coordinates | — |
+| `MON_RF` | RequiredForFeature | Antenna status, jamming indicator | `~/integrity` |
+| `MON_COMMS` | RequiredForFeature | Communication port health | `~/integrity` |
+| `SEC_SIG` | RequiredForFeature | Jamming/spoofing detection | `~/integrity` |
 | `NAV_RELPOSNED` | RequiredForFeature | Moving base relative position | `~/baseline_pose` |
 | `NAV_SAT` | Optional | Per-satellite info | `~/satellites` |
 | `NAV_COV` | Optional | Covariance matrix (F9R/F9H only) | — |
@@ -198,34 +248,100 @@ The driver validates message configuration at startup. Messages are categorized 
 
 ### Recommended Configuration
 
-**Minimal (position only):**
+**Use mode-based config** instead of manually specifying messages:
+
 ```yaml
-messages:
-  usb:
-    NAV_PVT: 1
+# Minimal (position only)
+mode: standalone
+
+# RTK rover with integrity
+mode: rover_ntrip
+features:
+  high_precision: true
+  integrity: true
+
+# Moving base/rover heading
+mode: moving_base_rover
+features:
+  high_precision: true
 ```
 
-**Standard (with integrity monitoring):**
+---
+
+## Advanced Configuration
+
+For users who need fine-grained control, you can override mode defaults.
+
+### Adding Extra Messages
+
 ```yaml
-messages:
-  usb:
-    NAV_PVT: 1
-    NAV_HPPOSLLH: 1
-    NAV_POSECEF: 1
-    MON_RF: 1
-    MON_COMMS: 1
-    SEC_SIG: 1
+mode: rover_ntrip
+features:
+  high_precision: true
+  integrity: true
+
+device:
+  ublox:
+    messages:
+      usb:
+        # Add messages not in the mode preset
+        NAV_SAT: 5          # Every 5th solution
+        # Change rates of existing messages
+        NAV_HPPOSLLH: 2     # Every 2nd solution
 ```
 
-**Moving Base/Rover RTK:**
+### GNSS Constellation Configuration
+
 ```yaml
-messages:
-  usb:
-    NAV_PVT: 1
-    NAV_HPPOSLLH: 1
-    NAV_RELPOSNED: 1    # Required for ~/baseline_pose
-    MON_RF: 1
-    SEC_SIG: 1
+device:
+  ublox:
+    signals:
+      gps:
+        enabled: true
+        l1: true      # L1C/A
+        l2: true      # L2C (dual-frequency)
+      glonass:
+        enabled: true
+        l1: true
+        l2: true
+      galileo:
+        enabled: true
+        l1: true      # E1
+        l2: true      # E5b
+      beidou:
+        enabled: true
+        b1: true
+        b2: true
+      sbas:
+        enabled: false
+      qzss:
+        enabled: false
+```
+
+### Measurement Rate
+
+```yaml
+device:
+  ublox:
+    rate:
+      measurement_ms: 100   # 10 Hz
+      nav_ratio: 1          # Nav solution per measurement
+```
+
+### Legacy Configuration
+
+If you omit `mode:`, the driver uses legacy mode with explicit message configuration:
+
+```yaml
+# Legacy mode - full manual control
+device:
+  port: "/dev/gnss_f9p"
+  ublox:
+    messages:
+      usb:
+        NAV_PVT: 1
+        NAV_HPPOSLLH: 1
+        SEC_SIG: 1
 ```
 
 ---
@@ -277,18 +393,25 @@ Comment out or remove the entire `ntrip:` section to disable NTRIP.
 
 ### Published Topics
 
+Topics are created based on your mode and feature configuration. Only enabled topics are advertised.
+
+**Core Topics (always created):**
+
 | Topic | Type | Source | Description |
 |-------|------|--------|-------------|
-| `~/fix` | `sensor_msgs/NavSatFix` | NAV_PVT | Position with covariance |
+| `~/fix` | `sensor_msgs/NavSatFix` | NAV_PVT (+HP if enabled) | Position with covariance |
 | `~/velocity` | `geometry_msgs/TwistWithCovarianceStamped` | NAV_PVT | 3D velocity |
 | `~/time_reference` | `sensor_msgs/TimeReference` | NAV_PVT | GPS time |
-| `~/hp_pos` | `sensor_msgs/NavSatFix` | NAV_HPPOSLLH | High-precision position |
-| `~/baseline_pose` | `geometry_msgs/PoseWithCovarianceStamped` | NAV_RELPOSNED | Moving base/rover baseline |
-| `~/satellites` | `std_msgs/String` | NAV_SAT | Satellite info (JSON) |
-| `~/integrity` | `oxide_gnss_msgs/OxideIntegrity` | Multiple | Safety integrity status |
-| `~/operational` | `std_msgs/Bool` | Multiple | Go/no-go signal |
-| `~/sec_sig_details` | `oxide_gnss_msgs/SecSigDetails` | SEC_SIG | Jamming/spoofing details |
 | `/diagnostics` | `diagnostic_msgs/DiagnosticArray` | Multiple | System diagnostics |
+
+**Optional Topics (based on mode/features):**
+
+| Topic | Type | Enabled By | Description |
+|-------|------|------------|-------------|
+| `~/integrity` | `oxide_gnss_msgs/OxideIntegrity` | `integrity: true` | Safety integrity status |
+| `~/operational` | `std_msgs/Bool` | `integrity: true` | Go/no-go signal |
+| `~/satellites` | `std_msgs/String` | `satellites: true` | Satellite info (JSON) |
+| `~/baseline_pose` | `geometry_msgs/PoseWithCovarianceStamped` | `mode: moving_base_rover` | Baseline to moving base |
 
 ---
 
