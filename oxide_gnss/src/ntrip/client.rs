@@ -307,6 +307,127 @@ impl NtripClient {
         &self.config
     }
 
+    /// Fetch the sourcetable from the NTRIP caster.
+    ///
+    /// This is a one-shot operation that connects, retrieves the sourcetable,
+    /// and disconnects. It does not affect the current streaming connection.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let config = NtripConfig { host: "caster.example.com".into(), .. };
+    /// let table = NtripClient::get_sourcetable(&config).await?;
+    /// for stream in table.rtcm_streams() {
+    ///     println!("{}: {}", stream.mountpoint, stream.format);
+    /// }
+    /// ```
+    pub async fn get_sourcetable(config: &NtripConfig) -> Result<super::sourcetable::Sourcetable, NtripError> {
+        let host = &config.host;
+        let port = config.port;
+        let addr = format!("{}:{}", host, port);
+
+        info!(addr = %addr, "Fetching sourcetable from NTRIP caster");
+
+        // 1. Establish TCP connection
+        let tcp_stream = match tokio::time::timeout(
+            Duration::from_secs(config.connection.timeout_secs as u64),
+            TcpStream::connect(&addr),
+        )
+        .await
+        {
+            Ok(Ok(s)) => s,
+            Ok(Err(e)) => return Err(NtripError::connection_failed(host, port, e)),
+            Err(_) => {
+                return Err(NtripError::Timeout {
+                    timeout_secs: config.connection.timeout_secs,
+                })
+            }
+        };
+
+        // 2. Optionally upgrade to TLS
+        let mut stream: NtripStream = if config.use_https {
+            NtripStream::connect_tls(tcp_stream, host, config.tls_skip_verify).await?
+        } else {
+            NtripStream::plain(tcp_stream)
+        };
+
+        // 3. Send sourcetable request (GET / instead of GET /mountpoint)
+        let user_agent = "NTRIP oxide_gnss/0.1";
+        let request = format!(
+            "GET / HTTP/1.0\r\n\
+             User-Agent: {}\r\n\
+             Host: {}:{}\r\n\
+             Accept: */*\r\n\
+             Connection: close\r\n\
+             \r\n",
+            user_agent, host, port
+        );
+
+        debug!(request = %request, "Sending sourcetable request");
+
+        if let Err(e) = stream.write_all(request.as_bytes()).await {
+            return Err(NtripError::NetworkError { source: e });
+        }
+
+        // 4. Read entire response
+        let mut response = Vec::new();
+        let mut buf = [0u8; 4096];
+        
+        loop {
+            match tokio::time::timeout(
+                Duration::from_secs(config.connection.timeout_secs as u64),
+                stream.read(&mut buf),
+            )
+            .await
+            {
+                Ok(Ok(0)) => break, // EOF
+                Ok(Ok(n)) => response.extend_from_slice(&buf[..n]),
+                Ok(Err(e)) => return Err(NtripError::NetworkError { source: e }),
+                Err(_) => {
+                    return Err(NtripError::Timeout {
+                        timeout_secs: config.connection.timeout_secs,
+                    })
+                }
+            }
+            
+            // Limit response size to prevent DoS
+            if response.len() > 1_000_000 {
+                return Err(NtripError::InvalidSourcetable {
+                    message: "Sourcetable too large (>1MB)".to_string(),
+                });
+            }
+        }
+
+        // 5. Parse response
+        let response_str = String::from_utf8_lossy(&response);
+        
+        // Check for success status
+        let first_line = response_str.lines().next().unwrap_or("");
+        if !first_line.contains("200") {
+            return Err(NtripError::HttpError {
+                status: 0,
+                message: first_line.to_string(),
+            });
+        }
+
+        // Find body (after \r\n\r\n)
+        let body = if let Some(idx) = response_str.find("\r\n\r\n") {
+            &response_str[idx + 4..]
+        } else {
+            &response_str[..]
+        };
+
+        let table = super::sourcetable::Sourcetable::parse(body);
+        
+        info!(
+            streams = table.streams.len(),
+            casters = table.casters.len(),
+            networks = table.networks.len(),
+            "Parsed sourcetable"
+        );
+
+        Ok(table)
+    }
+
     /// Detect protocol version from server response headers.
     fn detect_protocol(&self, response: &str, status_line: &str) -> DetectedProtocol {
         // ICY responses are always v1
