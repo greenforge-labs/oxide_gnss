@@ -1,7 +1,7 @@
 //! GNSS integrity monitoring and aggregation.
 //!
 //! This module implements safety-critical integrity monitoring as described in
-//! Section 5 of GNSS_TOPICS_AND_SAFETY_REFERENCE.md. It aggregates quality metrics
+//! `docs/INTEGRITY_AND_TOPICS.md`. It aggregates quality metrics
 //! from multiple UBX messages to determine overall GNSS solution integrity.
 
 use crate::device::{
