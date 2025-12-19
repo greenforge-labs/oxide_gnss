@@ -39,6 +39,9 @@ serial2-tokio = "0.1"
 base64 = "0.22"
 url = "2.5"
 tokio = { version = "1", features = ["full"] }
+tokio-rustls = "0.26"
+webpki-roots = "0.26"
+rustls-pki-types = "1"
 
 # Utilities
 nalgebra = "0.33"

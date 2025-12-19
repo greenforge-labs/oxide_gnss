@@ -18,6 +18,10 @@ pub struct NtripConfig {
     #[serde(default = "default_false")]
     pub use_https: bool,
 
+    /// Skip TLS certificate verification (for self-signed certs, testing only)
+    #[serde(default = "default_false")]
+    pub tls_skip_verify: bool,
+
     /// Mountpoint name
     pub mountpoint: String,
 
@@ -109,13 +113,6 @@ impl NtripConfig {
         if self.gga_interval_secs == 0 {
             return Err(ConfigError::Validation {
                 message: "GGA interval must be greater than 0".to_string(),
-            });
-        }
-
-        // TLS/HTTPS is not yet implemented - fail fast with clear message
-        if self.use_https {
-            return Err(ConfigError::Validation {
-                message: "NTRIP HTTPS/TLS is not yet implemented. Set use_https: false or wait for TLS support.".to_string(),
             });
         }
 

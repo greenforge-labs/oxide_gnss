@@ -4,17 +4,17 @@
 //! "ICY 200 OK" responses which are rejected by standard HTTP libraries.
 //!
 //! Features:
-//! - Raw TCP socket connection
+//! - Raw TCP socket connection (plain or TLS-encrypted)
 //! - Manual HTTP/1.0 request construction
 //! - Custom response parsing accepting ICY and HTTP status codes
 //! - Basic Authentication
-//! - Chunked transfer decoding (basic implementation)
+//! - TLS/HTTPS support for secure connections
 //! - GGA position reporting
 
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 
@@ -22,13 +22,14 @@ use crate::config::NtripConfig;
 use crate::error::NtripError;
 
 use super::gga::GgaSentence;
+use super::stream::NtripStream;
 
 /// NTRIP v1 client for streaming corrections from a caster.
 pub struct NtripClient {
     /// Configuration
     config: NtripConfig,
-    /// Active TCP stream (if connected)
-    stream: Option<TcpStream>,
+    /// Active stream (plain TCP or TLS, if connected)
+    stream: Option<NtripStream>,
 }
 
 impl NtripClient {
@@ -49,7 +50,7 @@ impl NtripClient {
         info!(addr = %addr, "Connecting to NTRIP caster");
 
         // 1. Establish TCP connection
-        let stream = match tokio::time::timeout(
+        let tcp_stream = match tokio::time::timeout(
             Duration::from_secs(self.config.connection.timeout_secs as u64),
             TcpStream::connect(&addr),
         )
@@ -64,9 +65,17 @@ impl NtripClient {
             }
         };
 
-        let mut stream = stream;
+        // 2. Optionally upgrade to TLS
+        let mut stream: NtripStream = if self.config.use_https {
+            if self.config.tls_skip_verify {
+                warn!("TLS certificate verification is disabled - connection is not fully secure");
+            }
+            NtripStream::connect_tls(tcp_stream, host, self.config.tls_skip_verify).await?
+        } else {
+            NtripStream::plain(tcp_stream)
+        };
 
-        // 2. Construct HTTP Request
+        // 3. Construct HTTP Request
         let mountpoint = &self.config.mountpoint;
         let user_agent = "NTRIP oxide_gnss/0.1";
 
@@ -99,12 +108,12 @@ impl NtripClient {
         };
         debug!(request = %redacted_request, "Sending NTRIP request");
 
-        // 3. Send Request
+        // 4. Send Request
         if let Err(e) = stream.write_all(request.as_bytes()).await {
             return Err(NtripError::NetworkError { source: e });
         }
 
-        // 4. Read Response Headers
+        // 5. Read Response Headers
         // We read byte-by-byte until we find \r\n\r\n
         let mut headers = Vec::new();
         let mut buffer = [0u8; 1];
@@ -145,7 +154,7 @@ impl NtripClient {
             });
         }
 
-        // 5. Parse Status Line
+        // 6. Parse Status Line
         let response = String::from_utf8_lossy(&headers);
         let status_line = response.lines().next().unwrap_or("");
 

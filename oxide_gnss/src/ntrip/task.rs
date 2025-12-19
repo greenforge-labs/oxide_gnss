@@ -373,6 +373,7 @@ mod tests {
             gga_interval_secs: 10,
             connection: Default::default(),
             use_https: false,
+            tls_skip_verify: false,
         }
     }
 

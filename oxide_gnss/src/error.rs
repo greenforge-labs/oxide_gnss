@@ -224,6 +224,10 @@ pub enum NtripError {
         #[source]
         source: std::io::Error,
     },
+
+    /// TLS/HTTPS error
+    #[error("NTRIP TLS error: {message}")]
+    TlsError { message: String },
 }
 
 // ============================================================================
