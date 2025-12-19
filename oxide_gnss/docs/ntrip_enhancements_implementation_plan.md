@@ -2,7 +2,7 @@
 
 **Date:** December 2024  
 **Author:** Cascade  
-**Status:** Phases 1-4 Complete
+**Status:** All Phases Complete ✅
 
 ---
 
@@ -73,14 +73,14 @@ Lower priority than TLS but needed for some modern casters.
 
 ---
 
-### **Phase 5: Sourcetable & Discovery** *(~2 hr, Optional)*
-Nice-to-have for UX, not critical path.
+### **Phase 5: Sourcetable & Discovery** *(~2 hr)* ✅ COMPLETE
+Mountpoint discovery and nearest-base selection.
 
-| Task | Description |
-|------|-------------|
-| **5.1** | Add `get_sourcetable()` method (GET `/` instead of `/{mountpoint}`) |
-| **5.2** | Parse `STR;...` lines into `SourcetableEntry` struct |
-| **5.3** | Add distance calculation for nearest-mountpoint suggestion |
+| Task | Description | Status |
+|------|-------------|--------|
+| **5.1** | Add `get_sourcetable()` method (GET `/` instead of `/{mountpoint}`) | ✅ |
+| **5.2** | Parse `STR;...` lines into `StreamEntry` struct | ✅ |
+| **5.3** | Add distance calculation (Haversine) for nearest-mountpoint suggestion | ✅ |
 
 ---
 
@@ -141,3 +141,4 @@ Start with **Phases 1-3** as a coherent unit. These address the security concern
 | 2024-12-20 | Cascade | Initial implementation plan |
 | 2024-12-20 | Cascade | Completed Phases 1-3 |
 | 2024-12-20 | Cascade | Completed Phase 4 (NTRIP v2) |
+| 2024-12-20 | Cascade | Completed Phase 5 (Sourcetable) - All phases done |
