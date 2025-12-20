@@ -379,14 +379,25 @@ impl NtripClient {
 
         // 3. Send sourcetable request (GET / instead of GET /mountpoint)
         let user_agent = "NTRIP oxide_gnss/0.1";
+        
+        // Include authentication if credentials are provided (some casters require it)
+        let auth_header =
+            if let (Some(user), Some(pass)) = (&config.username, &config.password) {
+                let credentials = format!("{}:{}", user, pass);
+                let encoded = BASE64.encode(credentials);
+                format!("Authorization: Basic {}\r\n", encoded)
+            } else {
+                String::new()
+            };
+
         let request = format!(
             "GET / HTTP/1.0\r\n\
              User-Agent: {}\r\n\
              Host: {}:{}\r\n\
              Accept: */*\r\n\
              Connection: close\r\n\
-             \r\n",
-            user_agent, host, port
+             {}\r\n",
+            user_agent, host, port, auth_header
         );
 
         debug!(request = %request, "Sending sourcetable request");

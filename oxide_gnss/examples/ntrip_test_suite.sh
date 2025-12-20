@@ -241,16 +241,15 @@ connect_tests() {
         skip_test "EUREF stream tests" "NTRIP_EUREF_USER/PASS not set"
     fi
 
-    # AUSCORS - requires registration
+    # AUSCORS - requires registration and HTTPS
+    # URL: ntrip.data.gnss.ga.gov.au (port 443, HTTPS required)
     if [[ -n "$NTRIP_AUSCORS_USER" && -n "$NTRIP_AUSCORS_PASS" ]]; then
         echo -e "${GREEN}AUSCORS credentials available${NC}"
         
-        MOUNTPOINT=$("$NTRIP_TEST" nearest auscors.ga.gov.au "$TEST_LAT_AU" "$TEST_LON_AU" 2>/dev/null | grep "Recommended:" | awk '{print $2}' || echo "")
-        
-        if [[ -n "$MOUNTPOINT" ]]; then
-            run_test "AUSCORS stream connect ($MOUNTPOINT)" \
-                connect auscors.ga.gov.au "$MOUNTPOINT" --user="$NTRIP_AUSCORS_USER" --pass="$NTRIP_AUSCORS_PASS"
-        fi
+        # AUSCORS uses HTTPS on port 443
+        run_test "AUSCORS stream connect (ALIC00AUS0)" \
+            connect ntrip.data.gnss.ga.gov.au ALIC00AUS0 443 \
+            --user="$NTRIP_AUSCORS_USER" --pass="$NTRIP_AUSCORS_PASS" --https --v2
     else
         skip_test "AUSCORS stream tests" "NTRIP_AUSCORS_USER/PASS not set"
     fi
