@@ -105,7 +105,7 @@ just check      # cargo check
 just test       # cargo test
 just clippy     # lint check
 just fmt        # format code
-just precommit  # all CI checks
+just ci         # all CI checks (fmt, clippy, test)
 ```
 
 ---
@@ -166,7 +166,7 @@ cargo test --features ros2
 
 Or use just:
 ```bash
-just precommit
+just ci
 ```
 
 ### Code Style

@@ -86,13 +86,13 @@ See [Configuration Reference](docs/CONFIGURATION.md) for all options.
 
 | Topic | Type | Description |
 |-------|------|-------------|
-| `~/fix` | `sensor_msgs/NavSatFix` | Position with covariance |
+| `~/fix` | `sensor_msgs/NavSatFix` | Position with covariance (HP-enhanced when available) |
 | `~/velocity` | `geometry_msgs/TwistWithCovarianceStamped` | 3D velocity |
 | `~/time_reference` | `sensor_msgs/TimeReference` | GPS time |
-| `~/hp_pos` | `sensor_msgs/NavSatFix` | High-precision position |
 | `~/baseline_pose` | `geometry_msgs/PoseWithCovarianceStamped` | Moving base/rover baseline |
 | `~/integrity` | `oxide_gnss_msgs/OxideIntegrity` | Safety integrity status |
 | `~/operational` | `std_msgs/Bool` | Go/no-go signal |
+| `~/satellites` | `std_msgs/String` | Satellite info (JSON) |
 | `/diagnostics` | `diagnostic_msgs/DiagnosticArray` | System diagnostics |
 
 ## Safety Integrity

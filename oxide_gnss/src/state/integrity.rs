@@ -4,6 +4,8 @@
 //! `docs/INTEGRITY_AND_TOPICS.md`. It aggregates quality metrics
 //! from multiple UBX messages to determine overall GNSS solution integrity.
 
+use std::time::Instant;
+
 use crate::device::{
     AntennaStatusData, CovData, JammingStateData, MonCommsData, MonHwData, MonRfData, PosEcefData,
     RxmCorData, SecSigData, SecSiglogData, SpoofingStateData,
@@ -65,6 +67,13 @@ pub struct IntegrityThresholds {
     pub max_pdop: f32,
     /// Maximum correction age (s) for RTK applications
     pub max_correction_age_s: f32,
+    /// Maximum time (seconds) without PVT before declaring integrity FAILED
+    pub max_pvt_age_s: f32,
+    /// IntegrityLevel at which operational becomes false
+    /// 0 = only Ok is operational (strictest)
+    /// 1 = Ok or Degraded is operational (default)
+    /// 2 = Ok/Degraded/Critical is operational (permissive)
+    pub operational_threshold: u8,
 }
 
 impl Default for IntegrityThresholds {
@@ -76,6 +85,8 @@ impl Default for IntegrityThresholds {
             max_v_accuracy_m: 0.15, // 15cm
             max_pdop: 3.0,
             max_correction_age_s: 10.0,
+            max_pvt_age_s: 2.0,       // 2 seconds without data = Failed
+            operational_threshold: 1, // Ok or Degraded = operational
         }
     }
 }
@@ -163,6 +174,8 @@ pub struct IntegrityAggregator {
     last_mon_comms: Option<MonCommsData>,
     /// Last hardware status
     last_mon_hw: Option<MonHwData>,
+    /// Timestamp of last PVT update (None = never received)
+    last_pvt_update: Option<Instant>,
 }
 
 impl IntegrityAggregator {
@@ -303,6 +316,9 @@ impl IntegrityAggregator {
         v_accuracy_m: f32,
         pdop: f32,
     ) {
+        // Record timestamp for staleness tracking
+        self.last_pvt_update = Some(Instant::now());
+
         self.current.fix_type = fix_type;
         self.current.carrier_solution = carrier_solution;
         self.current.differential_applied = differential_applied;
@@ -330,6 +346,27 @@ impl IntegrityAggregator {
     pub fn compute(&mut self) -> GnssIntegrity {
         let mut issues: Vec<&str> = Vec::new();
         let mut level = IntegrityLevel::Ok;
+
+        // =========================================================================
+        // STALENESS CHECK: Return Failed if data is stale or never received
+        // =========================================================================
+        let now = Instant::now();
+        if let Some(last_pvt) = self.last_pvt_update {
+            let age = now.duration_since(last_pvt).as_secs_f32();
+            if age > self.thresholds.max_pvt_age_s {
+                self.current.level = IntegrityLevel::Failed;
+                self.current.status_message = format!(
+                    "GNSS data stale ({:.1}s > {:.1}s threshold)",
+                    age, self.thresholds.max_pvt_age_s
+                );
+                return self.current.clone();
+            }
+        } else {
+            // Never received PVT data
+            self.current.level = IntegrityLevel::Failed;
+            self.current.status_message = "Waiting for GNSS data".to_string();
+            return self.current.clone();
+        }
 
         // =========================================================================
         // LEVEL 0: CRITICAL CHECKS (Operation MUST stop if failed)
@@ -459,12 +496,13 @@ impl IntegrityAggregator {
         &self.current
     }
 
-    /// Check if the system is operational (level is Ok or Degraded).
+    /// Check if the system is operational based on configurable threshold.
+    ///
+    /// By default (threshold=1), operational is true for `Ok` and `Degraded`.
+    /// With threshold=0 (strictest), only `Ok` is operational.
+    /// With threshold=2, `Ok`, `Degraded`, and `Critical` are all operational.
     pub fn is_operational(&self) -> bool {
-        matches!(
-            self.current.level,
-            IntegrityLevel::Ok | IntegrityLevel::Degraded
-        )
+        (self.current.level as u8) <= self.thresholds.operational_threshold
     }
 
     /// Check if the system is at full quality (level is Ok).

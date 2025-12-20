@@ -191,6 +191,8 @@ pub struct DeviceTask {
     configurator_options: ConfiguratorOptions,
     /// Integrity aggregator for safety monitoring
     integrity: IntegrityAggregator,
+    /// Timestamp of last RTCM data received (for host-side correction age tracking)
+    last_rtcm_received: Option<Instant>,
 }
 
 impl DeviceTask {
@@ -215,6 +217,7 @@ impl DeviceTask {
             state: Arc::new(Mutex::new(DeviceTaskState::default())),
             configurator_options: ConfiguratorOptions::default(),
             integrity: IntegrityAggregator::new(),
+            last_rtcm_received: None,
         }
     }
 
@@ -234,6 +237,7 @@ impl DeviceTask {
             state: Arc::new(Mutex::new(DeviceTaskState::default())),
             configurator_options,
             integrity: IntegrityAggregator::new(),
+            last_rtcm_received: None,
         }
     }
 
@@ -581,6 +585,14 @@ impl DeviceTask {
 
         // Compute and send integrity update if any relevant data changed
         if integrity_updated {
+            // Feed host-side correction age into integrity before computing
+            // When NTRIP is disabled, last_rtcm_received is always None -> INFINITY
+            let correction_age = self
+                .last_rtcm_received
+                .map(|t| Instant::now().duration_since(t).as_secs_f32())
+                .unwrap_or(f32::INFINITY);
+            self.integrity.set_correction_age(correction_age);
+
             let integrity = self.integrity.compute();
             let _ = self
                 .channels
@@ -649,6 +661,8 @@ impl DeviceTask {
         match serial.write(data).await {
             Ok(n) => {
                 debug!(bytes = n, "RTCM data injected");
+                // Track timestamp for host-side correction age
+                self.last_rtcm_received = Some(Instant::now());
                 let mut state = self.state.lock().await;
                 state.rtcm_bytes_injected += n as u64;
             }

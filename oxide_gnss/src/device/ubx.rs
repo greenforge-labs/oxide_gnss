@@ -87,6 +87,8 @@ pub struct SatStatus {
     pub azim: i16,
     pub pr_res: i16,
     pub flags: u32,
+    /// Satellite is used in the navigation solution
+    pub sv_used: bool,
 }
 
 /// Parsed Position Covariance (NAV-COV).
@@ -470,12 +472,23 @@ pub enum AckResult {
 
 /// Pending ACK state for tracking command responses.
 #[derive(Debug, Default)]
-#[allow(dead_code)] // Fields used for ACK validation in future
 struct PendingAck {
     /// Class ID of the command we're waiting for ACK
     class: Option<u8>,
     /// Message ID of the command we're waiting for ACK
     msg_id: Option<u8>,
+}
+
+impl PendingAck {
+    /// Check if the received ACK/NAK matches the pending expectation.
+    fn matches(&self, class: u8, msg_id: u8) -> bool {
+        self.class == Some(class) && self.msg_id == Some(msg_id)
+    }
+
+    /// Check if we have a pending ACK expectation.
+    fn is_pending(&self) -> bool {
+        self.class.is_some() && self.msg_id.is_some()
+    }
 }
 
 /// Result of processing input data.
@@ -610,12 +623,44 @@ impl UbxHandler {
                             new_sat_info = Some(sat);
                         }
                         ublox::proto27::PacketRef::AckAck(ack) => {
-                            debug!(class = ack.class(), id = ack.msg_id(), "ACK-ACK received");
-                            ack_result = Some(AckResult::Ack);
+                            if self.pending_ack.matches(ack.class(), ack.msg_id()) {
+                                debug!(
+                                    class = ack.class(),
+                                    id = ack.msg_id(),
+                                    "ACK-ACK received (matched)"
+                                );
+                                ack_result = Some(AckResult::Ack);
+                            } else if self.pending_ack.is_pending() {
+                                trace!(
+                                    class = ack.class(),
+                                    id = ack.msg_id(),
+                                    "ACK-ACK received (unrelated, ignoring)"
+                                );
+                            } else {
+                                // No pending expectation - accept any ACK (legacy behavior)
+                                debug!(class = ack.class(), id = ack.msg_id(), "ACK-ACK received");
+                                ack_result = Some(AckResult::Ack);
+                            }
                         }
                         ublox::proto27::PacketRef::AckNak(nak) => {
-                            debug!(class = nak.class(), id = nak.msg_id(), "ACK-NAK received");
-                            ack_result = Some(AckResult::Nak);
+                            if self.pending_ack.matches(nak.class(), nak.msg_id()) {
+                                debug!(
+                                    class = nak.class(),
+                                    id = nak.msg_id(),
+                                    "ACK-NAK received (matched)"
+                                );
+                                ack_result = Some(AckResult::Nak);
+                            } else if self.pending_ack.is_pending() {
+                                trace!(
+                                    class = nak.class(),
+                                    id = nak.msg_id(),
+                                    "ACK-NAK received (unrelated, ignoring)"
+                                );
+                            } else {
+                                // No pending expectation - accept any NAK (legacy behavior)
+                                debug!(class = nak.class(), id = nak.msg_id(), "ACK-NAK received");
+                                ack_result = Some(AckResult::Nak);
+                            }
                         }
                         ublox::proto27::PacketRef::NavCov(msg) => {
                             let cov = Self::parse_nav_cov(&msg);
@@ -841,6 +886,7 @@ impl UbxHandler {
                 // NavSatSvFlags doesn't expose a raw u32 value directly.
                 // Use 0 as placeholder; individual flags can be queried via sv.flags().sv_used() etc.
                 flags: 0,
+                sv_used: sv.flags().sv_used(),
             });
         }
         SatInfo {

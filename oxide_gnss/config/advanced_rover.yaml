@@ -91,10 +91,16 @@ device:
 
 ntrip:
   host: "ntrip.data.gnss.ga.gov.au"
-  port: 2101
-  use_https: false
+  # insecure (port 2101)
+  # port: 2101
+  # use_https: false
+
+  # secure (port 443)
+  port: 443
+  use_https: true
+  
   mountpoint: "SWTC00AUS0"
   username: "${NTRIP_USERNAME}"
   password: "${NTRIP_PASSWORD}"
   send_gga: true
-  gga_interval_secs: 10
+  gga_interval_secs: 60

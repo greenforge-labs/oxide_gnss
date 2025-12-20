@@ -287,8 +287,8 @@ pub const MESSAGE_REQUIREMENTS: &[MessageRequirement] = &[
     MessageRequirement {
         message: "NAV_HPPOSLLH",
         level: MessageLevel::Recommended,
-        reason: "High-precision position (mm-level when RTK fixed)",
-        ros_topics: &["~/hp_pos"],
+        reason: "High-precision position enhances ~/fix accuracy (mm-level when RTK fixed)",
+        ros_topics: &["~/fix"],
     },
     MessageRequirement {
         message: "NAV_POSECEF",
@@ -671,10 +671,10 @@ messages:
 "#;
         let config: UbloxConfig = serde_yaml::from_str(yaml).unwrap();
         let unavailable = config.check_topic_availability(None);
-        // ~/hp_pos should be unavailable (needs NAV_HPPOSLLH)
-        let hp_pos = unavailable.iter().find(|(t, _)| *t == "~/hp_pos");
-        assert!(hp_pos.is_some());
-        assert!(hp_pos.unwrap().1.contains(&"NAV_HPPOSLLH"));
+        // ~/integrity should be unavailable (needs SEC_SIG, MON_RF, etc.)
+        let integrity = unavailable.iter().find(|(t, _)| *t == "~/integrity");
+        assert!(integrity.is_some());
+        assert!(integrity.unwrap().1.contains(&"SEC_SIG"));
     }
 
     #[test]

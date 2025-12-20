@@ -31,7 +31,7 @@ builtin_interfaces = { version = "2", optional = true }
 oxide_gnss_msgs = { version = "0.1", optional = true }
 
 # GNSS Protocols
-ublox = { git = "https://github.com/ublox-rs/ublox.git", features = ["alloc", "ubx_proto23", "ubx_proto27"] }
+ublox = { version = "0.9.0", features = ["alloc", "ubx_proto23", "ubx_proto27"] }
 rtcm-rs = "0.11"
 
 # Communications
@@ -67,7 +67,5 @@ ros2 = ["dep:rclrs", "dep:sensor_msgs", "dep:geometry_msgs", "dep:std_msgs", "de
 [package.metadata.ros]
 install_to_share = ["launch", "config", "udev"]
 
-[patch.crates-io]
-# Use upstream master for latest messages (NAV-COV, SEC-SIG, RXM-COR, MON-COMMS)
-ublox = { git = "https://github.com/ublox-rs/ublox.git", branch = "master" }
-# ublox = { path = "../ublox/ublox" }
+# [patch.crates-io]
+# Removed: ublox 0.9.0 on crates.io now includes required messages (NAV-COV, SEC-SIG, RXM-COR, MON-COMMS)

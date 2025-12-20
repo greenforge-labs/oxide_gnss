@@ -354,8 +354,14 @@ NTRIP provides RTK corrections for centimeter-level accuracy.
 ntrip:
   host: "ntrip.data.gnss.ga.gov.au"
   port: 2101
-  use_https: false
   mountpoint: "SWTC00AUS0"
+  
+  # TLS/HTTPS settings
+  use_https: false              # Enable HTTPS (TLS) for connection
+  tls_skip_verify: false        # Skip certificate verification (testing only!)
+  
+  # Protocol version
+  ntrip_version: auto           # "1", "2", or "auto" (default)
   
   # Authentication
   username: "${NTRIP_USERNAME}"    # Environment variable
@@ -373,6 +379,14 @@ ntrip:
     max_delay_secs: 60
     backoff_reset_secs: 3600
 ```
+
+### TLS/HTTPS Options
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `use_https` | `false` | Enable TLS encryption for the NTRIP connection. Set to `true` for casters that require HTTPS. |
+| `tls_skip_verify` | `false` | **⚠️ Testing only!** Skip TLS certificate verification. Use only for self-signed certificates in development. Never enable in production. |
+| `ntrip_version` | `auto` | NTRIP protocol version: `1` (legacy ICY), `2` (HTTP/1.1 chunked), or `auto` (detect from server). |
 
 ### Environment Variables
 

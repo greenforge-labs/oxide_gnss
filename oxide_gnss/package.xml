@@ -4,7 +4,7 @@
   <name>oxide_gnss</name>
   <version>0.1.0</version>
   <description>A Rust-based ROS2 GNSS driver with integrated NTRIP client</description>
-  <maintainer email="gsokoll@example.com">gsokoll</maintainer>
+  <maintainer email="geoff.s@greenforgelabs.com.au">Geoff Sokoll</maintainer>
   <license>MIT</license>
 
   <url type="repository">https://github.com/gsokoll/oxide_gnss</url>

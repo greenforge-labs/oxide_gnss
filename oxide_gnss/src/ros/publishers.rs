@@ -254,7 +254,7 @@ impl GnssPublishers {
             data: format!(
                 "{{\"num_svs\": {}, \"active_svs\": {}}}",
                 info.num_sats,
-                info.sats.iter().filter(|s| (s.flags & 0x1) == 0x1).count()
+                info.sats.iter().filter(|s| s.sv_used).count()
             ),
         };
         let _ = pub_.publish(msg);

@@ -335,7 +335,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Contributing
 
-_TBD_
+See [CONTRIBUTING.md](oxide_gnss/CONTRIBUTING.md) for guidelines.
 
 ## References
 

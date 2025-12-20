@@ -1692,8 +1692,9 @@ checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
 
 [[package]]
 name = "ublox"
-version = "0.8.0"
-source = "git+https://github.com/ublox-rs/ublox.git#8fbc6fc3c6a8c94b4e53df7c4f0cf4f67ce3a296"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8eeddc3ec195925f70fc00f55820bc1127939e2822218c13d026e6f098af02c"
 dependencies = [
  "bitflags",
  "chrono",
@@ -1703,8 +1704,9 @@ dependencies = [
 
 [[package]]
 name = "ublox_derive"
-version = "0.4.0"
-source = "git+https://github.com/ublox-rs/ublox.git#8fbc6fc3c6a8c94b4e53df7c4f0cf4f67ce3a296"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95af5e70215d0cbba9686742df6716fd28321bddeed9397bd8eb7d6988329ab5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2256,8 +2258,3 @@ version = "2.0.3"
 [[patch.unused]]
 name = "unique_identifier_msgs"
 version = "2.5.0"
-
-[[patch.unused]]
-name = "ublox"
-version = "0.8.0"
-source = "git+https://github.com/ublox-rs/ublox.git?branch=master#8fbc6fc3c6a8c94b4e53df7c4f0cf4f67ce3a296"

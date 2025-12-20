@@ -9,7 +9,7 @@
 use std::time::Duration;
 
 use tokio::time::timeout;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::config::UbloxConfig;
 use crate::error::DeviceError;
@@ -191,8 +191,10 @@ impl DeviceConfigurator {
                 tokio::time::sleep(self.options.retry_delay).await;
             }
 
-            // Clear any pending ACK state
+            // Clear any pending ACK state and set expectation for CFG-VALSET response
             ubx.clear_pending_ack();
+            // CFG-VALSET: class = 0x06, msg_id = 0x8A
+            ubx.expect_ack(0x06, 0x8A);
 
             // Build and send the configuration packet
             let packet = build_cfg_valset(cfg_values, self.options.persist);
@@ -206,18 +208,25 @@ impl DeviceConfigurator {
                     return Ok(());
                 }
                 Ok(AckResult::Nak) => {
-                    warn!(step = ?step, "Configuration step NAK'd by device");
-                    // Continue to retry
+                    // NAK is a deterministic rejection - do not retry
+                    error!(step = ?step, "Configuration step NAK'd by device - failing immediately (no retry)");
+                    return Err(DeviceError::ConfigurationFailed {
+                        step: format!("{} (NAK received)", step.description()),
+                    });
                 }
                 Err(e) => {
-                    warn!(step = ?step, error = %e, "Error waiting for ACK");
-                    // Continue to retry
+                    warn!(step = ?step, error = %e, attempt = attempt + 1, max = self.options.max_retries + 1, "Timeout waiting for ACK, will retry");
+                    // Continue to retry on timeout
                 }
             }
         }
 
         Err(DeviceError::ConfigurationFailed {
-            step: step.description().to_string(),
+            step: format!(
+                "{} (timeout after {} retries)",
+                step.description(),
+                self.options.max_retries
+            ),
         })
     }
 
