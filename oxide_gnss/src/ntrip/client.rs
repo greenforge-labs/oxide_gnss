@@ -13,7 +13,7 @@
 //! - GGA position reporting
 
 use std::time::Duration;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 use tracing::{debug, error, info, warn};
 
@@ -62,7 +62,7 @@ impl NtripClient {
     }
 
     /// Connect to the NTRIP caster and start streaming.
-    /// 
+    ///
     /// For NTRIP v2, consider using `connect_with_gga()` to send an initial
     /// position in the request headers for faster VRS/nearest-base selection.
     pub async fn connect(&mut self) -> Result<(), NtripError> {
@@ -76,7 +76,10 @@ impl NtripClient {
     /// immediately, without waiting for a post-connection GGA report.
     ///
     /// For NTRIP v1, the initial_gga is ignored (GGA must be sent post-connection).
-    pub async fn connect_with_gga(&mut self, initial_gga: Option<&GgaSentence>) -> Result<(), NtripError> {
+    pub async fn connect_with_gga(
+        &mut self,
+        initial_gga: Option<&GgaSentence>,
+    ) -> Result<(), NtripError> {
         let host = &self.config.host;
         let port = self.config.port;
         let addr = format!("{}:{}", host, port);
@@ -234,7 +237,7 @@ impl NtripClient {
                 protocol = ?detected,
                 "Connected to NTRIP caster"
             );
-            
+
             self.stream = Some(stream);
             self.protocol = Some(detected);
             self.chunk_buffer.clear();
@@ -347,7 +350,9 @@ impl NtripClient {
     ///     println!("{}: {}", stream.mountpoint, stream.format);
     /// }
     /// ```
-    pub async fn get_sourcetable(config: &NtripConfig) -> Result<super::sourcetable::Sourcetable, NtripError> {
+    pub async fn get_sourcetable(
+        config: &NtripConfig,
+    ) -> Result<super::sourcetable::Sourcetable, NtripError> {
         let host = &config.host;
         let port = config.port;
         let addr = format!("{}:{}", host, port);
@@ -379,16 +384,15 @@ impl NtripClient {
 
         // 3. Send sourcetable request (GET / instead of GET /mountpoint)
         let user_agent = "NTRIP oxide_gnss/0.1";
-        
+
         // Include authentication if credentials are provided (some casters require it)
-        let auth_header =
-            if let (Some(user), Some(pass)) = (&config.username, &config.password) {
-                let credentials = format!("{}:{}", user, pass);
-                let encoded = BASE64.encode(credentials);
-                format!("Authorization: Basic {}\r\n", encoded)
-            } else {
-                String::new()
-            };
+        let auth_header = if let (Some(user), Some(pass)) = (&config.username, &config.password) {
+            let credentials = format!("{}:{}", user, pass);
+            let encoded = BASE64.encode(credentials);
+            format!("Authorization: Basic {}\r\n", encoded)
+        } else {
+            String::new()
+        };
 
         let request = format!(
             "GET / HTTP/1.0\r\n\
@@ -409,7 +413,7 @@ impl NtripClient {
         // 4. Read entire response
         let mut response = Vec::new();
         let mut buf = [0u8; 4096];
-        
+
         loop {
             match tokio::time::timeout(
                 Duration::from_secs(config.connection.timeout_secs as u64),
@@ -426,7 +430,7 @@ impl NtripClient {
                     })
                 }
             }
-            
+
             // Limit response size to prevent DoS
             if response.len() > 1_000_000 {
                 return Err(NtripError::InvalidSourcetable {
@@ -437,7 +441,7 @@ impl NtripClient {
 
         // 5. Parse response
         let response_str = String::from_utf8_lossy(&response);
-        
+
         // Check for success status
         let first_line = response_str.lines().next().unwrap_or("");
         if !first_line.contains("200") {
@@ -455,7 +459,7 @@ impl NtripClient {
         };
 
         let table = super::sourcetable::Sourcetable::parse(body);
-        
+
         info!(
             streams = table.streams.len(),
             casters = table.casters.len(),
@@ -505,9 +509,12 @@ impl NtripClient {
 
     /// Read raw data from stream (v1 protocol).
     async fn read_raw(&mut self, buf: &mut [u8]) -> Result<usize, NtripError> {
-        let stream = self.stream.as_mut().ok_or_else(|| NtripError::StreamDisconnected {
-            reason: "Not connected".to_string(),
-        })?;
+        let stream = self
+            .stream
+            .as_mut()
+            .ok_or_else(|| NtripError::StreamDisconnected {
+                reason: "Not connected".to_string(),
+            })?;
 
         match stream.read(buf).await {
             Ok(0) => {
@@ -534,9 +541,12 @@ impl NtripClient {
             return Ok(to_copy);
         }
 
-        let stream = self.stream.as_mut().ok_or_else(|| NtripError::StreamDisconnected {
-            reason: "Not connected".to_string(),
-        })?;
+        let stream = self
+            .stream
+            .as_mut()
+            .ok_or_else(|| NtripError::StreamDisconnected {
+                reason: "Not connected".to_string(),
+            })?;
 
         // If we're in the middle of a chunk, read remaining data
         if self.chunk_remaining > 0 {
@@ -595,14 +605,13 @@ impl NtripClient {
 
         // Parse chunk size (hex)
         let size_str = String::from_utf8_lossy(&size_line);
-        let chunk_size = usize::from_str_radix(size_str.trim(), 16).map_err(|_| {
-            NtripError::NetworkError {
+        let chunk_size =
+            usize::from_str_radix(size_str.trim(), 16).map_err(|_| NtripError::NetworkError {
                 source: std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
                     format!("Invalid chunk size: {}", size_str),
                 ),
-            }
-        })?;
+            })?;
 
         // Chunk size 0 means end of stream
         if chunk_size == 0 {
@@ -617,7 +626,7 @@ impl NtripClient {
         // Read chunk data
         self.chunk_remaining = chunk_size;
         let to_read = std::cmp::min(buf.len(), self.chunk_remaining);
-        
+
         match stream.read(&mut buf[..to_read]).await {
             Ok(0) => {
                 self.stream = None;

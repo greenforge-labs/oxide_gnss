@@ -30,27 +30,26 @@ use oxide_gnss::ntrip::{NtripClient, Sourcetable};
 const PUBLIC_CASTERS: &[(&str, u16, &str, &str)] = &[
     // RTK2go - Large free community caster
     ("rtk2go.com", 2101, "RTK2go Community", "Global"),
-    
     // EUREF - European Reference Frame
     ("euref-ip.net", 2101, "EUREF-IP", "Europe"),
     ("www.euref-ip.net", 2101, "EUREF-IP (www)", "Europe"),
     ("euref-ip.be", 2101, "EUREF-IP Belgium", "Europe"),
-    
     // IGS - International GNSS Service
     ("products.igs-ip.net", 2101, "IGS Products", "Global"),
     ("igs-ip.net", 2101, "IGS-IP", "Global"),
-    
     // Geoscience Australia
-    ("auscors.ga.gov.au", 2101, "AUSCORS (Geoscience AU)", "Australia"),
-    
+    (
+        "auscors.ga.gov.au",
+        2101,
+        "AUSCORS (Geoscience AU)",
+        "Australia",
+    ),
     // BKG - German Federal Agency
     ("igs.bkg.bund.de", 2101, "BKG Germany", "Germany"),
     ("ntrip.bkg.bund.de", 2101, "BKG NTRIP", "Germany"),
-    
     // Other regional casters
     ("caster.centipede.fr", 2101, "Centipede RTK", "France"),
     ("ntrip.emlid.com", 2101, "Emlid", "Global"),
-    
     // HTTPS casters (port 443 typically)
     ("euref-ip.net", 443, "EUREF-IP (HTTPS)", "Europe"),
     ("products.igs-ip.net", 443, "IGS Products (HTTPS)", "Global"),
@@ -124,7 +123,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let version = parse_version(&args);
             let user = parse_arg(&args, "--user=");
             let pass = parse_arg(&args, "--pass=");
-            cmd_connect(host, port, mountpoint, user.as_deref(), pass.as_deref(), use_https, version).await?;
+            cmd_connect(
+                host,
+                port,
+                mountpoint,
+                user.as_deref(),
+                pass.as_deref(),
+                use_https,
+                version,
+            )
+            .await?;
         }
         "test-casters" => {
             cmd_test_casters().await?;
@@ -207,7 +215,9 @@ fn print_usage() {
     println!("  cargo run --example ntrip_test -- test-locations rtk2go.com");
     println!();
     println!("  # Connect to RTK2go stream (use email as username):");
-    println!("  cargo run --example ntrip_test -- connect rtk2go.com MOUNTPOINT --user=you@email.com");
+    println!(
+        "  cargo run --example ntrip_test -- connect rtk2go.com MOUNTPOINT --user=you@email.com"
+    );
     println!();
     println!("Authentication Notes:");
     println!("  - Sourcetable access is typically open (no auth needed)");
@@ -373,10 +383,7 @@ async fn cmd_connect(
     }
 
     println!("\nReceived {} bytes in 5 seconds", total_bytes);
-    println!(
-        "Average rate: {:.1} bytes/sec",
-        total_bytes as f64 / 5.0
-    );
+    println!("Average rate: {:.1} bytes/sec", total_bytes as f64 / 5.0);
 
     Ok(())
 }
@@ -438,7 +445,10 @@ async fn cmd_test_casters() -> Result<(), NtripError> {
 
 /// Test NTRIP v1 vs v2 protocol against a caster
 async fn cmd_test_versions(host: &str, port: u16) -> Result<(), NtripError> {
-    println!("Testing NTRIP protocol versions against {}:{}...\n", host, port);
+    println!(
+        "Testing NTRIP protocol versions against {}:{}...\n",
+        host, port
+    );
 
     for (version, name) in [
         (NtripVersion::V1, "NTRIP v1 (HTTP/1.0)"),
@@ -473,22 +483,30 @@ async fn cmd_test_locations(host: &str, port: u16) -> Result<(), NtripError> {
     let config = make_config(host, port, "", false, NtripVersion::Auto);
     let table = NtripClient::get_sourcetable(&config).await?;
 
-    println!("Found {} streams ({} RTCM)\n", table.streams.len(), table.rtcm_streams().len());
+    println!(
+        "Found {} streams ({} RTCM)\n",
+        table.streams.len(),
+        table.rtcm_streams().len()
+    );
 
     if table.streams.is_empty() {
         println!("No streams available for distance testing.");
         return Ok(());
     }
 
-    println!("{:<25} {:>10} {:>10}  {:<20} {:>10}", 
-        "Location", "Lat", "Lon", "Nearest Mountpoint", "Distance");
+    println!(
+        "{:<25} {:>10} {:>10}  {:<20} {:>10}",
+        "Location", "Lat", "Lon", "Nearest Mountpoint", "Distance"
+    );
     println!("{:-<85}", "");
 
     for (name, lat, lon) in TEST_LOCATIONS {
         if let Some((stream, dist)) = table.nearest_rtcm_stream(*lat, *lon) {
             println!(
                 "{:<25} {:>10.4} {:>10.4}  {:<20} {:>8.1} km",
-                name, lat, lon, 
+                name,
+                lat,
+                lon,
                 truncate(&stream.mountpoint, 20),
                 dist
             );
@@ -506,11 +524,17 @@ async fn cmd_test_locations(host: &str, port: u16) -> Result<(), NtripError> {
 /// List all known public casters
 fn cmd_list_casters() {
     println!("Known Public NTRIP Casters:\n");
-    println!("{:<30} {:>6}  {:<25} {:<15}", "Host", "Port", "Description", "Region");
+    println!(
+        "{:<30} {:>6}  {:<25} {:<15}",
+        "Host", "Port", "Description", "Region"
+    );
     println!("{:-<80}", "");
 
     for (host, port, description, region) in PUBLIC_CASTERS {
-        println!("{:<30} {:>6}  {:<25} {:<15}", host, port, description, region);
+        println!(
+            "{:<30} {:>6}  {:<25} {:<15}",
+            host, port, description, region
+        );
     }
 
     println!("\nTotal: {} casters", PUBLIC_CASTERS.len());
@@ -557,9 +581,9 @@ fn print_sourcetable(table: &Sourcetable) {
 
     let rtcm_streams = table.rtcm_streams();
     let rtcm_count = rtcm_streams.len();
-    
+
     println!("--- Streams (RTCM): {} total ---", rtcm_count);
-    
+
     // Only show first 5 streams to reduce verbosity
     if rtcm_count > 0 {
         println!(
@@ -578,7 +602,7 @@ fn print_sourcetable(table: &Sourcetable) {
                 stream.longitude
             );
         }
-        
+
         if rtcm_count > 5 {
             println!("  ... and {} more streams", rtcm_count - 5);
         }

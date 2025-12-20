@@ -20,7 +20,7 @@ pub enum NtripStream {
     /// Plain TCP connection (no encryption)
     Plain(TcpStream),
     /// TLS-encrypted connection
-    Tls(TlsStream<TcpStream>),
+    Tls(Box<TlsStream<TcpStream>>),
 }
 
 impl NtripStream {
@@ -46,23 +46,23 @@ impl NtripStream {
         let connector = TlsConnector::from(Arc::new(config));
 
         // Parse the server name for SNI
-        let server_name = ServerName::try_from(host.to_string()).map_err(|_| {
-            NtripError::TlsError {
+        let server_name =
+            ServerName::try_from(host.to_string()).map_err(|_| NtripError::TlsError {
                 message: format!("Invalid server name for TLS: {}", host),
-            }
-        })?;
+            })?;
 
         info!(host = %host, "Performing TLS handshake");
 
-        let tls_stream = connector
-            .connect(server_name, stream)
-            .await
-            .map_err(|e| NtripError::TlsError {
-                message: format!("TLS handshake failed: {}", e),
-            })?;
+        let tls_stream =
+            connector
+                .connect(server_name, stream)
+                .await
+                .map_err(|e| NtripError::TlsError {
+                    message: format!("TLS handshake failed: {}", e),
+                })?;
 
         info!("TLS connection established");
-        Ok(Self::Tls(tls_stream))
+        Ok(Self::Tls(Box::new(tls_stream)))
     }
 }
 
@@ -153,7 +153,7 @@ impl AsyncRead for NtripStream {
     ) -> Poll<io::Result<()>> {
         match self.get_mut() {
             NtripStream::Plain(stream) => Pin::new(stream).poll_read(cx, buf),
-            NtripStream::Tls(stream) => Pin::new(stream).poll_read(cx, buf),
+            NtripStream::Tls(stream) => Pin::new(stream.as_mut()).poll_read(cx, buf),
         }
     }
 }
@@ -167,21 +167,21 @@ impl AsyncWrite for NtripStream {
     ) -> Poll<io::Result<usize>> {
         match self.get_mut() {
             NtripStream::Plain(stream) => Pin::new(stream).poll_write(cx, buf),
-            NtripStream::Tls(stream) => Pin::new(stream).poll_write(cx, buf),
+            NtripStream::Tls(stream) => Pin::new(stream.as_mut()).poll_write(cx, buf),
         }
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         match self.get_mut() {
             NtripStream::Plain(stream) => Pin::new(stream).poll_flush(cx),
-            NtripStream::Tls(stream) => Pin::new(stream).poll_flush(cx),
+            NtripStream::Tls(stream) => Pin::new(stream.as_mut()).poll_flush(cx),
         }
     }
 
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         match self.get_mut() {
             NtripStream::Plain(stream) => Pin::new(stream).poll_shutdown(cx),
-            NtripStream::Tls(stream) => Pin::new(stream).poll_shutdown(cx),
+            NtripStream::Tls(stream) => Pin::new(stream.as_mut()).poll_shutdown(cx),
         }
     }
 }

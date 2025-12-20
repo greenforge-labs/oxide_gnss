@@ -336,7 +336,11 @@ ENDSOURCETABLE
 
         // Distance to Brisbane (Alice Springs to Brisbane ~1900km)
         let dist = entry.distance_km(-27.4678, 153.0281);
-        assert!(dist > 1800.0 && dist < 2100.0, "Expected ~1900km, got {}", dist);
+        assert!(
+            dist > 1800.0 && dist < 2100.0,
+            "Expected ~1900km, got {}",
+            dist
+        );
     }
 
     #[test]
