@@ -858,6 +858,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "ntrip-core"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f0c99baa912e61cbdfd49e0b977759776efb5ef65c14675adf13abc5798490c"
+dependencies = [
+ "base64",
+ "chrono",
+ "rustls-pki-types",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-rustls",
+ "tracing",
+ "webpki-roots 0.26.11",
+]
+
+[[package]]
 name = "nu-ansi-term"
 version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -931,25 +947,23 @@ dependencies = [
  "diagnostic_msgs",
  "geometry_msgs",
  "nalgebra",
+ "ntrip-core",
  "oxide_gnss_msgs",
  "rclrs",
  "regex",
  "rtcm-rs",
- "rustls-pki-types",
  "sensor_msgs",
  "serde",
  "serde_yaml",
  "serial2-tokio",
  "std_msgs",
- "thiserror",
+ "thiserror 2.0.17",
  "tokio",
- "tokio-rustls",
  "tokio-test",
  "tracing",
  "tracing-subscriber",
  "ublox",
  "url",
- "webpki-roots 0.26.11",
 ]
 
 [[package]]
@@ -1484,11 +1498,31 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
+version = "1.0.69"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52"
+dependencies = [
+ "thiserror-impl 1.0.69",
+]
+
+[[package]]
+name = "thiserror"
 version = "2.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f63587ca0f12b72a0600bcba1d40081f830876000bb46dd2337a3051618f4fc8"
 dependencies = [
- "thiserror-impl",
+ "thiserror-impl 2.0.17",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "1.0.69"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.111",
 ]
 
 [[package]]
@@ -2206,18 +2240,6 @@ version = "2.0.3"
 [[patch.unused]]
 name = "example_interfaces"
 version = "0.12.0"
-
-[[patch.unused]]
-name = "ferrous_gnss"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "ferrous_gnss_msgs"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "oxide_gnss"
-version = "0.1.0"
 
 [[patch.unused]]
 name = "rcl_interfaces"

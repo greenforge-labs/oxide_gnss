@@ -13,13 +13,12 @@ use tokio::sync::{mpsc, watch, Mutex};
 use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
 
+use ntrip_core::{GgaSentence, NtripClient};
+
 use crate::config::NtripConfig;
 use crate::device::GgaData;
 use crate::error::NtripError;
 use crate::state::NtripState;
-
-use super::client::NtripClient;
-use super::gga::GgaSentence;
 
 /// Channels required by the NTRIP task.
 pub struct NtripTaskChannels {
@@ -210,7 +209,8 @@ impl NtripTask {
 
         self.set_state(NtripState::Connecting).await;
 
-        let mut client = NtripClient::new(self.config.clone())?;
+        let core_config = self.config.to_ntrip_core_config();
+        let mut client = NtripClient::new(core_config)?;
 
         // Try to get initial GGA position for Ntrip-GGA header (NTRIP v2 best practice)
         let initial_gga = self.channels.gga_rx.borrow().clone().map(|gga| {
@@ -262,7 +262,7 @@ impl NtripTask {
                             let _ = self.channels.msg_tx.send(NtripMessage::Disconnected {
                                 reason: e.to_string(),
                             }).await;
-                            return Err(e);
+                            return Err(e.into());
                         }
                     }
                 }

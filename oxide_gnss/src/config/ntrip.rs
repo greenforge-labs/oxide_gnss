@@ -136,6 +136,39 @@ impl Default for NtripConnectionConfig {
 }
 
 impl NtripConfig {
+    /// Convert to ntrip_core::NtripConfig for use with the NTRIP client.
+    ///
+    /// Note: Reconnection is disabled in the returned config - oxide_gnss
+    /// manages reconnection externally via NtripTask with exponential backoff.
+    pub fn to_ntrip_core_config(&self) -> ntrip_core::NtripConfig {
+        let mut config = ntrip_core::NtripConfig::new(&self.host, self.port, &self.mountpoint)
+            .with_timeout(self.connection.timeout_secs)
+            .with_read_timeout(self.connection.read_timeout_secs)
+            .without_reconnect(); // Oxide manages reconnection externally
+
+        // Set credentials if provided
+        if let (Some(user), Some(pass)) = (&self.username, &self.password) {
+            config = config.with_credentials(user, pass);
+        }
+
+        // Set TLS options
+        if self.use_https {
+            config = config.with_tls();
+        }
+        if self.tls_skip_verify {
+            config = config.with_tls_skip_verify();
+        }
+
+        // Set protocol version
+        config = config.with_version(match self.ntrip_version {
+            NtripVersion::V1 => ntrip_core::NtripVersion::V1,
+            NtripVersion::V2 => ntrip_core::NtripVersion::V2,
+            NtripVersion::Auto => ntrip_core::NtripVersion::Auto,
+        });
+
+        config
+    }
+
     /// Validate the NTRIP configuration.
     pub fn validate(&self) -> Result<(), ConfigError> {
         if self.host.is_empty() {
@@ -276,5 +309,101 @@ password: "pass"
 "#;
         let config: NtripConfig = serde_yaml::from_str(yaml).unwrap();
         assert!(config.has_auth());
+    }
+
+    #[test]
+    fn test_to_ntrip_core_config_basic() {
+        let yaml = r#"
+host: "example.com"
+port: 2101
+mountpoint: "TEST"
+"#;
+        let config: NtripConfig = serde_yaml::from_str(yaml).unwrap();
+        let core_config = config.to_ntrip_core_config();
+
+        assert_eq!(core_config.host, "example.com");
+        assert_eq!(core_config.port, 2101);
+        assert_eq!(core_config.mountpoint, "TEST");
+        assert!(!core_config.use_tls);
+        assert_eq!(core_config.connection.max_reconnect_attempts, 0); // Reconnect disabled
+    }
+
+    #[test]
+    fn test_to_ntrip_core_config_with_credentials() {
+        let yaml = r#"
+host: "example.com"
+mountpoint: "TEST"
+username: "myuser"
+password: "mypass"
+"#;
+        let config: NtripConfig = serde_yaml::from_str(yaml).unwrap();
+        let core_config = config.to_ntrip_core_config();
+
+        assert_eq!(core_config.username, Some("myuser".to_string()));
+        assert_eq!(core_config.password, Some("mypass".to_string()));
+    }
+
+    #[test]
+    fn test_to_ntrip_core_config_with_tls() {
+        let yaml = r#"
+host: "secure.example.com"
+port: 443
+mountpoint: "TEST"
+use_https: true
+tls_skip_verify: true
+"#;
+        let config: NtripConfig = serde_yaml::from_str(yaml).unwrap();
+        let core_config = config.to_ntrip_core_config();
+
+        assert!(core_config.use_tls);
+        assert!(core_config.tls_skip_verify);
+    }
+
+    #[test]
+    fn test_to_ntrip_core_config_version_mapping() {
+        // Test V1
+        let yaml = r#"
+host: "example.com"
+mountpoint: "TEST"
+ntrip_version: "v1"
+"#;
+        let config: NtripConfig = serde_yaml::from_str(yaml).unwrap();
+        let core_config = config.to_ntrip_core_config();
+        assert_eq!(core_config.ntrip_version, ntrip_core::NtripVersion::V1);
+
+        // Test V2
+        let yaml = r#"
+host: "example.com"
+mountpoint: "TEST"
+ntrip_version: "v2"
+"#;
+        let config: NtripConfig = serde_yaml::from_str(yaml).unwrap();
+        let core_config = config.to_ntrip_core_config();
+        assert_eq!(core_config.ntrip_version, ntrip_core::NtripVersion::V2);
+
+        // Test Auto (default)
+        let yaml = r#"
+host: "example.com"
+mountpoint: "TEST"
+"#;
+        let config: NtripConfig = serde_yaml::from_str(yaml).unwrap();
+        let core_config = config.to_ntrip_core_config();
+        assert_eq!(core_config.ntrip_version, ntrip_core::NtripVersion::Auto);
+    }
+
+    #[test]
+    fn test_to_ntrip_core_config_timeouts() {
+        let yaml = r#"
+host: "example.com"
+mountpoint: "TEST"
+connection:
+  timeout_secs: 20
+  read_timeout_secs: 45
+"#;
+        let config: NtripConfig = serde_yaml::from_str(yaml).unwrap();
+        let core_config = config.to_ntrip_core_config();
+
+        assert_eq!(core_config.connection.timeout_secs, 20);
+        assert_eq!(core_config.connection.read_timeout_secs, 45);
     }
 }

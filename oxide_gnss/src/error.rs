@@ -228,6 +228,48 @@ pub enum NtripError {
     /// TLS/HTTPS error
     #[error("NTRIP TLS error: {message}")]
     TlsError { message: String },
+
+    /// Invalid configuration
+    #[error("NTRIP configuration error: {message}")]
+    InvalidConfig { message: String },
+}
+
+impl From<ntrip_core::Error> for NtripError {
+    fn from(err: ntrip_core::Error) -> Self {
+        match err {
+            ntrip_core::Error::ConnectionFailed { host, port, source } => {
+                Self::ConnectionFailed { host, port, source }
+            }
+            ntrip_core::Error::Timeout { timeout_secs } => Self::Timeout { timeout_secs },
+            ntrip_core::Error::ReadTimeout { timeout_secs } => Self::ReadTimeout { timeout_secs },
+            ntrip_core::Error::AuthenticationFailed { host, username } => {
+                Self::AuthenticationFailed { host, username }
+            }
+            ntrip_core::Error::MountpointNotFound { host, mountpoint } => {
+                Self::MountpointNotFound { host, mountpoint }
+            }
+            ntrip_core::Error::HttpError {
+                host: _,
+                status_code,
+                reason,
+            } => Self::HttpError {
+                status: status_code,
+                message: reason,
+            },
+            ntrip_core::Error::TlsError { message } => Self::TlsError { message },
+            ntrip_core::Error::NetworkError { source } => Self::NetworkError { source },
+            ntrip_core::Error::StreamDisconnected { reason } => Self::StreamDisconnected { reason },
+            ntrip_core::Error::InvalidConfig { message } => Self::InvalidConfig { message },
+            ntrip_core::Error::SourcetableParseError { message } => {
+                Self::InvalidSourcetable { message }
+            }
+            // Handle any future variants added to ntrip_core::Error
+            #[allow(unreachable_patterns)]
+            _ => Self::NetworkError {
+                source: std::io::Error::other(format!("Unknown ntrip-core error: {}", err)),
+            },
+        }
+    }
 }
 
 // ============================================================================
