@@ -211,7 +211,15 @@ impl NtripTask {
         self.set_state(NtripState::Connecting).await;
 
         let mut client = NtripClient::new(self.config.clone())?;
-        client.connect().await?;
+
+        // Try to get initial GGA position for Ntrip-GGA header (NTRIP v2 best practice)
+        let initial_gga = self.channels.gga_rx.borrow().clone().map(|gga| {
+            GgaSentence::new(gga.latitude, gga.longitude, gga.altitude)
+                .with_quality(gga.quality)
+                .with_satellites(gga.num_satellites)
+        });
+
+        client.connect_with_gga(initial_gga.as_ref()).await?;
 
         // Update state and stats
         {

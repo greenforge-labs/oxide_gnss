@@ -21,7 +21,7 @@
 #   ./examples/ntrip_test_suite.sh [--quick|--full|--connect]
 #
 
-set -e
+# Note: Don't use 'set -e' as it interferes with test result handling
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -47,6 +47,23 @@ else
     echo -e "${YELLOW}No credentials file found at $CREDS_FILE${NC}"
     echo -e "${YELLOW}Stream connection tests will be skipped unless env vars are set${NC}"
 fi
+
+# Test locations - override in credentials file or env to test from different positions
+# Default locations are appropriate for each regional caster
+TEST_LAT_AU="${TEST_LAT_AU:--27.47}"      # Brisbane, Australia
+TEST_LON_AU="${TEST_LON_AU:-153.02}"
+TEST_LAT_EU="${TEST_LAT_EU:-52.52}"       # Berlin, Germany  
+TEST_LON_EU="${TEST_LON_EU:-13.41}"
+TEST_LAT_FR="${TEST_LAT_FR:-48.86}"       # Paris, France
+TEST_LON_FR="${TEST_LON_FR:-2.35}"
+TEST_LAT_NA="${TEST_LAT_NA:-40.71}"       # New York, USA
+TEST_LON_NA="${TEST_LON_NA:--74.00}"
+TEST_LAT_GLOBAL="${TEST_LAT_GLOBAL:-$TEST_LAT_AU}"  # Default to AU for global casters
+TEST_LON_GLOBAL="${TEST_LON_GLOBAL:-$TEST_LON_AU}"
+
+# Proximity test offsets (in degrees, ~111km per degree at equator)
+# Used to simulate rover positions at various distances from base
+PROXIMITY_OFFSETS="${PROXIMITY_OFFSETS:-0.0 0.1 0.5 1.0 2.0}"  # ~0, 11, 55, 111, 222 km
 
 # Build the test binary
 echo -e "\n${BLUE}=== Building ntrip_test ===${NC}\n"
@@ -119,10 +136,11 @@ quick_tests() {
     # Test locations feature
     run_test "Test locations (RTK2go)" test-locations rtk2go.com
 
-    # Nearest mountpoint tests
-    run_test "Nearest to Brisbane" nearest rtk2go.com -27.47 153.02
-    run_test "Nearest to London" nearest euref-ip.net 51.51 -0.13
-    run_test "Nearest to Berlin" nearest euref-ip.net 52.52 13.41
+    # Nearest mountpoint tests - multiple regions
+    run_test "Nearest to Brisbane (AU)" nearest rtk2go.com "$TEST_LAT_AU" "$TEST_LON_AU"
+    run_test "Nearest to New York (NA)" nearest rtk2go.com "$TEST_LAT_NA" "$TEST_LON_NA"
+    run_test "Nearest to London (EU)" nearest euref-ip.net 51.51 -0.13
+    run_test "Nearest to Berlin (EU)" nearest euref-ip.net "$TEST_LAT_EU" "$TEST_LON_EU"
 }
 
 # ============================================================================
@@ -188,8 +206,8 @@ connect_tests() {
         echo -e "${GREEN}RTK2go credentials available${NC}"
         
         # First get a mountpoint from the sourcetable
-        echo "Finding a mountpoint to test..."
-        MOUNTPOINT=$("$NTRIP_TEST" nearest rtk2go.com -27.47 153.02 2>/dev/null | grep "Recommended:" | awk '{print $2}' || echo "")
+        echo "Finding a mountpoint to test (from $TEST_LAT_GLOBAL, $TEST_LON_GLOBAL)..."
+        MOUNTPOINT=$("$NTRIP_TEST" nearest rtk2go.com "$TEST_LAT_GLOBAL" "$TEST_LON_GLOBAL" 2>/dev/null | grep "Recommended:" | awk '{print $2}' || echo "")
         
         if [[ -n "$MOUNTPOINT" ]]; then
             run_test "RTK2go stream connect ($MOUNTPOINT)" \
@@ -201,9 +219,9 @@ connect_tests() {
         # Test v1 vs v2 connection
         if [[ -n "$MOUNTPOINT" ]]; then
             run_test "RTK2go v1 stream" \
-                connect rtk2go.com "$MOUNTPOINT" --user="$NTRIP_RTK2GO_USER" --v1
+                connect rtk2go.com "$MOUNTPOINT" --user="$NTRIP_RTK2GO_USER" --pass="$NTRIP_RTK2GO_PASS" --v1
             run_test "RTK2go v2 stream" \
-                connect rtk2go.com "$MOUNTPOINT" --user="$NTRIP_RTK2GO_USER" --v2
+                connect rtk2go.com "$MOUNTPOINT" --user="$NTRIP_RTK2GO_USER" --pass="$NTRIP_RTK2GO_PASS" --v2
         fi
     else
         skip_test "RTK2go stream tests" "NTRIP_RTK2GO_USER not set"
@@ -213,7 +231,7 @@ connect_tests() {
     if [[ -n "$NTRIP_EUREF_USER" && -n "$NTRIP_EUREF_PASS" ]]; then
         echo -e "${GREEN}EUREF credentials available${NC}"
         
-        MOUNTPOINT=$("$NTRIP_TEST" nearest euref-ip.net 52.52 13.41 2>/dev/null | grep "Recommended:" | awk '{print $2}' || echo "")
+        MOUNTPOINT=$("$NTRIP_TEST" nearest euref-ip.net "$TEST_LAT_EU" "$TEST_LON_EU" 2>/dev/null | grep "Recommended:" | awk '{print $2}' || echo "")
         
         if [[ -n "$MOUNTPOINT" ]]; then
             run_test "EUREF stream connect ($MOUNTPOINT)" \
@@ -227,7 +245,7 @@ connect_tests() {
     if [[ -n "$NTRIP_AUSCORS_USER" && -n "$NTRIP_AUSCORS_PASS" ]]; then
         echo -e "${GREEN}AUSCORS credentials available${NC}"
         
-        MOUNTPOINT=$("$NTRIP_TEST" nearest auscors.ga.gov.au -27.47 153.02 2>/dev/null | grep "Recommended:" | awk '{print $2}' || echo "")
+        MOUNTPOINT=$("$NTRIP_TEST" nearest auscors.ga.gov.au "$TEST_LAT_AU" "$TEST_LON_AU" 2>/dev/null | grep "Recommended:" | awk '{print $2}' || echo "")
         
         if [[ -n "$MOUNTPOINT" ]]; then
             run_test "AUSCORS stream connect ($MOUNTPOINT)" \
@@ -239,13 +257,122 @@ connect_tests() {
 
     # Centipede - open community
     echo -e "${BLUE}Centipede (open community)${NC}"
-    MOUNTPOINT=$("$NTRIP_TEST" nearest caster.centipede.fr 48.86 2.35 2>/dev/null | grep "Recommended:" | awk '{print $2}' || echo "")
+    MOUNTPOINT=$("$NTRIP_TEST" nearest caster.centipede.fr "$TEST_LAT_FR" "$TEST_LON_FR" 2>/dev/null | grep "Recommended:" | awk '{print $2}' || echo "")
     if [[ -n "$MOUNTPOINT" ]]; then
         run_test "Centipede open stream ($MOUNTPOINT)" \
             connect caster.centipede.fr "$MOUNTPOINT"
     else
         skip_test "Centipede stream" "Could not find mountpoint"
     fi
+
+    # Emlid - Local base station
+    if [[ -n "$NTRIP_EMLID_MOUNT" && -n "$NTRIP_EMLID_USER" && -n "$NTRIP_EMLID_PASS" ]]; then
+        echo -e "${GREEN}Emlid local base station credentials available${NC}"
+        local emlid_host="${NTRIP_EMLID_HOST:-caster.emlid.com}"
+        local emlid_port="${NTRIP_EMLID_PORT:-2101}"
+        
+        run_test "Emlid local base ($NTRIP_EMLID_MOUNT)" \
+            connect "$emlid_host" "$NTRIP_EMLID_MOUNT" "$emlid_port" \
+            --user="$NTRIP_EMLID_USER" --pass="$NTRIP_EMLID_PASS"
+        
+        # Test both protocol versions against local base
+        run_test "Emlid local base v1" \
+            connect "$emlid_host" "$NTRIP_EMLID_MOUNT" "$emlid_port" \
+            --user="$NTRIP_EMLID_USER" --pass="$NTRIP_EMLID_PASS" --v1
+        run_test "Emlid local base v2" \
+            connect "$emlid_host" "$NTRIP_EMLID_MOUNT" "$emlid_port" \
+            --user="$NTRIP_EMLID_USER" --pass="$NTRIP_EMLID_PASS" --v2
+    else
+        skip_test "Emlid local base tests" "NTRIP_EMLID_MOUNT/USER/PASS not set"
+    fi
+}
+
+# ============================================================================
+# PROXIMITY TESTS - Test behavior at various distances from base station
+# ============================================================================
+
+proximity_tests() {
+    section "PROXIMITY TESTS - Distance from Base Station"
+    
+    # Need base station location and credentials
+    if [[ -z "$NTRIP_EMLID_MOUNT" || -z "$NTRIP_EMLID_USER" ]]; then
+        echo -e "${YELLOW}Proximity tests require Emlid local base station credentials${NC}"
+        echo -e "${YELLOW}Set NTRIP_EMLID_MOUNT, NTRIP_EMLID_USER, NTRIP_EMLID_PASS${NC}"
+        skip_test "Proximity tests" "Emlid credentials not configured"
+        return
+    fi
+    
+    # Base station reference location (set these to your base station's actual position)
+    local base_lat="${NTRIP_EMLID_BASE_LAT:-$TEST_LAT_AU}"
+    local base_lon="${NTRIP_EMLID_BASE_LON:-$TEST_LON_AU}"
+    local emlid_host="${NTRIP_EMLID_HOST:-caster.emlid.com}"
+    local emlid_port="${NTRIP_EMLID_PORT:-2101}"
+    
+    echo -e "${BLUE}Base station location: ($base_lat, $base_lon)${NC}"
+    echo -e "${BLUE}Testing distances: $PROXIMITY_OFFSETS degrees${NC}"
+    echo ""
+    
+    # Test connection at various simulated distances
+    for offset in $PROXIMITY_OFFSETS; do
+        # Calculate approximate distance (rough, good enough for testing)
+        # 1 degree ≈ 111 km at equator, less at higher latitudes
+        local approx_km=$(echo "$offset * 111" | bc -l 2>/dev/null || echo "$offset * 111" | awk '{print $1 * $3}')
+        approx_km=$(printf "%.0f" "$approx_km" 2>/dev/null || echo "${offset}x111")
+        
+        # Offset the latitude (simulating rover moving away from base)
+        local test_lat=$(echo "$base_lat + $offset" | bc -l 2>/dev/null || awk "BEGIN {print $base_lat + $offset}")
+        
+        echo -e "\n${BLUE}--- Testing at ~${approx_km}km from base (lat offset: +${offset}°) ---${NC}"
+        echo "Simulated rover position: ($test_lat, $base_lon)"
+        
+        # Find nearest mountpoint from this position (for global casters)
+        echo "Checking RTK2go nearest mountpoint from this position..."
+        local nearest=$("$NTRIP_TEST" nearest rtk2go.com "$test_lat" "$base_lon" 2>/dev/null | grep "Recommended:" || echo "")
+        if [[ -n "$nearest" ]]; then
+            echo "  $nearest"
+        fi
+        
+        # Test connection to our local base from this simulated position
+        # Note: The NTRIP server doesn't know our position unless we send GGA
+        # This test verifies the client handles connections properly
+        run_test "Emlid base @ ~${approx_km}km offset" \
+            connect "$emlid_host" "$NTRIP_EMLID_MOUNT" "$emlid_port" \
+            --user="$NTRIP_EMLID_USER" --pass="$NTRIP_EMLID_PASS"
+    done
+    
+    echo ""
+    echo -e "${BLUE}Note: Distance affects RTK fix quality, not connection reliability.${NC}"
+    echo -e "${BLUE}Connection tests verify client stability at various configurations.${NC}"
+}
+
+# ============================================================================
+# STRESS TESTS - Repeated connect/disconnect cycles
+# ============================================================================
+
+stress_tests() {
+    section "STRESS TESTS - Connection Cycling"
+    
+    if [[ -z "$NTRIP_EMLID_MOUNT" || -z "$NTRIP_EMLID_USER" ]]; then
+        skip_test "Stress tests" "Emlid credentials not configured"
+        return
+    fi
+    
+    local emlid_host="${NTRIP_EMLID_HOST:-caster.emlid.com}"
+    local emlid_port="${NTRIP_EMLID_PORT:-2101}"
+    local cycles="${STRESS_TEST_CYCLES:-5}"
+    
+    echo -e "${BLUE}Running $cycles connect/disconnect cycles...${NC}"
+    
+    for i in $(seq 1 $cycles); do
+        run_test "Connect cycle $i/$cycles" \
+            connect "$emlid_host" "$NTRIP_EMLID_MOUNT" "$emlid_port" \
+            --user="$NTRIP_EMLID_USER" --pass="$NTRIP_EMLID_PASS"
+        
+        # Brief pause between cycles
+        sleep 1
+    done
+    
+    echo -e "\n${BLUE}Stress test complete - $cycles cycles${NC}"
 }
 
 # ============================================================================
@@ -283,29 +410,46 @@ case "${1:-quick}" in
         quick_tests
         connect_tests
         ;;
+    --proximity|-p)
+        echo -e "${BLUE}Running PROXIMITY tests (distance from base)${NC}"
+        proximity_tests
+        ;;
+    --stress|-s)
+        echo -e "${BLUE}Running STRESS tests (connect/disconnect cycles)${NC}"
+        stress_tests
+        ;;
     --all|-a)
         echo -e "${BLUE}Running ALL tests${NC}"
         quick_tests
         full_tests
         connect_tests
+        proximity_tests
+        stress_tests
         ;;
     --help|-h)
         echo "NTRIP Test Suite"
         echo ""
-        echo "Usage: $0 [--quick|--full|--connect|--all]"
+        echo "Usage: $0 [--quick|--full|--connect|--proximity|--stress|--all]"
         echo ""
         echo "Options:"
-        echo "  --quick, -q    Quick tests (sourcetable only, no auth) [default]"
-        echo "  --full, -f     Full tests (all casters, protocols, no auth)"
-        echo "  --connect, -c  Connection tests (requires credentials)"
-        echo "  --all, -a      Run all tests"
+        echo "  --quick, -q      Quick tests (sourcetable only, no auth) [default]"
+        echo "  --full, -f       Full tests (all casters, protocols, no auth)"
+        echo "  --connect, -c    Connection tests (requires credentials)"
+        echo "  --proximity, -p  Proximity tests (various distances from base)"
+        echo "  --stress, -s     Stress tests (repeated connect/disconnect)"
+        echo "  --all, -a        Run all tests"
         echo ""
-        echo "Credentials:"
-        echo "  Create examples/ntrip_credentials.env with:"
-        echo "    export NTRIP_RTK2GO_USER=\"your.email@example.com\""
-        echo "    export NTRIP_RTK2GO_PASS=\"\""
-        echo "    export NTRIP_EUREF_USER=\"...\""
-        echo "    export NTRIP_EUREF_PASS=\"...\""
+        echo "Credentials (create examples/ntrip_credentials.env):"
+        echo "  NTRIP_RTK2GO_USER    RTK2go email"
+        echo "  NTRIP_EMLID_*        Emlid local base station"
+        echo ""
+        echo "Proximity Test Variables:"
+        echo "  NTRIP_EMLID_BASE_LAT  Base station latitude"
+        echo "  NTRIP_EMLID_BASE_LON  Base station longitude"
+        echo "  PROXIMITY_OFFSETS     Distance offsets in degrees (default: 0.0 0.1 0.5 1.0 2.0)"
+        echo ""
+        echo "Stress Test Variables:"
+        echo "  STRESS_TEST_CYCLES    Number of connect/disconnect cycles (default: 5)"
         exit 0
         ;;
     *)

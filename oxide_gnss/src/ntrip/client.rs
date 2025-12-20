@@ -62,7 +62,21 @@ impl NtripClient {
     }
 
     /// Connect to the NTRIP caster and start streaming.
+    /// 
+    /// For NTRIP v2, consider using `connect_with_gga()` to send an initial
+    /// position in the request headers for faster VRS/nearest-base selection.
     pub async fn connect(&mut self) -> Result<(), NtripError> {
+        self.connect_with_gga(None).await
+    }
+
+    /// Connect to the NTRIP caster with an optional initial GGA position.
+    ///
+    /// For NTRIP v2, the GGA sentence is sent in the `Ntrip-GGA` header,
+    /// allowing the caster to select the appropriate VRS or nearest base
+    /// immediately, without waiting for a post-connection GGA report.
+    ///
+    /// For NTRIP v1, the initial_gga is ignored (GGA must be sent post-connection).
+    pub async fn connect_with_gga(&mut self, initial_gga: Option<&GgaSentence>) -> Result<(), NtripError> {
         let host = &self.config.host;
         let port = self.config.port;
         let addr = format!("{}:{}", host, port);
@@ -108,10 +122,22 @@ impl NtripClient {
                 String::new()
             };
 
+        // Build Ntrip-GGA header for v2 if initial position provided
+        let gga_header = match (&self.config.ntrip_version, initial_gga) {
+            (NtripVersion::V2, Some(gga)) | (NtripVersion::Auto, Some(gga)) => {
+                let nmea = gga.to_nmea();
+                // Remove trailing newline for header format
+                let nmea_trimmed = nmea.trim();
+                debug!(gga = %nmea_trimmed, "Including initial GGA in request header");
+                format!("Ntrip-GGA: {}\r\n", nmea_trimmed)
+            }
+            _ => String::new(),
+        };
+
         // Build request based on configured NTRIP version
         let request = match self.config.ntrip_version {
             NtripVersion::V1 => {
-                // NTRIP v1: HTTP/1.0 request
+                // NTRIP v1: HTTP/1.0 request (no Ntrip-GGA header support)
                 debug!("Using NTRIP v1 protocol");
                 format!(
                     "GET /{} HTTP/1.0\r\n\
@@ -124,17 +150,18 @@ impl NtripClient {
                 )
             }
             NtripVersion::V2 | NtripVersion::Auto => {
-                // NTRIP v2: HTTP/1.1 with Ntrip-Version header
+                // NTRIP v2: HTTP/1.1 with Ntrip-Version header and optional Ntrip-GGA
                 debug!("Using NTRIP v2 protocol request");
                 format!(
                     "GET /{} HTTP/1.1\r\n\
                      Host: {}:{}\r\n\
                      User-Agent: {}\r\n\
                      Ntrip-Version: Ntrip/2.0\r\n\
+                     {}\
                      Accept: */*\r\n\
                      Connection: close\r\n\
                      {}\r\n",
-                    mountpoint, host, port, user_agent, auth_header
+                    mountpoint, host, port, user_agent, gga_header, auth_header
                 )
             }
         };

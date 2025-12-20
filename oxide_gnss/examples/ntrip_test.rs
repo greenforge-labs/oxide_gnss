@@ -555,22 +555,33 @@ fn print_sourcetable(table: &Sourcetable) {
         println!();
     }
 
-    println!("--- Streams (RTCM) ---");
-    println!(
-        "{:<20} {:<15} {:<20} {:>10} {:>10}",
-        "Mountpoint", "Format", "NavSys", "Lat", "Lon"
-    );
-    println!("{:-<80}", "");
-
-    for stream in table.rtcm_streams() {
+    let rtcm_streams = table.rtcm_streams();
+    let rtcm_count = rtcm_streams.len();
+    
+    println!("--- Streams (RTCM): {} total ---", rtcm_count);
+    
+    // Only show first 5 streams to reduce verbosity
+    if rtcm_count > 0 {
         println!(
-            "{:<20} {:<15} {:<20} {:>10.4} {:>10.4}",
-            truncate(&stream.mountpoint, 20),
-            truncate(&stream.format, 15),
-            truncate(&stream.nav_system, 20),
-            stream.latitude,
-            stream.longitude
+            "{:<20} {:<15} {:<20} {:>10} {:>10}",
+            "Mountpoint", "Format", "NavSys", "Lat", "Lon"
         );
+        println!("{:-<80}", "");
+
+        for stream in rtcm_streams.iter().take(5) {
+            println!(
+                "{:<20} {:<15} {:<20} {:>10.4} {:>10.4}",
+                truncate(&stream.mountpoint, 20),
+                truncate(&stream.format, 15),
+                truncate(&stream.nav_system, 20),
+                stream.latitude,
+                stream.longitude
+            );
+        }
+        
+        if rtcm_count > 5 {
+            println!("  ... and {} more streams", rtcm_count - 5);
+        }
     }
 }
 
