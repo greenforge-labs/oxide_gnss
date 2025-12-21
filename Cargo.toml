@@ -21,13 +21,14 @@ required-features = ["ros2"]
 
 [dependencies]
 # ROS2 dependencies - resolved via colcon patches in .cargo/config.toml
-# Build with: source /opt/ros/jazzy/setup.bash && source install/setup.bash && cargo build --features ros2
+# Version "*" allows workspace patches to override with distro-specific versions
+# Build with: source /opt/ros/$ROS_DISTRO/setup.bash && source install/setup.bash && cargo build --features ros2
 rclrs = { version = "0.6", optional = true }
-sensor_msgs = { version = "5", optional = true }
-geometry_msgs = { version = "5", optional = true }
-std_msgs = { version = "5", optional = true }
-diagnostic_msgs = { version = "5", optional = true }
-builtin_interfaces = { version = "2", optional = true }
+sensor_msgs = { version = "*", optional = true }
+geometry_msgs = { version = "*", optional = true }
+std_msgs = { version = "*", optional = true }
+diagnostic_msgs = { version = "*", optional = true }
+builtin_interfaces = { version = "*", optional = true }
 oxide_gnss_msgs = { version = "0.1", optional = true }
 
 # GNSS Protocols
