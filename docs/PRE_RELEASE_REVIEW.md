@@ -197,9 +197,59 @@ oxide_gnss is a well-architected ROS2 GNSS driver written in Rust, targeting u-b
 
 ### Recommendations
 
+- **High value**: Add unit tests for `ros/conversions.rs` transformations (pure functions, no ROS dependencies).
 - **High value**: Add integration test with captured UBX binary data to validate full parsing → integrity → ROS message chain.
 - **Medium value**: Add tests for edge cases in UBX parsing (malformed packets, partial reads).
 - **Documentation**: Add section on manual hardware testing procedures.
+
+### Future: Serial Interface Abstraction for Testing
+
+The current serial interface (`device/serial.rs`) is tightly coupled to `serial2_tokio::SerialPort`. Abstracting this behind a trait would enable mock serial injection for integration tests.
+
+**Proposed approach:**
+
+```rust
+#[async_trait]
+pub trait AsyncSerial: Send {
+    async fn read(&mut self, buf: &mut [u8]) -> Result<usize, DeviceError>;
+    async fn write(&mut self, data: &[u8]) -> Result<usize, DeviceError>;
+    fn write_sender(&self) -> mpsc::Sender<Vec<u8>>;
+}
+
+// Production: impl AsyncSerial for SerialPort
+// Testing: impl AsyncSerial for MockSerial (reads from captured UBX data)
+```
+
+**Using generics with defaults for zero runtime cost:**
+
+```rust
+pub struct DeviceTask<S: AsyncSerial = SerialPort> { ... }
+```
+
+**Effort estimate:** 2-4 hours, ~50-100 lines across `serial.rs`, `task.rs`, `config.rs`.
+
+**Files affected:**
+- `device/serial.rs` — define trait, implement for `SerialPort`
+- `device/task.rs` — make generic over `S: AsyncSerial`
+- `device/config.rs` — make `DeviceConfigurator` generic
+- New `tests/mock_serial.rs` — `MockSerial` implementation
+
+### ROS2 Publisher Testing Strategy
+
+Testing ROS2 publisher output presents challenges since verifying published messages typically requires a running ROS2 environment.
+
+**Recommended layered approach:**
+
+| Layer | Description | Value | Effort |
+|-------|-------------|-------|--------|
+| Conversion tests | Unit test `ros/conversions.rs` (PvtData → NavSatFix, NED → ENU) | High | Low |
+| Mock serial + subscriber | Inject known UBX data, subscribe and verify output | High | Medium |
+| launch_testing | Python-based ROS2 integration tests | Medium | Medium |
+| Bag record/replay | Capture golden baseline, compare against regressions | Medium | Low |
+
+**Pragmatic stance:** The `rclrs` publisher is assumed to work correctly (tested by maintainers). Focus testing effort on data transformations where bugs like PDOP scaling occur.
+
+**Post-release recommendation:** Implement trait abstraction + mock serial + test subscriber for comprehensive integration coverage.
 
 ---
 
