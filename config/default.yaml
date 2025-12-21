@@ -1,5 +1,17 @@
 # oxide_gnss default configuration
 # Copy this file and customize for your setup
+#
+# NOTE: This is a template showing all available options.
+# For simpler configs, use mode-based configuration (see other examples).
+
+# Operating mode - automatically configures ports, protocols, and messages
+mode: rover_ntrip
+
+# Feature flags - enable/disable optional functionality
+features:
+  high_precision: true    # Use HP position in ~/fix
+  integrity: true         # Enable ~/integrity, ~/operational topics
+  satellites: false       # Enable ~/satellites topic (higher bandwidth)
 
 # =============================================================================
 # ROS Configuration
@@ -61,27 +73,12 @@ device:
       nav_ratio: 1          # Nav solutions per measurement (typically 1)
 
     # -------------------------------------------------------------------------
-    # Protocol Settings
+    # Port Settings (optional overrides)
     # -------------------------------------------------------------------------
-    # Enable/disable protocols per port
-    # Available protocols: ubx, nmea, rtcm3x
-    protocols:
-      usb_in: [ubx, rtcm3x]   # Accept UBX commands and RTCM corrections
-      usb_out: [ubx]          # Output UBX messages only (no NMEA)
-      # uart1_in: [ubx, rtcm3x]
-      # uart1_out: [ubx]
-      # uart2_in: [rtcm3x]    # For moving base: receive RTCM from base
-      # uart2_out: []
-
-    # -------------------------------------------------------------------------
-    # Port Settings (optional)
-    # -------------------------------------------------------------------------
+    # Mode handles ports/protocols automatically. Only override if needed.
     # ports:
-    #   uart1:
-    #     enabled: false
     #   uart2:
     #     baudrate: 460800
-    #     enabled: true
 
     # -------------------------------------------------------------------------
     # GNSS Signal/Constellation Selection (optional)
@@ -109,37 +106,14 @@ device:
     #     enabled: false
 
     # -------------------------------------------------------------------------
-    # UBX Message Output Rates
+    # UBX Message Overrides (optional)
     # -------------------------------------------------------------------------
-    # Rate values: 0 = disabled, 1 = every solution, N = every Nth solution
+    # Mode automatically configures required messages based on enabled features.
+    # Only add overrides here if you need to customize message rates.
     #
-    # MESSAGE REQUIREMENTS are defined in code: src/config/ublox.rs
-    # The driver validates config at startup and will:
-    #   - ERROR and fail if ESSENTIAL messages are missing
-    #   - WARN if RECOMMENDED messages are missing  
-    #   - Log which ROS topics will be unavailable
-    #
-    # See MESSAGE_REQUIREMENTS in ublox.rs for the authoritative list of:
-    #   - Message levels (Essential/Recommended/Optional)
-    #   - Why each message is needed
-    #   - Which ROS topics depend on each message
-    #
-    messages:
-      usb:
-        # Essential - position/velocity/time
-        NAV_PVT: 1            # Position, velocity, time solution
-
-        # Recommended - high precision and integrity
-        NAV_HPPOSLLH: 1       # High-precision position (for ~/hp_pos)
-        NAV_POSECEF: 1        # ECEF position (for coordinate transforms)
-        MON_RF: 1             # RF/antenna status, jamming indicator
-        MON_COMMS: 1          # Communication port diagnostics
-        SEC_SIG: 1            # Jamming/spoofing detection
-
-        # Optional - additional data
-        NAV_SAT: 5            # Satellite info (every 5th - reduces bandwidth)
-        SEC_SIGLOG: 1         # Security event log
-        # NAV_RELPOSNED: 1    # Relative position (for moving base/rover)
+    # messages:
+    #   usb:
+    #     NAV_SAT: 5          # Reduce satellite info rate
 
 # NTRIP Client Configuration (optional)
 # Comment out this section to disable NTRIP

@@ -1,22 +1,14 @@
-# =============================================================================
-# F9P Rover with Integrity Monitoring
-# =============================================================================
-# Configuration for a ZED-F9P rover receiving RTK corrections via NTRIP.
-# Includes all messages required for safety integrity monitoring.
+# oxide_gnss configuration: RTK Rover with Integrity Monitoring
 #
-# Published topics:
-#   ~/fix               - Position (sensor_msgs/NavSatFix)
-#   ~/velocity          - Velocity (geometry_msgs/TwistWithCovarianceStamped)
-#   ~/time_reference    - GPS time (sensor_msgs/TimeReference)
-#   ~/hp_pos            - High-precision position (sensor_msgs/NavSatFix)
-#   ~/integrity         - Safety integrity status (oxide_gnss_msgs/OxideIntegrity)
-#   ~/operational       - Go/no-go signal (std_msgs/Bool)
-#   ~/sec_sig_details   - Jamming/spoofing details (oxide_gnss_msgs/SecSigDetails)
-#   /diagnostics        - System diagnostics (diagnostic_msgs/DiagnosticArray)
-#
-# NOT included (no NAV_RELPOSNED):
-#   ~/baseline_pose     - Requires moving base configuration
-# =============================================================================
+# RTK rover with NTRIP corrections and full integrity monitoring enabled.
+# Use this for safety-critical applications requiring go/no-go decisions.
+
+mode: rover_ntrip
+
+features:
+  high_precision: true
+  integrity: true         # Enable ~/integrity and ~/operational topics
+  satellites: true        # Enable ~/satellites for monitoring
 
 ros:
   rates:
@@ -41,38 +33,13 @@ device:
     max_delay_secs: 30
     max_attempts: 0       # Unlimited retries for safety-critical operation
 
+  # u-blox configuration overrides (mode handles ports/protocols automatically)
   ublox:
     family: "F9P"
 
     rate:
       measurement_ms: 100   # 10 Hz
       nav_ratio: 1
-
-    protocols:
-      usb_in: [ubx, rtcm3x]   # Accept UBX commands and RTCM corrections
-      usb_out: [ubx]          # UBX output only (no NMEA)
-
-    # -------------------------------------------------------------------------
-    # UBX Message Configuration
-    # -------------------------------------------------------------------------
-    # See docs/CONFIGURATION.md for message requirements and integrity checks.
-    messages:
-      usb:
-        # Essential - position/velocity/time solution
-        NAV_PVT: 1
-
-        # Recommended - high precision position
-        NAV_HPPOSLLH: 1       # High-precision lat/lon/height
-        NAV_POSECEF: 1        # ECEF position for transforms
-
-        # RequiredForFeature - integrity monitoring (~/integrity, ~/operational)
-        MON_RF: 1             # Antenna status, jamming indicator
-        MON_COMMS: 1          # Communication port health
-        SEC_SIG: 1            # Jamming/spoofing detection
-
-        # Optional - additional monitoring
-        SEC_SIGLOG: 1         # Security event log
-        NAV_SAT: 5            # Satellite info (every 5th solution)
 
 # =============================================================================
 # NTRIP Configuration
