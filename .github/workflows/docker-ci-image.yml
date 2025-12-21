@@ -60,12 +60,6 @@ jobs:
             ros_base: ros:rolling-ros-base
             ubuntu: noble
 
-    # Skip distros not matching manual input (if specified)
-    if: >-
-      github.event_name != 'workflow_dispatch' ||
-      github.event.inputs.distro == 'all' ||
-      github.event.inputs.distro == matrix.distro
-
     # Required for pushing to GHCR
     permissions:
       contents: read

@@ -28,7 +28,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [humble, jazzy, kilted]
+        # TODO: Re-enable humble, kilted after running docker-ci-image.yml workflow
+        distro: [jazzy]
         include:
           - distro: humble
             ros_distro: humble
