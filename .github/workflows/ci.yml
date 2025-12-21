@@ -82,37 +82,40 @@ jobs:
           cd src/oxide_gnss
           cargo test --features ros2
 
-  # Optional: Test on rolling (allowed to fail)
-  build-rolling:
-    name: Build & Test (rolling)
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    container:
-      image: ghcr.io/gsokoll/oxide_gnss-ci:rolling
-      options: --user root
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          path: src/oxide_gnss_repo
-
-      - name: Build with colcon
-        shell: bash
-        run: |
-          source /opt/ros/rolling/setup.bash
-          source /opt/ros2_ws/install/setup.bash
-          mkdir -p .cargo
-          cp /opt/ros2_ws/.cargo/config.toml .cargo/ 2>/dev/null || true
-          mv src/oxide_gnss_repo src/oxide_gnss
-          mv src/oxide_gnss/oxide_gnss_msgs src/
-          colcon build --packages-select oxide_gnss_msgs oxide_gnss
-
-      - name: Run tests
-        shell: bash
-        run: |
-          source /opt/ros/rolling/setup.bash
-          source /opt/ros2_ws/install/setup.bash
-          source install/setup.bash
-          cd src/oxide_gnss
-          cargo test --features ros2 || true
+  # Rolling CI disabled - ros2-rust API not yet stable on rolling
+  # Re-enable when rclrs matures and rosidl_runtime_rs stabilizes
+  # See: https://github.com/ros2-rust/ros2_rust/issues
+  #
+  # build-rolling:
+  #   name: Build & Test (rolling)
+  #   runs-on: ubuntu-latest
+  #   continue-on-error: true
+  #   container:
+  #     image: ghcr.io/gsokoll/oxide_gnss-ci:rolling
+  #     options: --user root
+  #
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v4
+  #       with:
+  #         path: src/oxide_gnss_repo
+  #
+  #     - name: Build with colcon
+  #       shell: bash
+  #       run: |
+  #         source /opt/ros/rolling/setup.bash
+  #         source /opt/ros2_ws/install/setup.bash
+  #         mkdir -p .cargo
+  #         cp /opt/ros2_ws/.cargo/config.toml .cargo/ 2>/dev/null || true
+  #         mv src/oxide_gnss_repo src/oxide_gnss
+  #         mv src/oxide_gnss/oxide_gnss_msgs src/
+  #         colcon build --packages-select oxide_gnss_msgs oxide_gnss
+  #
+  #     - name: Run tests
+  #       shell: bash
+  #       run: |
+  #         source /opt/ros/rolling/setup.bash
+  #         source /opt/ros2_ws/install/setup.bash
+  #         source install/setup.bash
+  #         cd src/oxide_gnss
+  #         cargo test --features ros2 || true
