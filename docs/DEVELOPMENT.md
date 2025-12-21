@@ -7,8 +7,8 @@ This document covers building, developing, and contributing to oxide_gnss.
 ### Required
 
 | Dependency | Purpose | Install |
-|------------|---------|---------|
-| ROS2 Jazzy | ROS2 framework | [Ubuntu 24.04 instructions](https://docs.ros.org/en/jazzy/Installation.html) |
+|------------|---------|----------|
+| ROS2 | ROS2 framework | Humble, Jazzy, or Rolling ([install](https://docs.ros.org/en/jazzy/Installation.html)) |
 | Rust (stable) | Compiler | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
 | libclang-dev | Bindgen (FFI) | `sudo apt install libclang-dev` |
 | vcstool | Repo import | `sudo apt install python3-vcstool` |
@@ -16,7 +16,8 @@ This document covers building, developing, and contributing to oxide_gnss.
 ### Optional
 
 | Dependency | Purpose | Install |
-|------------|---------|---------|
+|------------|---------|----------|
+| Docker | Local CI testing | [Install Docker](https://docs.docker.com/engine/install/ubuntu/) |
 | minicom | Serial debugging | `sudo apt install minicom` |
 | just | Task runner | `cargo install just` |
 
@@ -257,6 +258,30 @@ The driver uses async tasks coordinated by a supervisor:
 ```bash
 cargo test --features ros2
 ```
+
+### Local CI Testing (Docker)
+
+Test against multiple ROS2 distros locally before pushing:
+
+```bash
+# Test all supported distros (humble, jazzy, kilted, rolling)
+./scripts/local_ci_test.sh
+
+# Test specific distro
+./scripts/local_ci_test.sh jazzy
+
+# Quick check only (faster)
+./scripts/local_ci_test.sh jazzy check
+
+# Build only (no tests)
+./scripts/local_ci_test.sh humble build
+```
+
+This script:
+- Uses `rostooling/setup-ros-docker` images
+- Installs Rust and ros2-rust from scratch
+- Builds and tests oxide_gnss
+- Mirrors the GitHub Actions CI environment
 
 ### Manual Testing
 

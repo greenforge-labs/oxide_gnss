@@ -12,9 +12,10 @@ Thank you for your interest in contributing to oxide_gnss!
 
 ### Prerequisites
 
-- ROS2 Jazzy (Ubuntu 24.04)
+- ROS2 Humble, Jazzy, or Rolling
 - Rust stable toolchain
 - libclang-dev
+- Docker (for local CI testing)
 
 ### Building
 
@@ -44,6 +45,18 @@ cargo clippy --features ros2 -- -D warnings
 cargo fmt --all -- --check
 ```
 
+### Local CI Testing (Docker)
+
+Test against multiple ROS2 distros locally before pushing:
+
+```bash
+./scripts/local_ci_test.sh              # Test all distros (humble, jazzy, kilted, rolling)
+./scripts/local_ci_test.sh jazzy        # Test specific distro
+./scripts/local_ci_test.sh jazzy check  # Quick cargo check only
+```
+
+This mirrors the GitHub Actions CI environment.
+
 ### Code Style
 
 - Follow Rust conventions (`cargo fmt`, `cargo clippy`)
@@ -52,9 +65,9 @@ cargo fmt --all -- --check
 
 ## Submitting Changes
 
-1. Run all CI checks: `just ci`
+1. Run local CI checks: `just ci` or `./scripts/local_ci_test.sh jazzy`
 2. Push to your fork and open a Pull Request
-3. CI will automatically run format, clippy, and tests
+3. CI will automatically run format, clippy, and tests against multiple ROS2 distros (humble, jazzy, kilted, rolling)
 
 ## Reporting Issues
 

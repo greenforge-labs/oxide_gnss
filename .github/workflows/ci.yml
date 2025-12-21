@@ -21,13 +21,23 @@ jobs:
           components: rustfmt
       - run: cargo fmt --all -- --check
 
-  # Full build with ROS2 (uses pre-built Docker image)
+  # Multi-distro build with ROS2 (uses pre-built Docker images)
   build:
-    name: Build & Test
+    name: Build & Test (${{ matrix.distro }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [humble, jazzy, kilted]
+        include:
+          - distro: humble
+            ros_distro: humble
+          - distro: jazzy
+            ros_distro: jazzy
+          - distro: kilted
+            ros_distro: kilted
     container:
-      image: ghcr.io/gsokoll/oxide_gnss-ci:jazzy
-      # Grant access to workspace files
+      image: ghcr.io/gsokoll/oxide_gnss-ci:${{ matrix.distro }}
       options: --user root
 
     steps:
@@ -40,7 +50,7 @@ jobs:
         shell: bash
         run: |
           # Source ROS2 and ros2-rust workspace
-          source /opt/ros/jazzy/setup.bash
+          source /opt/ros/${{ matrix.ros_distro }}/setup.bash
           source /opt/ros2_ws/install/setup.bash
           
           # Copy the .cargo/config.toml from ros2-rust workspace to use the patches
@@ -57,7 +67,7 @@ jobs:
       - name: Run clippy
         shell: bash
         run: |
-          source /opt/ros/jazzy/setup.bash
+          source /opt/ros/${{ matrix.ros_distro }}/setup.bash
           source /opt/ros2_ws/install/setup.bash
           source install/setup.bash
           cd src/oxide_gnss
@@ -66,8 +76,43 @@ jobs:
       - name: Run tests
         shell: bash
         run: |
-          source /opt/ros/jazzy/setup.bash
+          source /opt/ros/${{ matrix.ros_distro }}/setup.bash
           source /opt/ros2_ws/install/setup.bash
           source install/setup.bash
           cd src/oxide_gnss
           cargo test --features ros2
+
+  # Optional: Test on rolling (allowed to fail)
+  build-rolling:
+    name: Build & Test (rolling)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    container:
+      image: ghcr.io/gsokoll/oxide_gnss-ci:rolling
+      options: --user root
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: src/oxide_gnss_repo
+
+      - name: Build with colcon
+        shell: bash
+        run: |
+          source /opt/ros/rolling/setup.bash
+          source /opt/ros2_ws/install/setup.bash
+          mkdir -p .cargo
+          cp /opt/ros2_ws/.cargo/config.toml .cargo/ 2>/dev/null || true
+          mv src/oxide_gnss_repo src/oxide_gnss
+          mv src/oxide_gnss/oxide_gnss_msgs src/
+          colcon build --packages-select oxide_gnss_msgs oxide_gnss
+
+      - name: Run tests
+        shell: bash
+        run: |
+          source /opt/ros/rolling/setup.bash
+          source /opt/ros2_ws/install/setup.bash
+          source install/setup.bash
+          cd src/oxide_gnss
+          cargo test --features ros2 || true

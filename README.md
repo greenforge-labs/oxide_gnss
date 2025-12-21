@@ -157,7 +157,7 @@ The driver publishes comprehensive diagnostics including:
 
 ### Prerequisites
 
-- **ROS2 Jazzy** (Ubuntu 24.04 / WSL2 recommended)
+- **ROS2** — Humble, Jazzy, Kilted, or Rolling (Jazzy on Ubuntu 24.04 recommended)
 - **Rust toolchain** — stable, install via [rustup](https://rustup.rs/)
   ```bash
   # Install Rust using rustup (recommended over apt)

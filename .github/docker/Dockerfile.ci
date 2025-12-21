@@ -1,10 +1,19 @@
 # CI Docker image for oxide_gnss
-# Contains ROS2 Jazzy + Rust toolchain + ros2-rust dependencies pre-built
+# Contains ROS2 + Rust toolchain + ros2-rust dependencies pre-built
 #
-# Build: docker build -f .github/docker/Dockerfile.ci -t oxide-gnss-ci .
+# Build (single distro):
+#   docker build -f .github/docker/Dockerfile.ci \
+#     --build-arg ROS_BASE_IMAGE=ros:jazzy-ros-base \
+#     --build-arg ROS_DISTRO=jazzy \
+#     -t oxide-gnss-ci:jazzy .
+#
 # Usage in CI: See .github/workflows/ci.yml
 
-FROM ros:jazzy-ros-base
+ARG ROS_BASE_IMAGE=ros:jazzy-ros-base
+FROM ${ROS_BASE_IMAGE}
+
+ARG ROS_DISTRO=jazzy
+ENV ROS_DISTRO=${ROS_DISTRO}
 
 # Avoid interactive prompts during apt installs
 ENV DEBIAN_FRONTEND=noninteractive
@@ -24,10 +33,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-vcstool \
     python3-colcon-common-extensions \
     # Dependencies for message generation and testing
-    ros-jazzy-rosidl-default-generators \
-    ros-jazzy-rosidl-default-runtime \
-    ros-jazzy-test-msgs \
-    ros-jazzy-example-interfaces \
+    ros-${ROS_DISTRO}-rosidl-default-generators \
+    ros-${ROS_DISTRO}-rosidl-default-runtime \
+    ros-${ROS_DISTRO}-test-msgs \
+    ros-${ROS_DISTRO}-example-interfaces \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Rust via rustup (as root, system-wide)
@@ -40,8 +49,12 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
     && rustup component add rustfmt clippy
 
 # Install colcon-cargo plugins
-# Note: --break-system-packages required for Ubuntu 24.04 (PEP 668)
+# Note: --break-system-packages required for Ubuntu 24.04+ (PEP 668)
+# For older Ubuntu (humble/jammy), fall back without the flag
 RUN pip install --break-system-packages \
+    git+https://github.com/colcon/colcon-cargo.git \
+    git+https://github.com/colcon/colcon-ros-cargo.git 2>/dev/null || \
+    pip install \
     git+https://github.com/colcon/colcon-cargo.git \
     git+https://github.com/colcon/colcon-ros-cargo.git
 
@@ -51,11 +64,12 @@ RUN cargo install cargo-ament-build
 # Create workspace and clone ros2-rust
 WORKDIR /opt/ros2_ws/src
 RUN git clone https://github.com/ros2-rust/ros2_rust.git && \
-    vcs import . < ros2_rust/ros2_rust_jazzy.repos
+    (vcs import . < ros2_rust/ros2_rust_${ROS_DISTRO}.repos 2>/dev/null || \
+     vcs import . < ros2_rust/ros2_rust.repos)
 
 # Build ros2-rust dependencies (this takes a while but is cached in the image)
 WORKDIR /opt/ros2_ws
-RUN . /opt/ros/jazzy/setup.sh && \
+RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
     colcon build --packages-up-to rclrs std_msgs sensor_msgs geometry_msgs diagnostic_msgs
 
 # Clean up build artifacts to reduce image size (keep install/)
@@ -65,7 +79,7 @@ RUN rm -rf /opt/ros2_ws/build /opt/ros2_ws/log
 # Source both ROS2 and the workspace in the entrypoint
 RUN echo '#!/bin/bash\n\
 set -e\n\
-source /opt/ros/jazzy/setup.bash\n\
+source /opt/ros/'"${ROS_DISTRO}"'/setup.bash\n\
 if [ -f /opt/ros2_ws/install/setup.bash ]; then\n\
   source /opt/ros2_ws/install/setup.bash\n\
 fi\n\
