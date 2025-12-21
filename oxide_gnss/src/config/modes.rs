@@ -129,7 +129,8 @@ impl Feature {
     pub fn required_messages(&self) -> &'static [&'static str] {
         match self {
             Self::HighPrecision => &["NAV_HPPOSLLH"],
-            Self::Integrity => &["SEC_SIG", "MON_RF", "MON_COMMS"],
+            // NAV_SAT required for C/N0 signal quality checks
+            Self::Integrity => &["SEC_SIG", "MON_RF", "MON_COMMS", "NAV_SAT"],
             Self::Satellites => &["NAV_SAT"],
             Self::Heading => &["NAV_RELPOSNED"],
             Self::DeadReckoning => &[], // ESF messages - not yet implemented

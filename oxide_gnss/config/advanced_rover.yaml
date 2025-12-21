@@ -89,6 +89,31 @@ device:
         # Example: Disable a message that mode enables
         # MON_COMMS: 0
 
+# Integrity monitoring thresholds (optional - these are the defaults)
+# Customize based on your application's safety requirements
+integrity:
+  thresholds:
+    # Critical checks - below these triggers CRITICAL level
+    min_satellites_critical: 4    # Minimum satellites for any fix
+
+    # Degraded checks - below/above these triggers DEGRADED level
+    min_satellites_high: 6        # Preferred minimum satellites
+    max_h_accuracy_m: 0.10        # Max horizontal accuracy (10cm)
+    max_v_accuracy_m: 0.15        # Max vertical accuracy (15cm)
+    max_pdop: 3.0                 # Max position DOP
+    max_correction_age_s: 10.0    # Max RTK correction age (device-reported)
+    min_cno_degraded: 25          # Min C/N0 for weakest satellite (dB-Hz)
+    min_mean_cno_degraded: 35.0   # Min mean C/N0 across satellites (dB-Hz)
+
+    # Staleness check - exceeding this triggers FAILED level
+    max_pvt_age_s: 2.0            # Max time without PVT data
+
+    # Operational threshold:
+    # 0 = only OK is operational (strictest)
+    # 1 = OK or DEGRADED is operational (default)
+    # 2 = OK/DEGRADED/CRITICAL is operational (permissive)
+    operational_threshold: 1
+
 ntrip:
   host: "ntrip.data.gnss.ga.gov.au"
   # insecure (port 2101)

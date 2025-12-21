@@ -223,6 +223,7 @@ mod tests {
             head_acc: 2.0,
             p_dop: 1.2,
             carr_soln: crate::device::CarrierSolution::Fixed,
+            diff_corr_age_s: Some(2),
             received_at: Instant::now(),
         }
     }
@@ -357,6 +358,11 @@ impl GnssIntegrity {
         // Communication status
         msg.comm_ports = self.comm_ports;
         msg.comm_tx_errors = self.comm_tx_errors;
+
+        // Signal quality
+        msg.mean_cno = self.mean_cno;
+        msg.min_cno = self.min_cno;
+        msg.sats_above_cno_threshold = self.sats_above_cno_threshold;
 
         msg
     }

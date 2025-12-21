@@ -78,6 +78,49 @@ pub struct SatInfo {
     pub sats: Vec<SatStatus>,
 }
 
+impl SatInfo {
+    /// Compute signal quality metrics from satellite data.
+    ///
+    /// Only considers satellites that are used in the navigation solution.
+    pub fn compute_signal_quality(&self) -> SignalQuality {
+        let used_sats: Vec<&SatStatus> = self.sats.iter().filter(|s| s.sv_used).collect();
+
+        if used_sats.is_empty() {
+            return SignalQuality {
+                sats_used: 0,
+                sats_above_threshold: 0,
+                mean_cno: 0.0,
+                min_cno: 0,
+            };
+        }
+
+        let cno_values: Vec<u8> = used_sats.iter().map(|s| s.cno).collect();
+        let sats_above_threshold = cno_values.iter().filter(|&&c| c >= 30).count() as u8;
+        let mean_cno = cno_values.iter().map(|&c| c as f32).sum::<f32>() / cno_values.len() as f32;
+        let min_cno = *cno_values.iter().min().unwrap_or(&0);
+
+        SignalQuality {
+            sats_used: used_sats.len() as u8,
+            sats_above_threshold,
+            mean_cno,
+            min_cno,
+        }
+    }
+}
+
+/// Aggregated signal quality metrics derived from NAV-SAT.
+#[derive(Debug, Clone, Default)]
+pub struct SignalQuality {
+    /// Number of satellites used in the solution
+    pub sats_used: u8,
+    /// Number of satellites with C/N0 >= 30 dB-Hz (usable threshold)
+    pub sats_above_threshold: u8,
+    /// Mean C/N0 of satellites used in solution (dB-Hz)
+    pub mean_cno: f32,
+    /// Minimum C/N0 among used satellites (dB-Hz) - weakest link
+    pub min_cno: u8,
+}
+
 #[derive(Debug, Clone)]
 pub struct SatStatus {
     pub gnss_id: u8,
@@ -435,6 +478,9 @@ pub struct PvtData {
     pub p_dop: f32,
     /// Carrier phase range solution valid
     pub carr_soln: CarrierSolution,
+    /// Age of differential corrections (seconds), from device flags3.
+    /// None if not available (value 0 from device), Some(1-15) otherwise.
+    pub diff_corr_age_s: Option<u8>,
     /// Timestamp when received
     pub received_at: Instant,
 }
@@ -820,6 +866,29 @@ impl UbxHandler {
             _ => CarrierSolution::None,
         };
 
+        // Extract differential correction age from flags3 (bits 4..1)
+        // This is a 4-bit index into non-linear age bands, NOT seconds directly.
+        let diff_corr_age_raw = nav_pvt.flags3().age_differential_correction();
+        // The ublox crate returns bits 1-4 masked but not shifted, so shift right by 1
+        let age_index = diff_corr_age_raw >> 1;
+        // Convert index to upper bound of age band in seconds (conservative for integrity)
+        // Per u-blox interface description UBX-NAV-PVT lastCorrectionAge field
+        let diff_corr_age_s = match age_index {
+            0 => None,       // Not available
+            1 => Some(1),    // 0-1s
+            2 => Some(2),    // 1-2s
+            3 => Some(5),    // 2-5s
+            4 => Some(10),   // 5-10s
+            5 => Some(15),   // 10-15s
+            6 => Some(20),   // 15-20s
+            7 => Some(30),   // 20-30s
+            8 => Some(45),   // 30-45s
+            9 => Some(60),   // 45-60s
+            10 => Some(90),  // 60-90s
+            11 => Some(120), // 90-120s
+            _ => Some(255),  // >=12: >120s (use max u8)
+        };
+
         // Determine fix type considering RTK status
         let fix_type = if carr_soln == CarrierSolution::Fixed {
             FixType::RtkFixed
@@ -855,6 +924,7 @@ impl UbxHandler {
             head_acc: nav_pvt.heading_accuracy() as f32,
             p_dop: nav_pvt.pdop() as f32,
             carr_soln,
+            diff_corr_age_s,
             received_at: Instant::now(),
         }
     }

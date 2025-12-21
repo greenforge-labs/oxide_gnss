@@ -16,7 +16,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::config::{DeviceConfig, UbloxConfig};
 use crate::error::DeviceError;
-use crate::state::{DeviceState, FixType, GnssIntegrity, IntegrityAggregator};
+use crate::state::{DeviceState, FixType, GnssIntegrity, IntegrityAggregator, IntegrityThresholds};
 
 use super::config::{ConfigStep, ConfiguratorOptions, DeviceConfigurator};
 use super::serial::SerialPortBuilder;
@@ -203,11 +203,13 @@ impl DeviceTask {
     /// * `ublox_config` - Resolved u-blox configuration (from mode + features or legacy)
     /// * `enabled_topics` - List of enabled ROS topics (for mode-aware validation)
     /// * `channels` - Communication channels for the task
+    /// * `integrity_thresholds` - Configurable thresholds for integrity checks
     pub fn new(
         config: DeviceConfig,
         ublox_config: UbloxConfig,
         enabled_topics: Vec<String>,
         channels: DeviceTaskChannels,
+        integrity_thresholds: IntegrityThresholds,
     ) -> Self {
         Self {
             config,
@@ -216,7 +218,7 @@ impl DeviceTask {
             channels,
             state: Arc::new(Mutex::new(DeviceTaskState::default())),
             configurator_options: ConfiguratorOptions::default(),
-            integrity: IntegrityAggregator::new(),
+            integrity: IntegrityAggregator::with_thresholds(integrity_thresholds),
             last_rtcm_received: None,
         }
     }
@@ -228,6 +230,7 @@ impl DeviceTask {
         enabled_topics: Vec<String>,
         channels: DeviceTaskChannels,
         configurator_options: ConfiguratorOptions,
+        integrity_thresholds: IntegrityThresholds,
     ) -> Self {
         Self {
             config,
@@ -236,7 +239,7 @@ impl DeviceTask {
             channels,
             state: Arc::new(Mutex::new(DeviceTaskState::default())),
             configurator_options,
-            integrity: IntegrityAggregator::new(),
+            integrity: IntegrityAggregator::with_thresholds(integrity_thresholds),
             last_rtcm_received: None,
         }
     }
@@ -483,9 +486,18 @@ impl DeviceTask {
             let _ = self.channels.msg_tx.send(DeviceMessage::HpPos(hp)).await;
         }
 
-        // Handle Satellite Info
-        if let Some(sat) = result.sat_info {
-            let _ = self.channels.msg_tx.send(DeviceMessage::SatInfo(sat)).await;
+        // Handle Satellite Info and update signal quality for integrity
+        if let Some(ref sat) = result.sat_info {
+            // Compute signal quality metrics from satellite data
+            let signal_quality = sat.compute_signal_quality();
+            self.integrity.update_signal_quality(&signal_quality);
+            integrity_updated = true;
+
+            let _ = self
+                .channels
+                .msg_tx
+                .send(DeviceMessage::SatInfo(sat.clone()))
+                .await;
         }
 
         // Handle NAV-COV (position/velocity covariance)
@@ -585,13 +597,8 @@ impl DeviceTask {
 
         // Compute and send integrity update if any relevant data changed
         if integrity_updated {
-            // Feed host-side correction age into integrity before computing
-            // When NTRIP is disabled, last_rtcm_received is always None -> INFINITY
-            let correction_age = self
-                .last_rtcm_received
-                .map(|t| Instant::now().duration_since(t).as_secs_f32())
-                .unwrap_or(f32::INFINITY);
-            self.integrity.set_correction_age(correction_age);
+            // Note: Correction age is now device-reported via NAV-PVT flags3,
+            // set in update_pvt(). No host-side tracking needed.
 
             let integrity = self.integrity.compute();
             let _ = self
@@ -630,6 +637,7 @@ impl DeviceTask {
             pvt.h_acc,
             pvt.v_acc,
             pvt.p_dop,
+            pvt.diff_corr_age_s, // Device-reported correction age
         );
 
         // Update fix type
@@ -704,16 +712,24 @@ impl DeviceTask {
 /// * `ublox_config` - Resolved u-blox configuration (from mode + features or legacy)
 /// * `enabled_topics` - List of enabled ROS topics (for mode-aware validation)
 /// * `channels` - Communication channels for the task
+/// * `integrity_thresholds` - Configurable thresholds for integrity checks
 pub fn spawn_device_task(
     config: DeviceConfig,
     ublox_config: UbloxConfig,
     enabled_topics: Vec<String>,
     channels: DeviceTaskChannels,
+    integrity_thresholds: IntegrityThresholds,
 ) -> (
     tokio::task::JoinHandle<Result<(), DeviceError>>,
     DeviceTaskHandle,
 ) {
-    let task = DeviceTask::new(config, ublox_config, enabled_topics, channels);
+    let task = DeviceTask::new(
+        config,
+        ublox_config,
+        enabled_topics,
+        channels,
+        integrity_thresholds,
+    );
     let handle = task.handle();
     let join_handle = tokio::spawn(task.run());
     (join_handle, handle)
@@ -753,6 +769,7 @@ mod tests {
             head_acc: 1.0,
             p_dop: 1.2,
             carr_soln: super::super::ubx::CarrierSolution::Fixed,
+            diff_corr_age_s: Some(2),
             received_at: Instant::now(),
         };
 
@@ -794,6 +811,7 @@ mod tests {
             head_acc: 0.0,
             p_dop: 0.0,
             carr_soln: super::super::ubx::CarrierSolution::None,
+            diff_corr_age_s: None,
             received_at: Instant::now(),
         };
 

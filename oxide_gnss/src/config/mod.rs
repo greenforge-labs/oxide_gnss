@@ -13,11 +13,13 @@
 //!    This is still supported for advanced users.
 
 mod device;
+mod integrity;
 mod modes;
 mod ntrip;
 mod ublox;
 
 pub use device::{CoordinateFrame, DeviceConfig, NavigationConfig, ReconnectConfig};
+pub use integrity::{IntegrityConfig, IntegrityThresholdsConfig};
 pub use modes::{Feature, FeaturesConfig, ModePreset, OperatingMode};
 pub use ntrip::{NtripConfig, NtripConnectionConfig, NtripVersion};
 pub use ublox::{
@@ -49,6 +51,10 @@ pub struct Config {
     /// NTRIP client configuration (optional)
     #[serde(default)]
     pub ntrip: Option<NtripConfig>,
+
+    /// Integrity monitoring configuration (optional)
+    #[serde(default)]
+    pub integrity: IntegrityConfig,
 }
 
 /// ROS-related configuration.

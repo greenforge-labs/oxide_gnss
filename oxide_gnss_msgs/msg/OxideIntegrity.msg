@@ -26,6 +26,11 @@ float32 h_accuracy_m        # Horizontal accuracy (m)
 float32 v_accuracy_m        # Vertical accuracy (m)
 float32 pdop                # Position dilution of precision
 
+# Signal quality (from NAV-SAT)
+float32 mean_cno            # Mean C/N0 of satellites used in solution (dB-Hz)
+uint8 min_cno               # Minimum C/N0 among used satellites (dB-Hz)
+uint8 sats_above_cno_threshold  # Satellites with C/N0 >= 30 dB-Hz
+
 # Covariance data
 bool covariance_valid       # True if covariance data is valid
 float64[9] position_covariance   # ENU position covariance (row-major 3x3)

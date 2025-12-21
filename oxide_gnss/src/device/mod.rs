@@ -21,7 +21,7 @@ pub use ubx::{
     build_safety_messages_config, cfg_keys, msg_ids, AckResult, AntennaPowerData,
     AntennaStatusData, CarrierSolution, CovData, JammingStateData, MonCommsData, MonCommsPortData,
     MonHwData, MonRfData, PosEcefData, ProcessResult, PvtData, RxmCorData, SecSigData,
-    SecSiglogData, SecSiglogEventData, SpoofingStateData, UbxHandler, UbxStats,
+    SecSiglogData, SecSiglogEventData, SignalQuality, SpoofingStateData, UbxHandler, UbxStats,
 };
 // Re-export CfgVal for configuration building
 pub use ublox::cfg_val::CfgVal;

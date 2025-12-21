@@ -1,14 +1,14 @@
 //! GNSS integrity monitoring and aggregation.
 //!
 //! This module implements safety-critical integrity monitoring as described in
-//! `docs/INTEGRITY_AND_TOPICS.md`. It aggregates quality metrics
-//! from multiple UBX messages to determine overall GNSS solution integrity.
+//! `docs/INTEGRITY.md`. It aggregates quality metrics from multiple UBX messages
+//! to determine overall GNSS solution integrity.
 
 use std::time::Instant;
 
 use crate::device::{
     AntennaStatusData, CovData, JammingStateData, MonCommsData, MonHwData, MonRfData, PosEcefData,
-    RxmCorData, SecSigData, SecSiglogData, SpoofingStateData,
+    RxmCorData, SecSigData, SecSiglogData, SignalQuality, SpoofingStateData,
 };
 use crate::state::FixType;
 use ublox::rxm_cor::CorrectionMsgUsed;
@@ -65,7 +65,7 @@ pub struct IntegrityThresholds {
     pub max_v_accuracy_m: f32,
     /// Maximum PDOP for Level 1
     pub max_pdop: f32,
-    /// Maximum correction age (s) for RTK applications
+    /// Maximum correction age (s) for RTK applications (device-reported)
     pub max_correction_age_s: f32,
     /// Maximum time (seconds) without PVT before declaring integrity FAILED
     pub max_pvt_age_s: f32,
@@ -74,6 +74,10 @@ pub struct IntegrityThresholds {
     /// 1 = Ok or Degraded is operational (default)
     /// 2 = Ok/Degraded/Critical is operational (permissive)
     pub operational_threshold: u8,
+    /// Minimum C/N0 (dB-Hz) for weakest satellite before DEGRADED
+    pub min_cno_degraded: u8,
+    /// Minimum mean C/N0 (dB-Hz) across used satellites before DEGRADED
+    pub min_mean_cno_degraded: f32,
 }
 
 impl Default for IntegrityThresholds {
@@ -85,8 +89,10 @@ impl Default for IntegrityThresholds {
             max_v_accuracy_m: 0.15, // 15cm
             max_pdop: 3.0,
             max_correction_age_s: 10.0,
-            max_pvt_age_s: 2.0,       // 2 seconds without data = Failed
-            operational_threshold: 1, // Ok or Degraded = operational
+            max_pvt_age_s: 2.0,          // 2 seconds without data = Failed
+            operational_threshold: 1,    // Ok or Degraded = operational
+            min_cno_degraded: 25,        // Weakest satellite < 25 dB-Hz = Degraded
+            min_mean_cno_degraded: 35.0, // Mean C/N0 < 35 dB-Hz = Degraded
         }
     }
 }
@@ -151,6 +157,14 @@ pub struct GnssIntegrity {
     pub comm_ports: u8,
     /// TX errors detected
     pub comm_tx_errors: u8,
+
+    // Signal quality (from NAV-SAT)
+    /// Mean C/N0 of satellites used in solution (dB-Hz)
+    pub mean_cno: f32,
+    /// Minimum C/N0 among used satellites (dB-Hz)
+    pub min_cno: u8,
+    /// Number of satellites with C/N0 >= 30 dB-Hz
+    pub sats_above_cno_threshold: u8,
 }
 
 /// Integrity aggregator that combines quality metrics from multiple sources.
@@ -305,6 +319,8 @@ impl IntegrityAggregator {
     /// Update with PVT (position/velocity/time) data.
     ///
     /// This is typically called every epoch with the main navigation solution.
+    /// The `diff_corr_age_s` parameter is the device-reported correction age from NAV-PVT flags3
+    /// (None if not available, Some(1-15) seconds otherwise).
     #[allow(clippy::too_many_arguments)]
     pub fn update_pvt(
         &mut self,
@@ -315,6 +331,7 @@ impl IntegrityAggregator {
         h_accuracy_m: f32,
         v_accuracy_m: f32,
         pdop: f32,
+        diff_corr_age_s: Option<u8>,
     ) {
         // Record timestamp for staleness tracking
         self.last_pvt_update = Some(Instant::now());
@@ -327,6 +344,10 @@ impl IntegrityAggregator {
         self.current.v_accuracy_m = v_accuracy_m;
         self.current.pdop = pdop;
 
+        // Use device-reported correction age (authoritative source)
+        // -1.0 indicates no correction age available (either not in RTK mode or device not reporting)
+        self.current.correction_age_s = diff_corr_age_s.map(|a| a as f32).unwrap_or(-1.0);
+
         // Infer correction status from NAV-PVT differential flag
         // This is more reliable than RXM-COR which only reports SPARTN, not RTCM
         if differential_applied {
@@ -335,9 +356,11 @@ impl IntegrityAggregator {
         }
     }
 
-    /// Set the correction age from NAV-PVT (proto27+).
-    pub fn set_correction_age(&mut self, age_s: f32) {
-        self.current.correction_age_s = age_s;
+    /// Update with signal quality metrics from NAV-SAT.
+    pub fn update_signal_quality(&mut self, quality: &SignalQuality) {
+        self.current.mean_cno = quality.mean_cno;
+        self.current.min_cno = quality.min_cno;
+        self.current.sats_above_cno_threshold = quality.sats_above_threshold;
     }
 
     /// Compute the overall integrity level based on current data.
@@ -452,12 +475,30 @@ impl IntegrityAggregator {
                 issues.push("Low satellite count");
             }
 
-            // Check correction age for RTK
+            // Check correction age for RTK (device-reported)
+            // Only check if correction age is available (>= 0) and differential is applied
             if self.current.differential_applied
+                && self.current.correction_age_s >= 0.0
                 && self.current.correction_age_s > self.thresholds.max_correction_age_s
             {
                 level = level.max(IntegrityLevel::Degraded);
                 issues.push("Correction age exceeded");
+            }
+
+            // Check signal quality - minimum C/N0 (weakest satellite)
+            // Only check if we have signal quality data (min_cno > 0)
+            if self.current.min_cno > 0 && self.current.min_cno < self.thresholds.min_cno_degraded {
+                level = level.max(IntegrityLevel::Degraded);
+                issues.push("Weak satellite signal");
+            }
+
+            // Check signal quality - mean C/N0
+            // Only check if we have signal quality data (mean_cno > 0)
+            if self.current.mean_cno > 0.0
+                && self.current.mean_cno < self.thresholds.min_mean_cno_degraded
+            {
+                level = level.max(IntegrityLevel::Degraded);
+                issues.push("Low mean signal quality");
             }
         }
 
@@ -534,7 +575,7 @@ mod tests {
     #[test]
     fn test_aggregator_critical_no_fix() {
         let mut agg = IntegrityAggregator::new();
-        agg.update_pvt(FixType::NoFix, 0, false, 0, 0.0, 0.0, 0.0);
+        agg.update_pvt(FixType::NoFix, 0, false, 0, 0.0, 0.0, 0.0, None);
         let result = agg.compute();
         assert_eq!(result.level, IntegrityLevel::Critical);
         assert!(result.status_message.contains("No GNSS fix"));
@@ -543,7 +584,7 @@ mod tests {
     #[test]
     fn test_aggregator_critical_jamming() {
         let mut agg = IntegrityAggregator::new();
-        agg.update_pvt(FixType::Fix3D, 0, false, 8, 0.05, 0.08, 1.5);
+        agg.update_pvt(FixType::Fix3D, 0, false, 8, 0.05, 0.08, 1.5, None);
         agg.update_sec_sig(&SecSigData {
             jam_det_enabled: true,
             spf_det_enabled: true,
@@ -561,7 +602,7 @@ mod tests {
     #[test]
     fn test_aggregator_degraded_accuracy() {
         let mut agg = IntegrityAggregator::new();
-        agg.update_pvt(FixType::Fix3D, 0, false, 8, 0.5, 0.8, 1.5); // Poor accuracy
+        agg.update_pvt(FixType::Fix3D, 0, false, 8, 0.5, 0.8, 1.5, None); // Poor accuracy
         let result = agg.compute();
         assert_eq!(result.level, IntegrityLevel::Degraded);
         assert!(result.status_message.contains("accuracy"));
@@ -570,7 +611,7 @@ mod tests {
     #[test]
     fn test_aggregator_ok_rtk_fixed() {
         let mut agg = IntegrityAggregator::new();
-        agg.update_pvt(FixType::RtkFixed, 2, true, 12, 0.02, 0.03, 1.2);
+        agg.update_pvt(FixType::RtkFixed, 2, true, 12, 0.02, 0.03, 1.2, Some(2));
         agg.update_sec_sig(&SecSigData {
             jam_det_enabled: true,
             spf_det_enabled: true,
@@ -580,7 +621,7 @@ mod tests {
             cent_freq_khz: vec![],
             jammed: vec![],
         });
-        agg.set_correction_age(2.0);
+        // Correction age is now set via update_pvt's diff_corr_age_s parameter
         let result = agg.compute();
         assert_eq!(result.level, IntegrityLevel::Ok);
         assert!(agg.is_operational());

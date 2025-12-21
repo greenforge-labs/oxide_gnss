@@ -188,9 +188,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         shutdown_rx: supervisor.shutdown_rx(),
     };
 
+    // Convert integrity config to thresholds
+    let integrity_thresholds = config.integrity.thresholds.into();
+
     // Spawn device task with resolved u-blox config and enabled topics
-    let (_, _device_handle) =
-        spawn_device_task(config.device, ublox_config, enabled_topics, device_channels);
+    let (_, _device_handle) = spawn_device_task(
+        config.device,
+        ublox_config,
+        enabled_topics,
+        device_channels,
+        integrity_thresholds,
+    );
 
     // Spawn NTRIP task if configured
     let _ntrip_handle = if let Some(ntrip_config) = config.ntrip {
