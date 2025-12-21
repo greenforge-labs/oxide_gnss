@@ -1,6 +1,5 @@
 # Rust build artifacts
-**/target/
-# Cargo.lock is committed for reproducible builds (this is a binary, not a library)
+/target/
 
 # IDE
 .idea/
@@ -17,11 +16,11 @@ Thumbs.db
 /docs/ublox/
 /docs/datasheets/
 
-# ROS2 build artifacts
+# ROS2 build artifacts (when built in-tree)
 /build/
 /install/
 /log/
 
-# Environment
+# Environment and credentials
 .env
 *.local
