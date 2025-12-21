@@ -115,7 +115,34 @@ device:
     #   usb:
     #     NAV_SAT: 5          # Reduce satellite info rate
 
+# =============================================================================
+# Integrity Monitoring Thresholds (optional)
+# =============================================================================
+# Customize based on your application's safety requirements.
+# These affect the ~/integrity topic and ~/operational go/no-go signal.
+integrity:
+  thresholds:
+    # Critical checks - below these triggers CRITICAL level
+    min_satellites_critical: 4    # Minimum satellites for any fix
+    min_satellites_high: 6        # Desired minimum for HIGH integrity
+    
+    # Accuracy thresholds
+    max_h_accuracy_m: 0.10        # Horizontal accuracy limit (meters)
+    max_v_accuracy_m: 0.15        # Vertical accuracy limit (meters)
+    max_pdop: 3.0                 # Maximum acceptable PDOP
+    
+    # Correction and signal quality
+    max_correction_age_s: 10.0    # Max age of RTK corrections (seconds)
+    min_cno_degraded: 25          # Minimum C/N0 for any satellite
+    min_mean_cno_degraded: 35.0   # Minimum mean C/N0 across all satellites
+    max_pvt_age_s: 2.0            # Max age of position solution
+    
+    # Operational threshold (1=allow degraded, 0=require high integrity)
+    operational_threshold: 1
+
+# =============================================================================
 # NTRIP Client Configuration (optional)
+# =============================================================================
 # Comment out this section to disable NTRIP
 ntrip:
   # NTRIP caster hostname
