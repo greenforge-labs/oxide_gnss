@@ -135,12 +135,12 @@ oxide_gnss is a well-architected ROS2 GNSS driver written in Rust, targeting u-b
 
 2. **MON-RF vs MON-HW**: The code correctly notes MON-RF replaces MON-HW, but both are supported. Documentation could clarify which firmware versions need which.
 
-3. **No protection level calculation**: For applications requiring integrity risk assessment, a protection level (similar to aviation RAIM) would be valuable. This is advanced and not a blocker.
+3. **No protection level calculation**: For applications requiring integrity risk assessment, a protection level (similar to aviation RAIM) would be valuable. See **Appendix B** for detailed analysis and implementation path.
 
 ### Recommendations
 
 - **Documentation**: Clarify NAV-SAT dependency for signal quality checks.
-- **Future**: Consider protection level calculation for advanced integrity use cases.
+- **Future**: Add UBX-NAV-PL support (requires ublox-rs contribution) for true protection levels.
 
 ---
 
@@ -470,3 +470,101 @@ This bug may exist in other codebases that use similar patterns with the ublox-r
 2. Then applies additional `/ 100.0` or `* 0.01` scaling
 
 The ublox-rs crate consistently applies scaling for all `_raw()` vs non-raw accessor pairs.
+
+
+## Appendix B: Protection Level Implementation
+
+### Background
+
+A **protection level** is a bound on position error with a specified confidence level. Unlike accuracy estimates (which describe typical error), protection levels provide a **worst-case bound** that applications can use for safety decisions.
+
+| Metric | Confidence | Use Case |
+|--------|------------|----------|
+| NAV-PVT `hAcc` | 68% (1σ) | Typical accuracy estimate |
+| Protection Level | 95% or higher | Safety-critical decisions, geofencing |
+
+### Option 1: UBX-NAV-PL (Recommended)
+
+The ZED-F9P computes protection levels internally and outputs them via the **UBX-NAV-PL** message:
+
+| Field | Description |
+|-------|-------------|
+| `plPos1` | Horizontal Protection Level (HPL) at 95% confidence |
+| `plPos2` | Vertical Protection Level (VPL) at 95% confidence |
+| `plPos3` | Along-track protection level |
+
+**Advantages:**
+- Hardware-computed using internal pseudorange residuals
+- Accounts for multipath, NLOS, and geometry
+- More rigorous than accuracy estimates
+- No additional CPU load on host
+
+**Current blocker:** The `ublox-rs` crate (v0.9.0) does not support NAV-PL parsing.
+
+**Implementation path:**
+1. Contribute NAV-PL message support to `ublox-rs` (PR to https://github.com/ublox-rs/ublox)
+2. Add NAV-PL to oxide_gnss device configuration and parsing
+3. Extend `GnssIntegrity` message with `hpl` and `vpl` fields
+4. Optionally publish dedicated `/gnss/protection_level` topic
+
+**Estimated effort:** 
+- ublox-rs PR: 2-3 hours (follow existing message patterns)
+- oxide_gnss integration: 2-3 hours
+
+### Option 2: Classic RAIM (Not Recommended)
+
+Software-computed protection levels using RAIM algorithms require:
+- Raw pseudorange measurements (UBX-RXM-RAWX)
+- Custom position solution to compute residuals
+- Statistical fault detection framework
+
+**Problems:**
+- ZED-F9P doesn't expose pseudorange residuals directly
+- Duplicates work the receiver already does
+- Requires deep GNSS expertise to implement correctly
+- High computational overhead
+
+**Verdict:** Not practical when hardware NAV-PL is available.
+
+### Option 3: Conservative Accuracy Approximation (Interim)
+
+A simplified approximation using available NAV-PVT data:
+
+```rust
+/// Approximate protection level (NOT a true PL)
+/// Scales 1σ accuracy to ~95% confidence with geometry/satellite factors
+fn approximate_hpl(h_acc_1sigma: f32, pdop: f32, num_sats: u8) -> f32 {
+    // Scale from 68% (1σ) to ~95% (2σ for Gaussian)
+    let sigma_scale = 2.0;
+    
+    // Geometry degradation factor
+    let geometry_factor = if pdop > 2.5 { 1.3 } else if pdop > 2.0 { 1.15 } else { 1.0 };
+    
+    // Satellite availability factor
+    let sat_factor = if num_sats < 6 { 1.5 } else if num_sats < 8 { 1.2 } else { 1.0 };
+    
+    h_acc_1sigma * sigma_scale * geometry_factor * sat_factor
+}
+```
+
+**Limitations:**
+- Not a true protection level (no fault detection)
+- Does not bound error with statistical rigor
+- Should be labeled "conservative accuracy estimate" not "protection level"
+
+**Use case:** Interim solution until NAV-PL support is added.
+
+### Recommendation
+
+| Phase | Action | Priority |
+|-------|--------|----------|
+| Pre-release | Document that true PL requires NAV-PL | — |
+| Post-release | Submit PR to ublox-rs for NAV-PL support | High |
+| Post-release | Integrate NAV-PL into oxide_gnss integrity system | High |
+| Optional | Add approximate HPL as interim (clearly documented) | Low |
+
+### References
+
+- [u-blox Protection Level Technology](https://www.u-blox.com/en/technologies/protection-level)
+- [RAIM Fundamentals - ESA Navipedia](https://gssc.esa.int/navipedia/index.php/RAIM_Fundamentals)
+- ZED-F9P Interface Description (UBX-NAV-PL message specification)
