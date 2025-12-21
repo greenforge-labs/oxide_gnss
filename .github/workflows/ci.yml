@@ -47,8 +47,9 @@ jobs:
           mkdir -p .cargo
           cp /opt/ros2_ws/.cargo/config.toml .cargo/ 2>/dev/null || true
           
-          # Move repo content to workspace src
-          mv src/oxide_gnss_repo/* src/
+          # Reorganize for colcon: driver in oxide_gnss/, messages in oxide_gnss_msgs/
+          mv src/oxide_gnss_repo src/oxide_gnss
+          mv src/oxide_gnss/oxide_gnss_msgs src/
           
           # Build messages first, then the driver
           colcon build --packages-select oxide_gnss_msgs oxide_gnss
@@ -59,7 +60,7 @@ jobs:
           source /opt/ros/jazzy/setup.bash
           source /opt/ros2_ws/install/setup.bash
           source install/setup.bash
-          cd src
+          cd src/oxide_gnss
           cargo clippy --features ros2 -- -D warnings
 
       - name: Run tests
@@ -68,5 +69,5 @@ jobs:
           source /opt/ros/jazzy/setup.bash
           source /opt/ros2_ws/install/setup.bash
           source install/setup.bash
-          cd src
+          cd src/oxide_gnss
           cargo test --features ros2
