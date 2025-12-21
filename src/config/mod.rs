@@ -23,8 +23,8 @@ pub use integrity::{IntegrityConfig, IntegrityThresholdsConfig};
 pub use modes::{Feature, FeaturesConfig, ModePreset, OperatingMode};
 pub use ntrip::{NtripConfig, NtripConnectionConfig, NtripVersion};
 pub use ublox::{
-    BeidouConfig, GnssConstellationConfig, MessageConfig, PortSettings, ProtocolConfig, QzssConfig,
-    RateConfig, SbasConfig, SignalConfig, UartPortConfig, UbloxConfig,
+    BeidouConfig, GnssConstellationConfig, MessageConfig, PortProtocols, PortSettings,
+    ProtocolConfig, QzssConfig, RateConfig, SbasConfig, SignalConfig, UartPortConfig, UbloxConfig,
 };
 
 use serde::Deserialize;
@@ -213,16 +213,75 @@ impl Config {
 
         let preset = mode.preset();
 
-        // Build protocol config
+        // Build protocol config from mode preset (explicit enable/disable)
         let protocols = ProtocolConfig {
-            usb_in: preset.usb_in_protocols(),
-            usb_out: preset.usb_out_protocols(),
-            uart1_in: vec![],
-            uart1_out: vec![],
-            uart2_in: preset.uart2_in_protocols(),
-            uart2_out: preset.uart2_out_protocols(),
-            i2c_in: vec![],
-            i2c_out: vec![],
+            usb: PortProtocols {
+                in_ubx: Some(preset.usb.ubx_in),
+                in_nmea: Some(preset.usb.nmea_in),
+                in_rtcm3x: Some(preset.usb.rtcm3x_in),
+                out_ubx: Some(preset.usb.ubx_out),
+                out_nmea: Some(preset.usb.nmea_out),
+                out_rtcm3x: Some(preset.usb.rtcm3x_out),
+                ..Default::default()
+            },
+            uart1: PortProtocols {
+                in_ubx: Some(preset.uart1.ubx_in),
+                in_nmea: Some(preset.uart1.nmea_in),
+                in_rtcm3x: Some(preset.uart1.rtcm3x_in),
+                out_ubx: Some(preset.uart1.ubx_out),
+                out_nmea: Some(preset.uart1.nmea_out),
+                out_rtcm3x: Some(preset.uart1.rtcm3x_out),
+                ..Default::default()
+            },
+            uart2: PortProtocols {
+                in_ubx: Some(preset.uart2.ubx_in),
+                in_nmea: Some(preset.uart2.nmea_in),
+                in_rtcm3x: Some(preset.uart2.rtcm3x_in),
+                out_ubx: Some(preset.uart2.ubx_out),
+                out_nmea: Some(preset.uart2.nmea_out),
+                out_rtcm3x: Some(preset.uart2.rtcm3x_out),
+                ..Default::default()
+            },
+            i2c: PortProtocols {
+                in_ubx: Some(preset.i2c.ubx_in),
+                in_nmea: Some(preset.i2c.nmea_in),
+                in_rtcm3x: Some(preset.i2c.rtcm3x_in),
+                out_ubx: Some(preset.i2c.ubx_out),
+                out_nmea: Some(preset.i2c.nmea_out),
+                out_rtcm3x: Some(preset.i2c.rtcm3x_out),
+                ..Default::default()
+            },
+            spi: PortProtocols {
+                in_ubx: Some(preset.spi.ubx_in),
+                in_nmea: Some(preset.spi.nmea_in),
+                in_rtcm3x: Some(preset.spi.rtcm3x_in),
+                out_ubx: Some(preset.spi.ubx_out),
+                out_nmea: Some(preset.spi.nmea_out),
+                out_rtcm3x: Some(preset.spi.rtcm3x_out),
+                ..Default::default()
+            },
+        };
+
+        // Build port settings from mode preset (enable/disable ports)
+        let ports = PortSettings {
+            uart1: UartPortConfig {
+                enabled: preset.port_enables.uart1,
+                baudrate: self
+                    .device
+                    .ublox
+                    .as_ref()
+                    .and_then(|u| u.ports.uart1.baudrate),
+            },
+            uart2: UartPortConfig {
+                enabled: preset.port_enables.uart2,
+                baudrate: self
+                    .device
+                    .ublox
+                    .as_ref()
+                    .and_then(|u| u.ports.uart2.baudrate),
+            },
+            i2c_enabled: preset.port_enables.i2c,
+            spi_enabled: preset.port_enables.spi,
         };
 
         // Build message config: start with mode base messages
@@ -275,7 +334,7 @@ impl Config {
             rate,
             protocols,
             messages,
-            ports: PortSettings::default(),
+            ports,
             signals,
         }
     }

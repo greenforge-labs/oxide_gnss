@@ -17,52 +17,19 @@ pub fn build_cfg_vals_from_config(config: &UbloxConfig) -> Vec<CfgVal> {
     vals.push(CfgVal::RateNav(config.rate.nav_ratio));
 
     // Protocol settings - USB
-    for proto in &config.protocols.usb_in {
-        if let Some(val) = parse_protocol_in("usb", proto) {
-            vals.push(val);
-        }
-    }
-    for proto in &config.protocols.usb_out {
-        if let Some(val) = parse_protocol_out("usb", proto) {
-            vals.push(val);
-        }
-    }
+    build_port_protocol_cfg_vals("usb", &config.protocols.usb, &mut vals);
 
     // Protocol settings - UART1
-    for proto in &config.protocols.uart1_in {
-        if let Some(val) = parse_protocol_in("uart1", proto) {
-            vals.push(val);
-        }
-    }
-    for proto in &config.protocols.uart1_out {
-        if let Some(val) = parse_protocol_out("uart1", proto) {
-            vals.push(val);
-        }
-    }
+    build_port_protocol_cfg_vals("uart1", &config.protocols.uart1, &mut vals);
 
     // Protocol settings - UART2
-    for proto in &config.protocols.uart2_in {
-        if let Some(val) = parse_protocol_in("uart2", proto) {
-            vals.push(val);
-        }
-    }
-    for proto in &config.protocols.uart2_out {
-        if let Some(val) = parse_protocol_out("uart2", proto) {
-            vals.push(val);
-        }
-    }
+    build_port_protocol_cfg_vals("uart2", &config.protocols.uart2, &mut vals);
 
     // Protocol settings - I2C
-    for proto in &config.protocols.i2c_in {
-        if let Some(val) = parse_protocol_in("i2c", proto) {
-            vals.push(val);
-        }
-    }
-    for proto in &config.protocols.i2c_out {
-        if let Some(val) = parse_protocol_out("i2c", proto) {
-            vals.push(val);
-        }
-    }
+    build_port_protocol_cfg_vals("i2c", &config.protocols.i2c, &mut vals);
+
+    // Protocol settings - SPI
+    build_port_protocol_cfg_vals("spi", &config.protocols.spi, &mut vals);
 
     // Port settings - UART1
     if let Some(enabled) = config.ports.uart1.enabled {
@@ -78,6 +45,16 @@ pub fn build_cfg_vals_from_config(config: &UbloxConfig) -> Vec<CfgVal> {
     }
     if let Some(baudrate) = config.ports.uart2.baudrate {
         vals.push(CfgVal::Uart2Baudrate(baudrate));
+    }
+
+    // Port settings - I2C
+    if let Some(enabled) = config.ports.i2c_enabled {
+        vals.push(CfgVal::I2cEnabled(enabled));
+    }
+
+    // Port settings - SPI
+    if let Some(enabled) = config.ports.spi_enabled {
+        vals.push(CfgVal::SpiEnabled(enabled));
     }
 
     // Signal/constellation settings
@@ -165,61 +142,109 @@ fn build_signal_cfg_vals(signals: &crate::config::SignalConfig, vals: &mut Vec<C
     }
 }
 
-/// Parse input protocol setting.
-fn parse_protocol_in(port: &str, protocol: &str) -> Option<CfgVal> {
-    match (port, protocol.to_lowercase().as_str()) {
+/// Build CfgVal entries for a port's protocol configuration.
+fn build_port_protocol_cfg_vals(
+    port: &str,
+    protocols: &crate::config::PortProtocols,
+    vals: &mut Vec<CfgVal>,
+) {
+    // Input protocols
+    if let Some(v) = protocols.in_ubx {
+        if let Some(cfg) = protocol_in_cfg_val(port, "ubx", v) {
+            vals.push(cfg);
+        }
+    }
+    if let Some(v) = protocols.in_nmea {
+        if let Some(cfg) = protocol_in_cfg_val(port, "nmea", v) {
+            vals.push(cfg);
+        }
+    }
+    if let Some(v) = protocols.in_rtcm3x {
+        if let Some(cfg) = protocol_in_cfg_val(port, "rtcm3x", v) {
+            vals.push(cfg);
+        }
+    }
+    if let Some(v) = protocols.in_spartn {
+        if let Some(cfg) = protocol_in_cfg_val(port, "spartn", v) {
+            vals.push(cfg);
+        }
+    }
+
+    // Output protocols
+    if let Some(v) = protocols.out_ubx {
+        if let Some(cfg) = protocol_out_cfg_val(port, "ubx", v) {
+            vals.push(cfg);
+        }
+    }
+    if let Some(v) = protocols.out_nmea {
+        if let Some(cfg) = protocol_out_cfg_val(port, "nmea", v) {
+            vals.push(cfg);
+        }
+    }
+    if let Some(v) = protocols.out_rtcm3x {
+        if let Some(cfg) = protocol_out_cfg_val(port, "rtcm3x", v) {
+            vals.push(cfg);
+        }
+    }
+}
+
+/// Get input protocol CfgVal for a port.
+fn protocol_in_cfg_val(port: &str, protocol: &str, enabled: bool) -> Option<CfgVal> {
+    match (port, protocol) {
         // USB
-        ("usb", "ubx") => Some(CfgVal::UsbInProtUbx(true)),
-        ("usb", "nmea") => Some(CfgVal::UsbInProtNmea(true)),
-        ("usb", "rtcm3x") => Some(CfgVal::UsbInProtRtcm3x(true)),
+        ("usb", "ubx") => Some(CfgVal::UsbInProtUbx(enabled)),
+        ("usb", "nmea") => Some(CfgVal::UsbInProtNmea(enabled)),
+        ("usb", "rtcm3x") => Some(CfgVal::UsbInProtRtcm3x(enabled)),
         // UART1
-        ("uart1", "ubx") => Some(CfgVal::Uart1InProtUbx(true)),
-        ("uart1", "nmea") => Some(CfgVal::Uart1InProtNmea(true)),
-        ("uart1", "rtcm3x") => Some(CfgVal::Uart1InProtRtcm3x(true)),
+        ("uart1", "ubx") => Some(CfgVal::Uart1InProtUbx(enabled)),
+        ("uart1", "nmea") => Some(CfgVal::Uart1InProtNmea(enabled)),
+        ("uart1", "rtcm3x") => Some(CfgVal::Uart1InProtRtcm3x(enabled)),
         // UART2
-        ("uart2", "ubx") => Some(CfgVal::Uart2InProtUbx(true)),
-        ("uart2", "nmea") => Some(CfgVal::Uart2InProtNmea(true)),
-        ("uart2", "rtcm3x") => Some(CfgVal::Uart2InProtRtcm3x(true)),
+        ("uart2", "ubx") => Some(CfgVal::Uart2InProtUbx(enabled)),
+        ("uart2", "nmea") => Some(CfgVal::Uart2InProtNmea(enabled)),
+        ("uart2", "rtcm3x") => Some(CfgVal::Uart2InProtRtcm3x(enabled)),
         // I2C (DDC)
-        ("i2c", "ubx") => Some(CfgVal::I2cInProtUbx(true)),
-        ("i2c", "nmea") => Some(CfgVal::I2cInProtNmea(true)),
-        ("i2c", "rtcm3x") => Some(CfgVal::I2cInProtRtcm3x(true)),
+        ("i2c", "ubx") => Some(CfgVal::I2cInProtUbx(enabled)),
+        ("i2c", "nmea") => Some(CfgVal::I2cInProtNmea(enabled)),
+        ("i2c", "rtcm3x") => Some(CfgVal::I2cInProtRtcm3x(enabled)),
+        ("i2c", "spartn") => Some(CfgVal::I2cInProtSpartn(enabled)),
         // SPI
-        ("spi", "ubx") => Some(CfgVal::SpiInProtUbx(true)),
-        ("spi", "nmea") => Some(CfgVal::SpiInProtNmea(true)),
-        ("spi", "rtcm3x") => Some(CfgVal::SpiInProtRtcm3x(true)),
+        ("spi", "ubx") => Some(CfgVal::SpiInProtUbx(enabled)),
+        ("spi", "nmea") => Some(CfgVal::SpiInProtNmea(enabled)),
+        ("spi", "rtcm3x") => Some(CfgVal::SpiInProtRtcm3x(enabled)),
+        ("spi", "spartn") => Some(CfgVal::SpiInProtSpartn(enabled)),
         _ => {
-            warn!("Unknown protocol '{}' for port '{}'", protocol, port);
+            warn!("Unknown input protocol '{}' for port '{}'", protocol, port);
             None
         }
     }
 }
 
-/// Parse output protocol setting.
-fn parse_protocol_out(port: &str, protocol: &str) -> Option<CfgVal> {
-    match (port, protocol.to_lowercase().as_str()) {
+/// Get output protocol CfgVal for a port.
+fn protocol_out_cfg_val(port: &str, protocol: &str, enabled: bool) -> Option<CfgVal> {
+    match (port, protocol) {
         // USB
-        ("usb", "ubx") => Some(CfgVal::UsbOutProtUbx(true)),
-        ("usb", "nmea") => Some(CfgVal::UsbOutProtNmea(true)),
-        ("usb", "rtcm3x") => Some(CfgVal::UsbOutProtRtcm3x(true)),
+        ("usb", "ubx") => Some(CfgVal::UsbOutProtUbx(enabled)),
+        ("usb", "nmea") => Some(CfgVal::UsbOutProtNmea(enabled)),
+        ("usb", "rtcm3x") => Some(CfgVal::UsbOutProtRtcm3x(enabled)),
         // UART1
-        ("uart1", "ubx") => Some(CfgVal::Uart1OutProtUbx(true)),
-        ("uart1", "nmea") => Some(CfgVal::Uart1OutProtNmea(true)),
-        ("uart1", "rtcm3x") => Some(CfgVal::Uart1OutProtRtcm3x(true)),
+        ("uart1", "ubx") => Some(CfgVal::Uart1OutProtUbx(enabled)),
+        ("uart1", "nmea") => Some(CfgVal::Uart1OutProtNmea(enabled)),
+        ("uart1", "rtcm3x") => Some(CfgVal::Uart1OutProtRtcm3x(enabled)),
         // UART2
-        ("uart2", "ubx") => Some(CfgVal::Uart2OutProtUbx(true)),
-        ("uart2", "nmea") => Some(CfgVal::Uart2OutProtNmea(true)),
-        ("uart2", "rtcm3x") => Some(CfgVal::Uart2OutProtRtcm3x(true)),
+        ("uart2", "ubx") => Some(CfgVal::Uart2OutProtUbx(enabled)),
+        ("uart2", "nmea") => Some(CfgVal::Uart2OutProtNmea(enabled)),
+        ("uart2", "rtcm3x") => Some(CfgVal::Uart2OutProtRtcm3x(enabled)),
         // I2C (DDC)
-        ("i2c", "ubx") => Some(CfgVal::I2cOutProtUbx(true)),
-        ("i2c", "nmea") => Some(CfgVal::I2cOutProtNmea(true)),
-        ("i2c", "rtcm3x") => Some(CfgVal::I2cOutProtRtcm3x(true)),
+        ("i2c", "ubx") => Some(CfgVal::I2cOutProtUbx(enabled)),
+        ("i2c", "nmea") => Some(CfgVal::I2cOutProtNmea(enabled)),
+        ("i2c", "rtcm3x") => Some(CfgVal::I2cOutProtRtcm3x(enabled)),
         // SPI
-        ("spi", "ubx") => Some(CfgVal::SpiOutProtUbx(true)),
-        ("spi", "nmea") => Some(CfgVal::SpiOutProtNmea(true)),
-        ("spi", "rtcm3x") => Some(CfgVal::SpiOutProtRtcm3x(true)),
+        ("spi", "ubx") => Some(CfgVal::SpiOutProtUbx(enabled)),
+        ("spi", "nmea") => Some(CfgVal::SpiOutProtNmea(enabled)),
+        ("spi", "rtcm3x") => Some(CfgVal::SpiOutProtRtcm3x(enabled)),
         _ => {
-            warn!("Unknown protocol '{}' for port '{}'", protocol, port);
+            warn!("Unknown output protocol '{}' for port '{}'", protocol, port);
             None
         }
     }
@@ -324,14 +349,20 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_protocol_in() {
-        let result = parse_protocol_in("usb", "ubx");
+    fn test_protocol_in_cfg_val() {
+        let result = protocol_in_cfg_val("usb", "ubx", true);
         assert!(matches!(result, Some(CfgVal::UsbInProtUbx(true))));
+
+        let result_disabled = protocol_in_cfg_val("usb", "nmea", false);
+        assert!(matches!(
+            result_disabled,
+            Some(CfgVal::UsbInProtNmea(false))
+        ));
     }
 
     #[test]
-    fn test_parse_protocol_out() {
-        let result = parse_protocol_out("uart1", "rtcm3x");
+    fn test_protocol_out_cfg_val() {
+        let result = protocol_out_cfg_val("uart1", "rtcm3x", true);
         assert!(matches!(result, Some(CfgVal::Uart1OutProtRtcm3x(true))));
     }
 }

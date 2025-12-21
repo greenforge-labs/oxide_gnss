@@ -1,22 +1,22 @@
-# oxide_gnss configuration: Moving Base
+# oxide_gnss configuration: RTK Rover with Radio/Serial Corrections
 #
-# Moving base in a moving base + rover pair.
-# Outputs RTCM corrections to the rover via UART2.
-# Optionally receives NTRIP corrections for absolute position.
+# RTK rover receiving corrections via radio or serial link on UART2.
+# Use this for remote areas without network connectivity.
 
-mode: moving_base
+mode: rover_radio
 
 features:
-  high_precision: true
-  integrity: true
+  high_precision: true    # Use HP position in ~/fix topic
+  integrity: true         # Enable integrity monitoring
+  satellites: false       # Disable to reduce bandwidth
 
 device:
-  port: "/dev/gnss_f9p_base"
+  port: "/dev/gnss_f9p_rover"
   baud_rate: 460800
   frame: ENU
 
   navigation:
-    rate_hz: 5            # 5 Hz for moving base
+    rate_hz: 10
     min_satellites: 4
     max_hdop: 5.0
     max_pdop: 10.0
@@ -26,20 +26,19 @@ device:
     initial_delay_secs: 1
     max_delay_secs: 30
     max_attempts: 0       # 0 = unlimited
-    backoff_reset_secs: 300
 
   # u-blox configuration overrides (mode handles ports/protocols automatically)
   ublox:
     family: "F9P"
 
     rate:
-      measurement_ms: 200   # 5 Hz (matches navigation rate_hz)
+      measurement_ms: 100   # 10 Hz
       nav_ratio: 1
 
-    # UART2 baudrate for RTCM output to rover
+    # UART2 baudrate for receiving RTCM from radio
     ports:
       uart2:
-        baudrate: 460800
+        baudrate: 115200    # Common radio baud rate
 
     # GNSS constellation configuration
     signals:
@@ -55,8 +54,6 @@ device:
 
       galileo:
         enabled: false
-        l1: false
-        l2: false
 
       beidou:
         enabled: true
@@ -89,23 +86,4 @@ integrity:
     max_pvt_age_s: 2.0
     operational_threshold: 1
 
-# Optional: NTRIP for absolute position (comment out if not needed)
-ntrip:
-  host: "ntrip.data.gnss.ga.gov.au"
-  port: 443
-  use_https: true
-  # tls_skip_verify: false
-  # ntrip_version: auto
-  mountpoint: "SWTC00AUS0"
-  username: "${NTRIP_USERNAME}"
-  password: "${NTRIP_PASSWORD}"
-  send_gga: true
-  gga_interval_secs: 10
-
-  connection:
-    timeout_secs: 10
-    read_timeout_secs: 30
-    reconnect: true
-    initial_delay_secs: 1
-    max_delay_secs: 60
-    backoff_reset_secs: 3600
+# No NTRIP - corrections come from radio/serial on UART2

@@ -15,3 +15,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Jamming and spoofing detection** via SEC-SIG message
 - **Comprehensive diagnostics** including antenna status and satellite info
 - ROS2 topics: ~/fix, ~/velocity, ~/time_reference, ~/integrity, ~/operational, ~/satellites, ~/baseline_pose
+- **Automatic port/protocol optimization** - Modes automatically disable unused ports (UART1, SPI) and protocols (NMEA) to reduce CPU load
+- **Configurable namespace** in launch file for running multiple nodes (e.g., gnss_base, gnss_rover)
+- Config files for all modes: rover_ntrip, rover_radio, standalone, moving_base, moving_base_rover, static_base

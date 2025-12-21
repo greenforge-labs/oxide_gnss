@@ -12,17 +12,82 @@ features:
   heading: true           # Get heading from baseline vector
 
 device:
-  port: "/dev/gnss_rover"
+  port: "/dev/gnss_f9p_rover"
   baud_rate: 460800
   frame: ENU
 
   navigation:
     rate_hz: 5            # Match base rate
+    min_satellites: 4
+    max_hdop: 5.0
+    max_pdop: 10.0
 
-  # UART2 receives RTCM from the moving base
+  reconnect:
+    enabled: true
+    initial_delay_secs: 1
+    max_delay_secs: 30
+    max_attempts: 0       # 0 = unlimited
+    backoff_reset_secs: 300
+
+  # u-blox configuration overrides (mode handles ports/protocols automatically)
   ublox:
+    family: "F9P"
+
+    rate:
+      measurement_ms: 200   # 5 Hz (matches navigation rate_hz)
+      nav_ratio: 1
+
+    # UART2 baudrate for RTCM input from moving base
     ports:
       uart2:
         baudrate: 460800
+
+    # GNSS constellation configuration (should match base)
+    signals:
+      gps:
+        enabled: true
+        l1: true
+        l2: true
+
+      glonass:
+        enabled: true
+        l1: true
+        l2: true
+
+      galileo:
+        enabled: false
+        l1: false
+        l2: false
+
+      beidou:
+        enabled: true
+        b1: true
+        b2: true
+
+      sbas:
+        enabled: false
+
+      qzss:
+        enabled: false
+
+# ROS topic publish rates
+ros:
+  rates:
+    diagnostics_hz: 1.0
+    integrity_hz: 1.0
+
+# Integrity monitoring thresholds
+integrity:
+  thresholds:
+    min_satellites_critical: 4
+    min_satellites_high: 6
+    max_h_accuracy_m: 0.10
+    max_v_accuracy_m: 0.15
+    max_pdop: 3.0
+    max_correction_age_s: 10.0
+    min_cno_degraded: 25
+    min_mean_cno_degraded: 35.0
+    max_pvt_age_s: 2.0
+    operational_threshold: 1
 
 # No NTRIP - corrections come from the moving base via UART2

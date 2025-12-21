@@ -318,15 +318,23 @@ allow all users to access the device.
 
 ### 2. Launching
 
-**Option 1: From Workspace Root (Recommended)**
+**Single Device:**
 ```bash
 cd ~/ros2_ws
 ros2 launch oxide_gnss oxide_gnss.launch.py config_file:=src/oxide_gnss/config/rover_ntrip.yaml
 ```
 
-**Option 2: Using Absolute Path (Safest)**
+**Multiple Devices (e.g., Moving Base + Rover):**
 ```bash
-ros2 launch oxide_gnss oxide_gnss.launch.py config_file:=/home/user/ros2_ws/src/oxide_gnss/config/rover_ntrip.yaml
+# Terminal 1 - Base
+ros2 launch oxide_gnss oxide_gnss.launch.py \
+    config_file:=src/oxide_gnss/config/moving_base.yaml \
+    namespace:=gnss_base
+
+# Terminal 2 - Rover
+ros2 launch oxide_gnss oxide_gnss.launch.py \
+    config_file:=src/oxide_gnss/config/moving_base_rover.yaml \
+    namespace:=gnss_rover
 ```
 
 ## License

@@ -18,8 +18,10 @@ use tracing::warn;
 ///     measurement_ms: 100
 ///     nav_ratio: 1
 ///   protocols:
-///     usb_in: [ubx, rtcm3x]
-///     usb_out: [ubx]
+///     usb:
+///       in_ubx: true
+///       in_rtcm3x: true
+///       out_ubx: true
 ///   messages:
 ///     usb:
 ///       NAV_PVT: 1
@@ -81,39 +83,91 @@ impl Default for RateConfig {
 }
 
 /// Protocol configuration per port.
+///
+/// Each port has input and output protocol settings. Each protocol can be
+/// explicitly enabled (true), disabled (false), or left unchanged (not specified).
+///
+/// # Example
+/// ```yaml
+/// protocols:
+///   usb:
+///     in_ubx: true
+///     in_nmea: false
+///     in_rtcm3x: true
+///     out_ubx: true
+///     out_nmea: false
+///   uart2:
+///     in_rtcm3x: true
+///     out_rtcm3x: true
+/// ```
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct ProtocolConfig {
-    /// USB input protocols (ubx, nmea, rtcm3x)
+    /// USB port protocols
     #[serde(default)]
-    pub usb_in: Vec<String>,
+    pub usb: PortProtocols,
 
-    /// USB output protocols (ubx, nmea, rtcm3x)
+    /// UART1 port protocols
     #[serde(default)]
-    pub usb_out: Vec<String>,
+    pub uart1: PortProtocols,
 
-    /// UART1 input protocols
+    /// UART2 port protocols
     #[serde(default)]
-    pub uart1_in: Vec<String>,
+    pub uart2: PortProtocols,
 
-    /// UART1 output protocols
+    /// I2C (DDC) port protocols
     #[serde(default)]
-    pub uart1_out: Vec<String>,
+    pub i2c: PortProtocols,
 
-    /// UART2 input protocols
+    /// SPI port protocols
     #[serde(default)]
-    pub uart2_in: Vec<String>,
+    pub spi: PortProtocols,
+}
 
-    /// UART2 output protocols
+/// Protocol enable/disable settings for a single port.
+///
+/// All fields are optional - if not specified, the device default is kept.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct PortProtocols {
+    /// Enable UBX protocol input
     #[serde(default)]
-    pub uart2_out: Vec<String>,
+    pub in_ubx: Option<bool>,
 
-    /// I2C input protocols
+    /// Enable NMEA protocol input
     #[serde(default)]
-    pub i2c_in: Vec<String>,
+    pub in_nmea: Option<bool>,
 
-    /// I2C output protocols
+    /// Enable RTCM3X protocol input
     #[serde(default)]
-    pub i2c_out: Vec<String>,
+    pub in_rtcm3x: Option<bool>,
+
+    /// Enable SPARTN protocol input (I2C/SPI only)
+    #[serde(default)]
+    pub in_spartn: Option<bool>,
+
+    /// Enable UBX protocol output
+    #[serde(default)]
+    pub out_ubx: Option<bool>,
+
+    /// Enable NMEA protocol output
+    #[serde(default)]
+    pub out_nmea: Option<bool>,
+
+    /// Enable RTCM3X protocol output
+    #[serde(default)]
+    pub out_rtcm3x: Option<bool>,
+}
+
+impl PortProtocols {
+    /// Check if any protocol setting is configured (not None).
+    pub fn has_any_set(&self) -> bool {
+        self.in_ubx.is_some()
+            || self.in_nmea.is_some()
+            || self.in_rtcm3x.is_some()
+            || self.in_spartn.is_some()
+            || self.out_ubx.is_some()
+            || self.out_nmea.is_some()
+            || self.out_rtcm3x.is_some()
+    }
 }
 
 /// UBX message output configuration per port.
@@ -142,6 +196,14 @@ pub struct PortSettings {
     /// UART2 settings
     #[serde(default)]
     pub uart2: UartPortConfig,
+
+    /// I2C (DDC) port enabled
+    #[serde(default)]
+    pub i2c_enabled: Option<bool>,
+
+    /// SPI port enabled
+    #[serde(default)]
+    pub spi_enabled: Option<bool>,
 }
 
 /// UART port configuration.
@@ -368,8 +430,9 @@ impl UbloxConfig {
     pub fn has_config(&self) -> bool {
         !self.messages.usb.is_empty()
             || !self.messages.uart1.is_empty()
-            || !self.protocols.usb_in.is_empty()
-            || !self.protocols.usb_out.is_empty()
+            || self.protocols.usb.has_any_set()
+            || self.protocols.uart1.has_any_set()
+            || self.protocols.uart2.has_any_set()
     }
 
     /// Check if a message is enabled on any port with rate > 0.
@@ -553,8 +616,10 @@ rate:
   measurement_ms: 100
   nav_ratio: 1
 protocols:
-  usb_in: [ubx, rtcm3x]
-  usb_out: [ubx]
+  usb:
+    in_ubx: true
+    in_rtcm3x: true
+    out_ubx: true
 messages:
   usb:
     NAV_PVT: 1
@@ -564,7 +629,8 @@ messages:
         assert_eq!(config.family, Some("F9P".to_string()));
         assert_eq!(config.rate.measurement_ms, 100);
         assert_eq!(config.rate.nav_ratio, 1);
-        assert_eq!(config.protocols.usb_in.len(), 2);
+        assert_eq!(config.protocols.usb.in_ubx, Some(true));
+        assert_eq!(config.protocols.usb.in_rtcm3x, Some(true));
         assert_eq!(config.messages.usb.len(), 2);
         assert_eq!(config.messages.usb.get("NAV_PVT"), Some(&1));
     }

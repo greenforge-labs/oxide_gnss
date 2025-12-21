@@ -33,12 +33,18 @@ def generate_launch_description():
         description='NTRIP password (overrides config)'
     )
 
+    namespace_arg = DeclareLaunchArgument(
+        'namespace',
+        default_value='oxide_gnss',
+        description='ROS namespace for the node (e.g., gnss_base, gnss_rover)'
+    )
+
     # Node
     node = Node(
         package='oxide_gnss',
         executable='oxide_gnss_node',
-        name='oxide_gnss',
-        namespace='',
+        name='gnss_node',
+        namespace=LaunchConfiguration('namespace'),
         output='screen',
         parameters=[{
             'use_sim_time': False,
@@ -57,5 +63,6 @@ def generate_launch_description():
         log_level_arg,
         ntrip_username_arg,
         ntrip_password_arg,
+        namespace_arg,
         node
     ])

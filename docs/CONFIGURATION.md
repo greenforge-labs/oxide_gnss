@@ -9,9 +9,11 @@ oxide_gnss uses YAML configuration files. Example configs are in `config/`:
 | File | Description |
 |------|-------------|
 | `rover_ntrip.yaml` | RTK rover with NTRIP corrections (most common) |
+| `rover_radio.yaml` | RTK rover with radio/serial corrections on UART2 |
 | `standalone.yaml` | Basic GPS without RTK |
 | `moving_base.yaml` | Moving base in MB+R pair |
 | `moving_base_rover.yaml` | Rover in MB+R pair |
+| `static_base.yaml` | Static base station providing RTCM corrections |
 | `advanced_rover.yaml` | Advanced config with custom messages/signals |
 
 ```bash
@@ -142,36 +144,50 @@ device:
       nav_ratio: 1          # Nav solutions per measurement
 ```
 
-### Protocol Settings
+### Port and Protocol Settings
 
-Configure which protocols are enabled on each port:
+**When using mode-based configuration**, ports and protocols are configured automatically based on your selected mode. The mode presets:
 
-```yaml
-device:
-  ublox:
-    protocols:
-      usb_in: [ubx, rtcm3x]    # Input protocols
-      usb_out: [ubx]            # Output protocols
-      # uart1_in: [ubx, rtcm3x]
-      # uart1_out: [ubx]
-      # uart2_in: [rtcm3x]      # Moving base: receive RTCM
-      # uart2_out: []
-```
+- Enable only the ports needed for that mode (e.g., UART2 for moving base)
+- Disable unused ports (UART1, SPI) to reduce CPU load
+- Enable only required protocols (UBX, RTCM3X where needed)
+- Disable unused protocols (NMEA) to reduce processing overhead
 
-Available protocols: `ubx`, `nmea`, `rtcm3x`
+**You typically don't need to configure ports/protocols manually.** The mode handles it.
 
-### Port Settings (Optional)
+### Port Settings (Optional Overrides)
+
+If you need to override the mode defaults (e.g., set UART2 baudrate):
 
 ```yaml
 device:
   ublox:
     ports:
-      uart1:
-        enabled: false
       uart2:
-        baudrate: 460800
-        enabled: true
+        baudrate: 460800      # Set UART2 baud rate for RTCM
 ```
+
+### Advanced: Explicit Protocol Control
+
+For advanced users who need fine-grained control, you can override protocol settings:
+
+```yaml
+device:
+  ublox:
+    protocols:
+      usb:
+        in_ubx: true
+        in_nmea: false
+        in_rtcm3x: true
+        out_ubx: true
+        out_nmea: false
+```
+
+Available protocols per port:
+- **Input**: `in_ubx`, `in_nmea`, `in_rtcm3x`, `in_spartn` (I2C/SPI only)
+- **Output**: `out_ubx`, `out_nmea`, `out_rtcm3x`
+
+**Note:** Explicit protocol settings override the mode defaults. Only use this if you have a specific need.
 
 ### GNSS Signal Selection (Optional)
 

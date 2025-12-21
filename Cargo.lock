@@ -2244,6 +2244,10 @@ name = "example_interfaces"
 version = "0.12.0"
 
 [[patch.unused]]
+name = "ferrous_gnss_msgs"
+version = "0.1.0"
+
+[[patch.unused]]
 name = "rcl_interfaces"
 version = "2.0.3"
 

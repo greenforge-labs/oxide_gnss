@@ -222,17 +222,34 @@ pub struct PortProtocols {
     pub rtcm3x_out: bool,
 }
 
+/// Port enable settings for a mode.
+#[derive(Debug, Clone, Default)]
+pub struct PortEnables {
+    /// UART1 port enabled (None = don't configure, keep device default)
+    pub uart1: Option<bool>,
+    /// UART2 port enabled
+    pub uart2: Option<bool>,
+    /// I2C (DDC) port enabled - leave enabled but disable protocols to avoid firmware quirks
+    pub i2c: Option<bool>,
+    /// SPI port enabled
+    pub spi: Option<bool>,
+}
+
 /// Mode preset containing all configuration for a mode.
 #[derive(Debug, Clone)]
 pub struct ModePreset {
+    /// Port enable/disable settings
+    pub port_enables: PortEnables,
     /// USB port protocol configuration
     pub usb: PortProtocols,
     /// UART1 port protocol configuration
     pub uart1: PortProtocols,
     /// UART2 port protocol configuration
     pub uart2: PortProtocols,
-    /// I2C (DDC) port protocol configuration - disabled by default to reduce CPU load
+    /// I2C (DDC) port protocol configuration
     pub i2c: PortProtocols,
+    /// SPI port protocol configuration
+    pub spi: PortProtocols,
     /// Base UBX messages (always enabled for this mode)
     pub base_messages: Vec<(&'static str, u8)>,
     /// RTCM messages to output (for base modes)
@@ -316,8 +333,16 @@ pub mod presets {
     use super::*;
 
     /// Standalone mode - basic GPS without RTK.
+    /// Disables unused ports/protocols to reduce CPU load.
     pub fn standalone() -> ModePreset {
         ModePreset {
+            port_enables: PortEnables {
+                uart1: Some(false),
+                uart2: Some(false),
+                // Leave I2C enabled but disable protocols (firmware quirk)
+                i2c: None,
+                spi: Some(false),
+            },
             usb: PortProtocols {
                 ubx_in: true,
                 ubx_out: true,
@@ -325,7 +350,8 @@ pub mod presets {
             },
             uart1: PortProtocols::default(),
             uart2: PortProtocols::default(),
-            i2c: PortProtocols::default(), // Disabled to reduce CPU load
+            i2c: PortProtocols::default(),
+            spi: PortProtocols::default(),
             base_messages: vec![("NAV_PVT", 1)],
             rtcm_output_uart2: vec![],
             allowed_features: vec![Feature::Satellites],
@@ -333,8 +359,15 @@ pub mod presets {
     }
 
     /// Rover with NTRIP corrections.
+    /// Disables unused ports/protocols to reduce CPU load.
     pub fn rover_ntrip() -> ModePreset {
         ModePreset {
+            port_enables: PortEnables {
+                uart1: Some(false),
+                uart2: Some(false),
+                i2c: None,
+                spi: Some(false),
+            },
             usb: PortProtocols {
                 ubx_in: true,
                 ubx_out: true,
@@ -343,7 +376,8 @@ pub mod presets {
             },
             uart1: PortProtocols::default(),
             uart2: PortProtocols::default(),
-            i2c: PortProtocols::default(), // Disabled to reduce CPU load
+            i2c: PortProtocols::default(),
+            spi: PortProtocols::default(),
             base_messages: vec![("NAV_PVT", 1), ("NAV_HPPOSLLH", 1)],
             rtcm_output_uart2: vec![],
             allowed_features: vec![
@@ -357,6 +391,12 @@ pub mod presets {
     /// Rover with radio/serial corrections on UART2.
     pub fn rover_radio() -> ModePreset {
         ModePreset {
+            port_enables: PortEnables {
+                uart1: Some(false),
+                uart2: Some(true), // UART2 needed for radio corrections
+                i2c: None,
+                spi: Some(false),
+            },
             usb: PortProtocols {
                 ubx_in: true,
                 ubx_out: true,
@@ -367,7 +407,8 @@ pub mod presets {
                 rtcm3x_in: true, // Corrections from radio
                 ..Default::default()
             },
-            i2c: PortProtocols::default(), // Disabled to reduce CPU load
+            i2c: PortProtocols::default(),
+            spi: PortProtocols::default(),
             base_messages: vec![("NAV_PVT", 1), ("NAV_HPPOSLLH", 1)],
             rtcm_output_uart2: vec![],
             allowed_features: vec![
@@ -381,6 +422,12 @@ pub mod presets {
     /// Moving base in MB+R pair.
     pub fn moving_base() -> ModePreset {
         ModePreset {
+            port_enables: PortEnables {
+                uart1: Some(false),
+                uart2: Some(true), // UART2 outputs RTCM to rover
+                i2c: None,
+                spi: Some(false),
+            },
             usb: PortProtocols {
                 ubx_in: true,
                 ubx_out: true,
@@ -392,7 +439,8 @@ pub mod presets {
                 rtcm3x_out: true, // RTCM to rover
                 ..Default::default()
             },
-            i2c: PortProtocols::default(), // Disabled to reduce CPU load
+            i2c: PortProtocols::default(),
+            spi: PortProtocols::default(),
             base_messages: vec![
                 ("NAV_PVT", 1),
                 ("NAV_HPPOSLLH", 1),
@@ -418,6 +466,12 @@ pub mod presets {
     /// Rover in MB+R pair.
     pub fn moving_base_rover() -> ModePreset {
         ModePreset {
+            port_enables: PortEnables {
+                uart1: Some(false),
+                uart2: Some(true), // UART2 receives RTCM from base
+                i2c: None,
+                spi: Some(false),
+            },
             usb: PortProtocols {
                 ubx_in: true,
                 ubx_out: true,
@@ -428,7 +482,8 @@ pub mod presets {
                 rtcm3x_in: true, // RTCM from moving base
                 ..Default::default()
             },
-            i2c: PortProtocols::default(), // Disabled to reduce CPU load
+            i2c: PortProtocols::default(),
+            spi: PortProtocols::default(),
             base_messages: vec![
                 ("NAV_PVT", 1),
                 ("NAV_HPPOSLLH", 1),
@@ -449,6 +504,12 @@ pub mod presets {
     /// Static base station.
     pub fn static_base() -> ModePreset {
         ModePreset {
+            port_enables: PortEnables {
+                uart1: Some(false),
+                uart2: Some(true), // UART2 outputs RTCM
+                i2c: None,
+                spi: Some(false),
+            },
             usb: PortProtocols {
                 ubx_in: true,
                 ubx_out: true,
@@ -460,7 +521,8 @@ pub mod presets {
                 rtcm3x_out: true, // Alternative RTCM output
                 ..Default::default()
             },
-            i2c: PortProtocols::default(), // Disabled to reduce CPU load
+            i2c: PortProtocols::default(),
+            spi: PortProtocols::default(),
             base_messages: vec![("NAV_PVT", 1), ("NAV_SVIN", 1)], // Survey-in status
             rtcm_output_uart2: vec![
                 "RTCM_3X_TYPE1005", // Stationary RTK reference station ARP

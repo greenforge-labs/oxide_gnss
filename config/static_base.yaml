@@ -1,0 +1,80 @@
+# oxide_gnss configuration: Static Base Station
+#
+# Static base station providing RTK corrections.
+# Outputs RTCM messages via USB and/or UART2.
+# Supports survey-in or fixed coordinates mode.
+
+mode: static_base
+
+features:
+  satellites: true        # Monitor satellite visibility
+
+device:
+  port: "/dev/gnss_f9p_base"
+  baud_rate: 460800
+  frame: ENU
+
+  navigation:
+    rate_hz: 1            # Low rate sufficient for static base
+    min_satellites: 4
+    max_hdop: 5.0
+    max_pdop: 10.0
+
+  reconnect:
+    enabled: true
+    initial_delay_secs: 1
+    max_delay_secs: 30
+    max_attempts: 0       # 0 = unlimited
+
+  # u-blox configuration overrides (mode handles ports/protocols automatically)
+  ublox:
+    family: "F9P"
+
+    rate:
+      measurement_ms: 1000  # 1 Hz for static base
+      nav_ratio: 1
+
+    # UART2 baudrate for RTCM output (to radio or direct connection)
+    ports:
+      uart2:
+        baudrate: 115200
+
+    # GNSS constellation configuration
+    signals:
+      gps:
+        enabled: true
+        l1: true
+        l2: true
+
+      glonass:
+        enabled: true
+        l1: true
+        l2: true
+
+      galileo:
+        enabled: true
+        l1: true
+        l2: true
+
+      beidou:
+        enabled: true
+        b1: true
+        b2: true
+
+      sbas:
+        enabled: false
+
+      qzss:
+        enabled: false
+
+# ROS topic publish rates
+ros:
+  rates:
+    diagnostics_hz: 1.0
+    integrity_hz: 1.0
+
+# Note: Survey-in and fixed coordinates configuration
+# is handled by u-center or direct UBX commands.
+# This driver focuses on outputting RTCM corrections.
+
+# No NTRIP client - this IS the base station
