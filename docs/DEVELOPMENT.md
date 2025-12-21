@@ -90,7 +90,7 @@ After initial colcon build, iterate faster with cargo:
 ```bash
 source /opt/ros/jazzy/setup.bash
 source ~/ros2_ws/install/setup.bash
-cd ~/ros2_ws/src/oxide_gnss/oxide_gnss
+cd ~/ros2_ws/src/oxide_gnss
 
 cargo build --features ros2
 ```
@@ -125,7 +125,7 @@ source ~/ros2_ws/install/setup.bash   # 2. Workspace overlay
 
 ```bash
 # Terminal 1: Build on change
-cd ~/ros2_ws/src/oxide_gnss/oxide_gnss
+cd ~/ros2_ws/src/oxide_gnss
 cargo watch -x 'build --features ros2'
 
 # Terminal 2: Run tests
@@ -181,7 +181,7 @@ just ci
 ## Architecture Overview
 
 ```
-oxide_gnss/
+oxide_gnss/                 # Repository root
 ├── src/
 │   ├── main.rs           # Entry point (ROS2 node)
 │   ├── lib.rs            # Library root
@@ -263,13 +263,13 @@ cargo test --features ros2
 ```bash
 # Monitor all topics
 ros2 topic list
-ros2 topic echo /oxide_gnss/fix
+ros2 topic echo /oxide_gnss_node/fix
 
 # Check diagnostics
 ros2 topic echo /diagnostics
 
 # Verify integrity
-ros2 topic echo /oxide_gnss/integrity
+ros2 topic echo /oxide_gnss_node/integrity
 ```
 
 ### Serial Debugging

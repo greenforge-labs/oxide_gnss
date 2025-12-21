@@ -36,7 +36,7 @@ Then follow the [Launching](#launching) instructions below.
 
 ## Configuration
 
-Configuration is via YAML files. See `oxide_gnss/config/` directory for examples.
+Configuration is via YAML files. See the `config/` directory for examples.
 
 ### Mode-Based Configuration (Recommended)
 
@@ -83,7 +83,7 @@ ntrip:
 | `integrity` | Jamming/spoofing detection | `~/integrity`, `~/operational` |
 | `satellites` | Per-satellite info | `~/satellites` |
 
-See [CONFIGURATION.md](oxide_gnss/docs/CONFIGURATION.md) for full details.
+See [CONFIGURATION.md](docs/CONFIGURATION.md) for full details.
 
 ## ROS2 Interface
 
@@ -321,12 +321,12 @@ allow all users to access the device.
 **Option 1: From Workspace Root (Recommended)**
 ```bash
 cd ~/ros2_ws
-ros2 launch oxide_gnss oxide_gnss.launch.py config_file:=src/oxide_gnss/oxide_gnss/config/rover_ntrip.yaml
+ros2 launch oxide_gnss oxide_gnss.launch.py config_file:=src/oxide_gnss/config/rover_ntrip.yaml
 ```
 
 **Option 2: Using Absolute Path (Safest)**
 ```bash
-ros2 launch oxide_gnss oxide_gnss.launch.py config_file:=/home/user/ros2_ws/src/oxide_gnss/oxide_gnss/config/rover_ntrip.yaml
+ros2 launch oxide_gnss oxide_gnss.launch.py config_file:=/home/user/ros2_ws/src/oxide_gnss/config/rover_ntrip.yaml
 ```
 
 ## License
@@ -335,7 +335,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Contributing
 
-See [CONTRIBUTING.md](oxide_gnss/CONTRIBUTING.md) for guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## References
 

@@ -29,7 +29,7 @@ colcon build --packages-up-to oxide_gnss
 The project uses a `justfile` for common tasks. Install with `cargo install just`.
 
 ```bash
-cd ~/ros2_ws/src/oxide_gnss/oxide_gnss
+cd ~/ros2_ws/src/oxide_gnss
 
 just ci          # Run all CI checks (format, clippy, tests)
 just test        # Run tests only

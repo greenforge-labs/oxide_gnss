@@ -20,7 +20,6 @@ jobs:
         with:
           components: rustfmt
       - run: cargo fmt --all -- --check
-        working-directory: oxide_gnss
 
   # Full build with ROS2 (uses pre-built Docker image)
   build:
@@ -55,19 +54,19 @@ jobs:
           colcon build --packages-select oxide_gnss_msgs oxide_gnss
 
       - name: Run clippy
-        working-directory: src/oxide_gnss
         shell: bash
         run: |
           source /opt/ros/jazzy/setup.bash
           source /opt/ros2_ws/install/setup.bash
-          source ../../install/setup.bash
+          source install/setup.bash
+          cd src
           cargo clippy --features ros2 -- -D warnings
 
       - name: Run tests
-        working-directory: src/oxide_gnss
         shell: bash
         run: |
           source /opt/ros/jazzy/setup.bash
           source /opt/ros2_ws/install/setup.bash
-          source ../../install/setup.bash
+          source install/setup.bash
+          cd src
           cargo test --features ros2
