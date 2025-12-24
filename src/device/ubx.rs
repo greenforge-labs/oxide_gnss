@@ -1180,11 +1180,7 @@ impl UbxHandler {
         };
 
         // Position PLs - ublox-rs returns values in meters (SI units)
-        let pos_pl_m = [
-            msg.pl_pos1(),
-            msg.pl_pos2(),
-            msg.pl_pos3(),
-        ];
+        let pos_pl_m = [msg.pl_pos1(), msg.pl_pos2(), msg.pl_pos3()];
 
         // Velocity protection level validity and frame
         let vel_valid = matches!(msg.pl_vel_valid(), PlVelValid::Valid);
@@ -1196,11 +1192,7 @@ impl UbxHandler {
         };
 
         // Velocity PLs - ublox-rs returns values in m/s (SI units)
-        let vel_pl_ms = [
-            msg.pl_vel1(),
-            msg.pl_vel2(),
-            msg.pl_vel3(),
-        ];
+        let vel_pl_ms = [msg.pl_vel1(), msg.pl_vel2(), msg.pl_vel3()];
 
         // Time protection level validity
         let time_valid = matches!(msg.pl_time_valid(), PlTimeValid::Valid);
