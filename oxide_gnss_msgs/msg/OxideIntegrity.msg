@@ -67,3 +67,22 @@ uint8 ANTENNA_SHORT = 3
 # Communication status
 uint8 comm_ports            # Number of communication ports
 uint8 comm_tx_errors        # TX errors detected
+
+# Protection Level data (from NAV-PL) - ISO 26262/SOTIF compliant integrity bounds
+bool protection_level_valid         # True if PL data is valid and current
+float32 horizontal_pl_m             # Horizontal protection level (m)
+float32 vertical_pl_m               # Vertical protection level (m)
+float32 velocity_pl_ms              # Velocity protection level magnitude (m/s)
+float64 target_mir                  # Target Misleading Information Risk [%MI/epoch]
+uint8 pl_frame                      # Protection level reference frame
+uint8 pl_invalidity_reason          # Reason if PL is invalid
+
+uint8 PL_FRAME_INVALID = 0
+uint8 PL_FRAME_NED = 1
+uint8 PL_FRAME_LONG_LAT_VERT = 2
+uint8 PL_FRAME_ELLIPSE = 3
+
+uint8 PL_REASON_VALID = 0
+uint8 PL_REASON_NOT_AVAILABLE = 1
+uint8 PL_REASON_NOT_TRUSTWORTHY = 2
+uint8 PL_REASON_NOT_VERIFIED = 3

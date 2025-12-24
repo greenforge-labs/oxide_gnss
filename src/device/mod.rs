@@ -20,8 +20,9 @@ pub use ubx::{
     build_cfg_msg, build_cfg_rate, build_cfg_valset, build_rover_config,
     build_safety_messages_config, cfg_keys, msg_ids, AckResult, AntennaPowerData,
     AntennaStatusData, CarrierSolution, CovData, JammingStateData, MonCommsData, MonCommsPortData,
-    MonHwData, MonRfData, PosEcefData, ProcessResult, PvtData, RxmCorData, SecSigData,
-    SecSiglogData, SecSiglogEventData, SignalQuality, SpoofingStateData, UbxHandler, UbxStats,
+    MonHwData, MonRfData, NavPlData, NavPlFrame, NavPlInvalidityReason, PosEcefData, ProcessResult,
+    PvtData, RxmCorData, SecSigData, SecSiglogData, SecSiglogEventData, SignalQuality,
+    SpoofingStateData, UbxHandler, UbxStats,
 };
 // Re-export CfgVal for configuration building
 pub use ublox::cfg_val::CfgVal;

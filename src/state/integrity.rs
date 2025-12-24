@@ -7,8 +7,9 @@
 use std::time::Instant;
 
 use crate::device::{
-    AntennaStatusData, CovData, JammingStateData, MonCommsData, MonHwData, MonRfData, PosEcefData,
-    RxmCorData, SecSigData, SecSiglogData, SignalQuality, SpoofingStateData,
+    AntennaStatusData, CovData, JammingStateData, MonCommsData, MonHwData, MonRfData, NavPlData,
+    NavPlFrame, NavPlInvalidityReason, PosEcefData, RxmCorData, SecSigData, SecSiglogData,
+    SignalQuality, SpoofingStateData,
 };
 use crate::state::FixType;
 use ublox::rxm_cor::CorrectionMsgUsed;
@@ -78,6 +79,19 @@ pub struct IntegrityThresholds {
     pub min_cno_degraded: u8,
     /// Minimum mean C/N0 (dB-Hz) across used satellites before DEGRADED
     pub min_mean_cno_degraded: f32,
+
+    // Protection Level (NAV-PL) thresholds
+    /// Maximum horizontal protection level (m) before DEGRADED
+    pub max_horizontal_pl_m: f32,
+    /// Maximum vertical protection level (m) before DEGRADED
+    pub max_vertical_pl_m: f32,
+    /// Maximum velocity protection level (m/s) before DEGRADED
+    pub max_velocity_pl_ms: f32,
+    /// Maximum TMIR (Target Misleading Information Risk) per epoch
+    pub max_tmir_per_epoch: f64,
+    /// Require valid protection level for operational status
+    /// If true, invalid PL will result in CRITICAL level
+    pub require_valid_pl: bool,
 }
 
 impl Default for IntegrityThresholds {
@@ -93,6 +107,12 @@ impl Default for IntegrityThresholds {
             operational_threshold: 1,    // Ok or Degraded = operational
             min_cno_degraded: 25,        // Weakest satellite < 25 dB-Hz = Degraded
             min_mean_cno_degraded: 35.0, // Mean C/N0 < 35 dB-Hz = Degraded
+            // Protection Level thresholds
+            max_horizontal_pl_m: 0.50, // 50cm horizontal PL alert limit
+            max_vertical_pl_m: 1.00,   // 1m vertical PL alert limit
+            max_velocity_pl_ms: 0.10,  // 10cm/s velocity PL alert limit
+            max_tmir_per_epoch: 1e-5,  // 10^-5 %MI/epoch
+            require_valid_pl: false,   // Don't require PL by default (backward compat)
         }
     }
 }
@@ -165,6 +185,22 @@ pub struct GnssIntegrity {
     pub min_cno: u8,
     /// Number of satellites with C/N0 >= 30 dB-Hz
     pub sats_above_cno_threshold: u8,
+
+    // Protection Level (from NAV-PL)
+    /// Protection level data valid and current
+    pub protection_level_valid: bool,
+    /// Horizontal protection level (m) - computed from pos_pl axes
+    pub horizontal_pl_m: f32,
+    /// Vertical protection level (m)
+    pub vertical_pl_m: f32,
+    /// Velocity protection level magnitude (m/s)
+    pub velocity_pl_ms: f32,
+    /// Target Misleading Information Risk [%MI/epoch]
+    pub target_mir: f64,
+    /// Protection level reference frame (0=invalid, 1=NED, 2=LLV, 3=ellipse)
+    pub pl_frame: u8,
+    /// Protection level invalidity reason (0=valid, 1=not available, 2=not trustworthy, 3=not verified)
+    pub pl_invalidity_reason: u8,
 }
 
 /// Integrity aggregator that combines quality metrics from multiple sources.
@@ -190,6 +226,8 @@ pub struct IntegrityAggregator {
     last_mon_hw: Option<MonHwData>,
     /// Timestamp of last PVT update (None = never received)
     last_pvt_update: Option<Instant>,
+    /// Last protection level data (NAV-PL)
+    last_nav_pl: Option<NavPlData>,
 }
 
 impl IntegrityAggregator {
@@ -363,6 +401,60 @@ impl IntegrityAggregator {
         self.current.sats_above_cno_threshold = quality.sats_above_threshold;
     }
 
+    /// Update with protection level data (NAV-PL).
+    ///
+    /// Protection levels provide statistically-bounded error estimates with a specified
+    /// Target Misleading Information Risk (TMIR) for ISO 26262/ISO 21448 compliance.
+    pub fn update_nav_pl(&mut self, pl: &NavPlData) {
+        self.last_nav_pl = Some(pl.clone());
+
+        self.current.protection_level_valid = pl.pos_valid;
+        self.current.target_mir = pl.tmir;
+
+        // Convert frame enum to u8 for ROS message
+        self.current.pl_frame = match pl.pos_frame {
+            NavPlFrame::Invalid => 0,
+            NavPlFrame::Ned => 1,
+            NavPlFrame::LongLatVert => 2,
+            NavPlFrame::Ellipse => 3,
+        };
+
+        // Convert invalidity reason enum to u8 for ROS message
+        self.current.pl_invalidity_reason = match pl.pos_invalidity_reason {
+            NavPlInvalidityReason::Valid => 0,
+            NavPlInvalidityReason::NotAvailable => 1,
+            NavPlInvalidityReason::SolutionNotTrustworthy => 2,
+            NavPlInvalidityReason::NotVerifiedForConfig => 3,
+        };
+
+        if pl.pos_valid {
+            // Compute horizontal PL as 2D magnitude of first two axes
+            // For NED frame: sqrt(N^2 + E^2), for Ellipse: semi-major axis
+            let horizontal_pl = if matches!(pl.pos_frame, NavPlFrame::Ellipse) {
+                // For ellipse frame, pos_pl_m[0] is semi-major axis (worst case horizontal)
+                pl.pos_pl_m[0] as f32
+            } else {
+                // For NED/LLV, compute 2D magnitude
+                ((pl.pos_pl_m[0].powi(2) + pl.pos_pl_m[1].powi(2)).sqrt()) as f32
+            };
+            self.current.horizontal_pl_m = horizontal_pl;
+            self.current.vertical_pl_m = pl.pos_pl_m[2] as f32;
+        } else {
+            self.current.horizontal_pl_m = 0.0;
+            self.current.vertical_pl_m = 0.0;
+        }
+
+        if pl.vel_valid {
+            // Compute velocity PL magnitude (3D)
+            let vel_pl =
+                ((pl.vel_pl_ms[0].powi(2) + pl.vel_pl_ms[1].powi(2) + pl.vel_pl_ms[2].powi(2))
+                    .sqrt()) as f32;
+            self.current.velocity_pl_ms = vel_pl;
+        } else {
+            self.current.velocity_pl_ms = 0.0;
+        }
+    }
+
     /// Compute the overall integrity level based on current data.
     ///
     /// Returns the computed `GnssIntegrity` with updated level and status message.
@@ -439,6 +531,27 @@ impl IntegrityAggregator {
             _ => {}
         }
 
+        // Check protection level validity (if required)
+        if self.thresholds.require_valid_pl {
+            if let Some(ref pl) = self.last_nav_pl {
+                if !pl.pos_valid {
+                    level = level.max(IntegrityLevel::Critical);
+                    issues.push("Protection level invalid");
+                }
+                // Check if solution is not trustworthy
+                if matches!(
+                    pl.pos_invalidity_reason,
+                    NavPlInvalidityReason::SolutionNotTrustworthy
+                ) {
+                    level = level.max(IntegrityLevel::Critical);
+                    issues.push("Solution not trustworthy");
+                }
+            } else {
+                level = level.max(IntegrityLevel::Critical);
+                issues.push("Protection level not available");
+            }
+        }
+
         // =========================================================================
         // LEVEL 1: HIGH QUALITY CHECKS (Degraded operation if failed)
         // =========================================================================
@@ -499,6 +612,41 @@ impl IntegrityAggregator {
             {
                 level = level.max(IntegrityLevel::Degraded);
                 issues.push("Low mean signal quality");
+            }
+
+            // =========================================================================
+            // PROTECTION LEVEL CHECKS (ISO 26262/SOTIF compliant bounds)
+            // =========================================================================
+
+            // Check protection levels if available and valid
+            if let Some(ref pl) = self.last_nav_pl {
+                if pl.pos_valid {
+                    // Check horizontal protection level against alert limit
+                    if self.current.horizontal_pl_m > self.thresholds.max_horizontal_pl_m {
+                        level = level.max(IntegrityLevel::Degraded);
+                        issues.push("Horizontal PL exceeds alert limit");
+                    }
+
+                    // Check vertical protection level against alert limit
+                    if self.current.vertical_pl_m > self.thresholds.max_vertical_pl_m {
+                        level = level.max(IntegrityLevel::Degraded);
+                        issues.push("Vertical PL exceeds alert limit");
+                    }
+                }
+
+                if pl.vel_valid {
+                    // Check velocity protection level against alert limit
+                    if self.current.velocity_pl_ms > self.thresholds.max_velocity_pl_ms {
+                        level = level.max(IntegrityLevel::Degraded);
+                        issues.push("Velocity PL exceeds alert limit");
+                    }
+                }
+
+                // Check TMIR (Target Misleading Information Risk)
+                if pl.tmir > self.thresholds.max_tmir_per_epoch {
+                    level = level.max(IntegrityLevel::Degraded);
+                    issues.push("TMIR exceeds threshold");
+                }
             }
         }
 

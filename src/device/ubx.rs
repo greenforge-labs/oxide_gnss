@@ -16,6 +16,9 @@ use ublox::{
     mon_hw::{AntennaPower, AntennaStatus, MonHwRef},
     nav_cov::NavCovRef,
     nav_hp_pos_llh::NavHpPosLlhRef,
+    nav_pl::{
+        NavPlRef, PlInvalidityReason, PlPosFrame, PlPosValid, PlTimeValid, PlVelFrame, PlVelValid,
+    },
     nav_pos_ecef::NavPosEcefRef,
     nav_rel_pos_ned::{common::NavRelPosNedFlags, proto27_31::NavRelPosNedRef},
     nav_sat::NavSatRef,
@@ -59,6 +62,8 @@ pub struct UbxHandler {
     pub mon_rf: Option<MonRfData>,
     /// Last received relative position (moving base/rover)
     pub rel_pos_ned: Option<RelPosNedData>,
+    /// Last received protection level data (NAV-PL)
+    pub nav_pl: Option<NavPlData>,
 }
 
 /// Parsed High Precision Position (NAV-HPPOSLLH).
@@ -230,6 +235,112 @@ impl From<NavRelPosNedFlags> for RelPosNedFlags {
             is_moving: flags.is_moving(),
             ref_pos_miss: flags.ref_pos_miss(),
             ref_obs_miss: flags.ref_obs_miss(),
+        }
+    }
+}
+
+/// Parsed Protection Level data (NAV-PL).
+///
+/// Protection levels provide statistically-bounded error estimates with a specified
+/// Target Misleading Information Risk (TMIR). This enables ISO 26262/ISO 21448 (SOTIF)
+/// compliant integrity monitoring for autonomous vehicle applications.
+#[derive(Debug, Clone)]
+pub struct NavPlData {
+    /// GPS time of week (ms)
+    pub itow: u32,
+    /// Target Misleading Information Risk: TMIR = tmir_coeff * 10^tmir_exp [%MI/epoch]
+    pub tmir: f64,
+    /// Position protection level validity
+    pub pos_valid: bool,
+    /// Position protection level frame
+    pub pos_frame: NavPlFrame,
+    /// Position protection level invalidity reason (if invalid)
+    pub pos_invalidity_reason: NavPlInvalidityReason,
+    /// Position protection levels in meters [axis1, axis2, axis3]
+    /// Interpretation depends on pos_frame (NED, LongLatVert, or Ellipse)
+    pub pos_pl_m: [f64; 3],
+    /// Horizontal position ellipse orientation (degrees from true North, clockwise)
+    /// Only valid when pos_frame is Ellipse
+    pub pos_horiz_orient_deg: f64,
+    /// Velocity protection level validity
+    pub vel_valid: bool,
+    /// Velocity protection level frame
+    pub vel_frame: NavPlFrame,
+    /// Velocity protection level invalidity reason (if invalid)
+    pub vel_invalidity_reason: NavPlInvalidityReason,
+    /// Velocity protection levels in m/s [axis1, axis2, axis3]
+    pub vel_pl_ms: [f64; 3],
+    /// Horizontal velocity ellipse orientation (degrees from true North, clockwise)
+    pub vel_horiz_orient_deg: f64,
+    /// Time protection level validity
+    pub time_valid: bool,
+    /// Time protection level invalidity reason (if invalid)
+    pub time_invalidity_reason: NavPlInvalidityReason,
+    /// Time protection level in nanoseconds
+    pub time_pl_ns: u32,
+}
+
+/// Protection level reference frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum NavPlFrame {
+    /// Invalid (not possible to calculate frame conversion)
+    #[default]
+    Invalid,
+    /// North-East-Down
+    Ned,
+    /// Longitudinal-Lateral-Vertical (vehicle frame)
+    LongLatVert,
+    /// HorizSemiMajorAxis-HorizSemiMinorAxis-Vertical (error ellipse)
+    Ellipse,
+}
+
+impl From<PlPosFrame> for NavPlFrame {
+    fn from(frame: PlPosFrame) -> Self {
+        match frame {
+            PlPosFrame::Invalid => NavPlFrame::Invalid,
+            PlPosFrame::Ned => NavPlFrame::Ned,
+            PlPosFrame::LongLatVert => NavPlFrame::LongLatVert,
+            PlPosFrame::HorizSemiMajorMinorVert => NavPlFrame::Ellipse,
+            _ => NavPlFrame::Invalid, // Reserved values
+        }
+    }
+}
+
+impl From<PlVelFrame> for NavPlFrame {
+    fn from(frame: PlVelFrame) -> Self {
+        match frame {
+            PlVelFrame::Invalid => NavPlFrame::Invalid,
+            PlVelFrame::Ned => NavPlFrame::Ned,
+            PlVelFrame::LongLatVert => NavPlFrame::LongLatVert,
+            PlVelFrame::HorizSemiMajorMinorVert => NavPlFrame::Ellipse,
+            _ => NavPlFrame::Invalid, // Reserved values
+        }
+    }
+}
+
+/// Protection level invalidity reason.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum NavPlInvalidityReason {
+    /// Protection level is valid (no invalidity reason)
+    #[default]
+    Valid,
+    /// Not available
+    NotAvailable,
+    /// Solution not trustworthy (values 1-29)
+    SolutionNotTrustworthy,
+    /// PL not verified for this receiver configuration (values 30-100)
+    NotVerifiedForConfig,
+}
+
+impl From<PlInvalidityReason> for NavPlInvalidityReason {
+    fn from(reason: PlInvalidityReason) -> Self {
+        match reason {
+            PlInvalidityReason::NotAvailable => NavPlInvalidityReason::NotAvailable,
+            PlInvalidityReason::SolutionNotTrustworthy => {
+                NavPlInvalidityReason::SolutionNotTrustworthy
+            }
+            PlInvalidityReason::NotVerifiedForConfig => NavPlInvalidityReason::NotVerifiedForConfig,
+            _ => NavPlInvalidityReason::NotAvailable, // Reserved values
         }
     }
 }
@@ -568,6 +679,8 @@ pub struct ProcessResult {
     pub mon_rf: Option<MonRfData>,
     /// Relative position for moving base/rover
     pub rel_pos_ned: Option<RelPosNedData>,
+    /// Protection level data (NAV-PL)
+    pub nav_pl: Option<NavPlData>,
 }
 
 impl UbxHandler {
@@ -591,6 +704,7 @@ impl UbxHandler {
             mon_hw: None,
             mon_rf: None,
             rel_pos_ned: None,
+            nav_pl: None,
         }
     }
 
@@ -629,6 +743,7 @@ impl UbxHandler {
         let mut new_mon_hw = None;
         let mut new_mon_rf = None;
         let mut new_rel_pos_ned = None;
+        let mut new_nav_pl = None;
         let mut ack_result = None;
         let mut nav_pvt_count = 0u64;
         let mut other_count = 0u64;
@@ -778,6 +893,11 @@ impl UbxHandler {
                             );
                             new_rel_pos_ned = Some(rel_pos);
                         }
+                        ublox::proto27::PacketRef::NavPl(msg) => {
+                            let pl = Self::parse_nav_pl(&msg);
+                            debug!(pos_valid = pl.pos_valid, tmir = pl.tmir, "NAV-PL received");
+                            new_nav_pl = Some(pl);
+                        }
                         _ => {
                             other_count += 1;
                         }
@@ -837,6 +957,9 @@ impl UbxHandler {
         if let Some(ref rel_pos) = new_rel_pos_ned {
             self.rel_pos_ned = Some(rel_pos.clone());
         }
+        if let Some(ref pl) = new_nav_pl {
+            self.nav_pl = Some(pl.clone());
+        }
 
         ProcessResult {
             pvt: new_pvt,
@@ -853,6 +976,7 @@ impl UbxHandler {
             mon_hw: new_mon_hw,
             mon_rf: new_mon_rf,
             rel_pos_ned: new_rel_pos_ned,
+            nav_pl: new_nav_pl,
         }
     }
 
@@ -1035,6 +1159,73 @@ impl UbxHandler {
             acc_length,
             acc_heading,
             flags: msg.flags().into(),
+        }
+    }
+
+    /// Parse NAV-PL (protection level) message.
+    ///
+    /// Protection levels provide statistically-bounded error estimates with a specified
+    /// Target Misleading Information Risk (TMIR) for ISO 26262/ISO 21448 compliance.
+    fn parse_nav_pl(msg: &NavPlRef) -> NavPlData {
+        // Calculate TMIR from coefficient and exponent
+        let tmir = (msg.tmir_coeff() as f64) * 10_f64.powi(msg.tmir_exp() as i32);
+
+        // Position protection level validity and frame
+        let pos_valid = matches!(msg.pl_pos_valid(), PlPosValid::Valid);
+        let pos_frame: NavPlFrame = msg.pl_pos_frame().into();
+        let pos_invalidity_reason = if pos_valid {
+            NavPlInvalidityReason::Valid
+        } else {
+            msg.pl_pos_invalidity_reason().into()
+        };
+
+        // Convert position PLs from mm to meters
+        let pos_pl_m = [
+            msg.pl_pos1() as f64 / 1000.0,
+            msg.pl_pos2() as f64 / 1000.0,
+            msg.pl_pos3() as f64 / 1000.0,
+        ];
+
+        // Velocity protection level validity and frame
+        let vel_valid = matches!(msg.pl_vel_valid(), PlVelValid::Valid);
+        let vel_frame: NavPlFrame = msg.pl_vel_frame().into();
+        let vel_invalidity_reason = if vel_valid {
+            NavPlInvalidityReason::Valid
+        } else {
+            msg.pl_vel_invalidity_reason().into()
+        };
+
+        // Convert velocity PLs from mm/s to m/s
+        let vel_pl_ms = [
+            msg.pl_vel1() as f64 / 1000.0,
+            msg.pl_vel2() as f64 / 1000.0,
+            msg.pl_vel3() as f64 / 1000.0,
+        ];
+
+        // Time protection level validity
+        let time_valid = matches!(msg.pl_time_valid(), PlTimeValid::Valid);
+        let time_invalidity_reason = if time_valid {
+            NavPlInvalidityReason::Valid
+        } else {
+            msg.pl_time_invalidity_reason().into()
+        };
+
+        NavPlData {
+            itow: msg.itow(),
+            tmir,
+            pos_valid,
+            pos_frame,
+            pos_invalidity_reason,
+            pos_pl_m,
+            pos_horiz_orient_deg: msg.pl_pos_horiz_orient(),
+            vel_valid,
+            vel_frame,
+            vel_invalidity_reason,
+            vel_pl_ms,
+            vel_horiz_orient_deg: msg.pl_vel_horiz_orient(),
+            time_valid,
+            time_invalidity_reason,
+            time_pl_ns: msg.pl_time(),
         }
     }
 

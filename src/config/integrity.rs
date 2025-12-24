@@ -79,6 +79,28 @@ pub struct IntegrityThresholdsConfig {
     /// 2 = OK/DEGRADED/CRITICAL is operational (permissive)
     #[serde(default = "default_operational_threshold")]
     pub operational_threshold: u8,
+
+    // Protection Level (NAV-PL) thresholds
+    /// Maximum horizontal protection level (m) before DEGRADED (default: 0.50)
+    #[serde(default = "default_max_horizontal_pl_m")]
+    pub max_horizontal_pl_m: f32,
+
+    /// Maximum vertical protection level (m) before DEGRADED (default: 1.00)
+    #[serde(default = "default_max_vertical_pl_m")]
+    pub max_vertical_pl_m: f32,
+
+    /// Maximum velocity protection level (m/s) before DEGRADED (default: 0.10)
+    #[serde(default = "default_max_velocity_pl_ms")]
+    pub max_velocity_pl_ms: f32,
+
+    /// Maximum TMIR (Target Misleading Information Risk) per epoch (default: 1e-5)
+    #[serde(default = "default_max_tmir_per_epoch")]
+    pub max_tmir_per_epoch: f64,
+
+    /// Require valid protection level for operational status (default: false)
+    /// If true, invalid PL will result in CRITICAL level
+    #[serde(default = "default_require_valid_pl")]
+    pub require_valid_pl: bool,
 }
 
 fn default_min_satellites_critical() -> u8 {
@@ -111,6 +133,21 @@ fn default_max_pvt_age_s() -> f32 {
 fn default_operational_threshold() -> u8 {
     1
 }
+fn default_max_horizontal_pl_m() -> f32 {
+    0.50
+}
+fn default_max_vertical_pl_m() -> f32 {
+    1.00
+}
+fn default_max_velocity_pl_ms() -> f32 {
+    0.10
+}
+fn default_max_tmir_per_epoch() -> f64 {
+    1e-5
+}
+fn default_require_valid_pl() -> bool {
+    false
+}
 
 impl Default for IntegrityThresholdsConfig {
     fn default() -> Self {
@@ -125,6 +162,11 @@ impl Default for IntegrityThresholdsConfig {
             min_mean_cno_degraded: default_min_mean_cno_degraded(),
             max_pvt_age_s: default_max_pvt_age_s(),
             operational_threshold: default_operational_threshold(),
+            max_horizontal_pl_m: default_max_horizontal_pl_m(),
+            max_vertical_pl_m: default_max_vertical_pl_m(),
+            max_velocity_pl_ms: default_max_velocity_pl_ms(),
+            max_tmir_per_epoch: default_max_tmir_per_epoch(),
+            require_valid_pl: default_require_valid_pl(),
         }
     }
 }
@@ -142,6 +184,11 @@ impl From<IntegrityThresholdsConfig> for IntegrityThresholds {
             min_mean_cno_degraded: config.min_mean_cno_degraded,
             max_pvt_age_s: config.max_pvt_age_s,
             operational_threshold: config.operational_threshold,
+            max_horizontal_pl_m: config.max_horizontal_pl_m,
+            max_vertical_pl_m: config.max_vertical_pl_m,
+            max_velocity_pl_ms: config.max_velocity_pl_ms,
+            max_tmir_per_epoch: config.max_tmir_per_epoch,
+            require_valid_pl: config.require_valid_pl,
         }
     }
 }
