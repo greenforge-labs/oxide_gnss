@@ -1217,7 +1217,7 @@ checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
 [[package]]
 name = "ublox"
 version = "0.9.0"
-source = "git+https://github.com/gsokoll/ublox.git?branch=feature%2Fnav-pl-support#f22df5759e3e07af60eef3590eb0bc3d9b9f77c5"
+source = "git+https://github.com/gsokoll/ublox.git?branch=feature%2Fnav-pl-support#7ad4ac8a9f8b1d0bdf28d2be22d6a2725d64bc59"
 dependencies = [
  "bitflags",
  "chrono",
@@ -1228,7 +1228,7 @@ dependencies = [
 [[package]]
 name = "ublox_derive"
 version = "0.5.0"
-source = "git+https://github.com/gsokoll/ublox.git?branch=feature%2Fnav-pl-support#f22df5759e3e07af60eef3590eb0bc3d9b9f77c5"
+source = "git+https://github.com/gsokoll/ublox.git?branch=feature%2Fnav-pl-support#7ad4ac8a9f8b1d0bdf28d2be22d6a2725d64bc59"
 dependencies = [
  "proc-macro2",
  "quote",
