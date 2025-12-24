@@ -34,6 +34,7 @@ The integrity feature requires these UBX messages to be enabled:
 | Message | Purpose |
 |---------|---------|
 | `NAV_PVT` | Fix type, accuracy, satellites, correction age |
+| `NAV_PL` | Protection levels, TMIR (ISO 26262 integrity bounds) |
 | `SEC_SIG` | Jamming/spoofing detection |
 | `MON_RF` | Antenna status, jamming indicator |
 | `MON_COMMS` | Communication port health |
@@ -124,6 +125,20 @@ Signal quality metrics are derived from satellites used in the navigation soluti
 | Condition | Integrity Contribution |
 |-----------|------------------------|
 | `security_events > 0` | → OK, but logged ("Security events logged") |
+
+### 3.7 Protection Levels (NAV-PL)
+
+Protection levels provide statistically-bounded error estimates with a specified Target Misleading Information Risk (TMIR), enabling ISO 26262/ISO 21448 (SOTIF) compliant integrity monitoring.
+
+| Metric | Threshold | Integrity Contribution |
+|--------|-----------|------------------------|
+| `horizontal_pl_m` | `> max_horizontal_pl_m` (default: 0.50m) | → **DEGRADED** ("Horizontal PL exceeds alert limit") |
+| `vertical_pl_m` | `> max_vertical_pl_m` (default: 1.00m) | → **DEGRADED** ("Vertical PL exceeds alert limit") |
+| `velocity_pl_ms` | `> max_velocity_pl_ms` (default: 0.10 m/s) | → **DEGRADED** ("Velocity PL exceeds alert limit") |
+| `tmir` | `> max_tmir_per_epoch` (default: 1e-5) | → **DEGRADED** ("TMIR exceeds threshold") |
+| `pos_valid` | `false` AND `require_valid_pl: true` | → **CRITICAL** ("Protection level invalid") |
+
+**Note:** When NAV-PL is unavailable (older firmware), the system falls back to hAcc/vAcc threshold checks. See [NAV_PL_INTEGRATION.md](NAV_PL_INTEGRATION.md) for details.
 
 ---
 
@@ -226,6 +241,13 @@ integrity:
     min_mean_cno_degraded: 35.0     # Below this → DEGRADED (mean C/N0)
     max_pvt_age_s: 2.0              # Above this → FAILED (staleness)
     operational_threshold: 1        # 0=strict, 1=default, 2=permissive
+    
+    # Protection Level thresholds (NAV-PL)
+    max_horizontal_pl_m: 0.50       # Above this → DEGRADED
+    max_vertical_pl_m: 1.00         # Above this → DEGRADED
+    max_velocity_pl_ms: 0.10        # Above this → DEGRADED
+    max_tmir_per_epoch: 1.0e-5      # Above this → DEGRADED
+    require_valid_pl: false         # If true, invalid PL → CRITICAL
 ```
 
 All fields are optional - omitted fields use defaults.
@@ -273,6 +295,7 @@ The `~/integrity` topic publishes `oxide_gnss_msgs/OxideIntegrity`:
 UBX Messages from Device
          │
          ├── NAV_PVT ──────► update_pvt()
+         ├── NAV_PL ───────► update_nav_pl()
          ├── NAV_SAT ──────► update_signal_quality()
          ├── SEC_SIG ──────► update_sec_sig()
          ├── MON_RF ───────► update_mon_rf()

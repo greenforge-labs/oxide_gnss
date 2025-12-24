@@ -4,8 +4,8 @@ This document describes the integration of UBX-NAV-PL (Protection Level) message
 into oxide_gnss for enhanced GNSS integrity monitoring in autonomous vehicle applications.
 
 **Created:** 2024-12-24  
-**Status:** In Progress  
-**Feature Branch:** `feature/nav-pl-integration`
+**Status:** Complete  
+**Feature Branch:** `feature/nav-pl-integration` (merged to main)
 
 ---
 
@@ -42,10 +42,10 @@ From the forked ublox crate (`gsokoll/ublox:feature/nav-pl-support`):
 | `pl_vel_invalidity_reason` | enum | Why velocity PL is invalid |
 | `pl_time_invalidity_reason` | enum | Why time PL is invalid |
 | `itow` | u32 | GPS time of week (ms) |
-| `pl_pos1/2/3` | u32 | Position PL per axis (mm) |
-| `pl_vel1/2/3` | u32 | Velocity PL per axis (mm/s) |
-| `pl_pos_horiz_orient` | u16 | Horizontal ellipse orientation (0.01°) |
-| `pl_vel_horiz_orient` | u16 | Velocity ellipse orientation (0.01°) |
+| `pl_pos1/2/3` | f64 | Position PL per axis (meters) - SI units |
+| `pl_vel1/2/3` | f64 | Velocity PL per axis (m/s) - SI units |
+| `pl_pos_horiz_orient` | f64 | Horizontal ellipse orientation (degrees) |
+| `pl_vel_horiz_orient` | f64 | Velocity ellipse orientation (degrees) |
 | `pl_time` | u32 | Time PL (ns) |
 
 ### Protection Level Frames
@@ -244,8 +244,9 @@ if nav_pl.invalidity_reason in [1..29]:
 
 # Step 2: Degraded checks  
 if nav_pl.pos_valid == Valid:
-    horizontal_pl = sqrt(pl_pos1² + pl_pos2²) / 1000.0  # mm to m
-    vertical_pl = pl_pos3 / 1000.0
+    # ublox-rs returns SI units (meters) directly
+    horizontal_pl = sqrt(pl_pos1² + pl_pos2²)
+    vertical_pl = pl_pos3
     
     if horizontal_pl > max_horizontal_pl_m:
         level = max(level, DEGRADED)

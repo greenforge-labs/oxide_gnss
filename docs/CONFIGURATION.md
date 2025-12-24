@@ -467,6 +467,7 @@ Integrity is computed from these UBX messages:
 | Message | Data Used | Checks |
 |---------|-----------|--------|
 | **NAV_PVT** | Fix type, satellites, accuracy, PDOP, carrier solution | Fix quality, satellite count, accuracy thresholds |
+| **NAV_PL** | Protection levels, TMIR | ISO 26262/SOTIF integrity bounds |
 | **SEC_SIG** | Jamming state, spoofing state | Jamming/spoofing detection |
 | **MON_RF** | Antenna status, jamming indicator | Antenna faults |
 | **MON_COMMS** | Port errors | Communication health |
@@ -513,7 +514,7 @@ These indicate reduced solution quality:
 
 ### Configurable Thresholds
 
-Thresholds are currently set to defaults in code. Future releases will expose these in config:
+All thresholds are configurable via YAML. See [INTEGRITY.md](INTEGRITY.md) for full details.
 
 | Threshold | Default | Description |
 |-----------|---------|-------------|
@@ -523,6 +524,11 @@ Thresholds are currently set to defaults in code. Future releases will expose th
 | `max_v_accuracy_m` | 0.15 | Vertical accuracy (15cm) |
 | `max_pdop` | 3.0 | Position DOP threshold |
 | `max_correction_age_s` | 10.0 | RTK correction age |
+| `max_horizontal_pl_m` | 0.50 | Horizontal protection level alert limit |
+| `max_vertical_pl_m` | 1.00 | Vertical protection level alert limit |
+| `max_velocity_pl_ms` | 0.10 | Velocity protection level alert limit |
+| `max_tmir_per_epoch` | 1e-5 | TMIR threshold |
+| `require_valid_pl` | false | If true, invalid PL → CRITICAL |
 
 ### Recommended Message Configuration
 
@@ -532,6 +538,7 @@ For full integrity monitoring, enable these messages:
 messages:
   usb:
     NAV_PVT: 1        # Essential - position/velocity/time
+    NAV_PL: 1         # Protection levels (requires HPG 1.30+ firmware)
     MON_RF: 1         # Antenna status, jamming indicator
     SEC_SIG: 1        # Jamming/spoofing detection
     MON_COMMS: 1      # Communication port health

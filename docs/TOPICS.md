@@ -96,7 +96,7 @@ Baseline vector from moving base to rover.
 | Topic | Required Messages | Optional Messages |
 |-------|-------------------|-------------------|
 | `~/fix`, `~/velocity`, `~/time_reference` | `NAV_PVT` | `NAV_HPPOSLLH` |
-| `~/integrity`, `~/operational` | `NAV_PVT`, `SEC_SIG`, `MON_RF`, `MON_COMMS`, `NAV_SAT` | `SEC_SIGLOG`, `RXM_COR`, `NAV_COV` |
+| `~/integrity`, `~/operational` | `NAV_PVT`, `SEC_SIG`, `MON_RF`, `MON_COMMS` | `NAV_PL`, `NAV_SAT`, `SEC_SIGLOG`, `RXM_COR`, `NAV_COV` |
 | `~/satellites` | `NAV_SAT` | - |
 | `~/baseline_pose` | `NAV_RELPOSNED` | - |
 

@@ -121,6 +121,7 @@ The driver includes built-in safety integrity monitoring that aggregates quality
 
 **Data Sources:**
 - NAV-PVT: Fix type, satellites, accuracy, PDOP
+- NAV-PL: Protection levels with TMIR (ISO 26262 integrity bounds)
 - NAV-COV: Position/velocity covariance matrices
 - SEC-SIG: Jamming/spoofing detection
 - SEC-SIGLOG: Security event log
