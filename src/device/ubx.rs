@@ -1179,11 +1179,11 @@ impl UbxHandler {
             msg.pl_pos_invalidity_reason().into()
         };
 
-        // Convert position PLs from mm to meters
+        // Position PLs - ublox-rs returns values in meters (SI units)
         let pos_pl_m = [
-            msg.pl_pos1() as f64 / 1000.0,
-            msg.pl_pos2() as f64 / 1000.0,
-            msg.pl_pos3() as f64 / 1000.0,
+            msg.pl_pos1(),
+            msg.pl_pos2(),
+            msg.pl_pos3(),
         ];
 
         // Velocity protection level validity and frame
@@ -1195,11 +1195,11 @@ impl UbxHandler {
             msg.pl_vel_invalidity_reason().into()
         };
 
-        // Convert velocity PLs from mm/s to m/s
+        // Velocity PLs - ublox-rs returns values in m/s (SI units)
         let vel_pl_ms = [
-            msg.pl_vel1() as f64 / 1000.0,
-            msg.pl_vel2() as f64 / 1000.0,
-            msg.pl_vel3() as f64 / 1000.0,
+            msg.pl_vel1(),
+            msg.pl_vel2(),
+            msg.pl_vel3(),
         ];
 
         // Time protection level validity
