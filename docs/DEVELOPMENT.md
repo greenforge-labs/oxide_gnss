@@ -190,6 +190,12 @@ just ci
 
 ```
 oxide_gnss/                 # Repository root
+├── oxide_gnss_msgs/       # ROS2 message definitions
+│   ├── CMakeLists.txt
+│   └── msg/
+│       ├── OxideSatellite.msg   # Per-satellite data
+│       ├── OxideSatellites.msg  # Satellite constellation status
+│       └── OxideIntegrity.msg   # Integrity monitoring
 ├── src/
 │   ├── main.rs           # Entry point (ROS2 node)
 │   ├── lib.rs            # Library root
@@ -320,6 +326,7 @@ minicom -D /dev/gnss_f9p_rover -b 460800
 
 | Problem | Cause | Solution |
 |---------|-------|----------|
+| `ignoring unknown package 'oxide_gnss_msgs'` | Missing symlink | Create symlink: `ln -s oxide_gnss/oxide_gnss_msgs oxide_gnss_msgs` in `src/` |
 | `No task extension to 'build' a 'ros.ament_cargo' package` | Missing colcon plugins | Install colcon-cargo plugins (see Initial Setup) |
 | `failed to resolve patches` | Stale cargo state | Delete `.cargo/` and `install/` dirs, rebuild |
 | `externally-managed-environment` | PEP 668 restriction | Use `--break-system-packages` with pip |
