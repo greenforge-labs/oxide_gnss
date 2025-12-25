@@ -71,13 +71,28 @@ Simple go/no-go signal derived from integrity level.
 
 ### `~/satellites`
 
-**Type:** `std_msgs/String` (JSON)
+**Type:** `oxide_gnss_msgs/OxideSatellites`
 
-Per-satellite signal information (SNR, elevation, azimuth).
+Per-satellite signal information including constellation, signal strength, elevation, azimuth, and usage status.
 
 - **Requires:** `features.satellites: true`
 - **UBX Messages:** `NAV_SAT`
 - **Rate:** Navigation rate (can be high bandwidth)
+
+**Message Fields:**
+- `num_satellites` — Total satellites tracked
+- `num_used` — Satellites used in navigation solution
+- `satellites[]` — Per-satellite details (`OxideSatellite`)
+- `mean_cno`, `min_cno`, `sats_above_threshold` — Signal quality metrics
+- `num_gps`, `num_glonass`, `num_galileo`, `num_beidou`, `num_sbas`, `num_qzss` — Per-constellation counts
+
+**OxideSatellite Fields:**
+- `gnss_id` — Constellation (GPS=0, SBAS=1, Galileo=2, BeiDou=3, QZSS=5, GLONASS=6, NAVIC=7)
+- `sv_id` — Satellite vehicle ID
+- `cno` — Carrier-to-noise ratio (dB-Hz)
+- `elevation`, `azimuth` — Sky position (degrees)
+- `used_in_solution` — Whether satellite contributes to fix
+- `signal_quality`, `health`, `orbit_source` — Quality indicators
 
 ### `~/baseline_pose`
 

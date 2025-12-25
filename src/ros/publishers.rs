@@ -27,7 +27,7 @@ pub struct GnssPublishers {
 
     // Optional publishers - only created if topic is enabled
     /// Satellite Info publisher (~/satellites) - requires satellites feature
-    sat_pub: Option<Publisher<std_msgs::msg::String>>,
+    sat_pub: Option<Publisher<oxide_gnss_msgs::msg::OxideSatellites>>,
     /// Integrity status publisher (~/integrity) - requires integrity feature
     integrity_pub: Option<Publisher<oxide_gnss_msgs::msg::OxideIntegrity>>,
     /// Operational go/no-go publisher (~/operational) - requires integrity feature
@@ -250,14 +250,18 @@ impl GnssPublishers {
             return; // Topic not enabled
         };
 
-        let msg = std_msgs::msg::String {
-            data: format!(
-                "{{\"num_svs\": {}, \"active_svs\": {}}}",
-                info.num_sats,
-                info.sats.iter().filter(|s| s.sv_used).count()
-            ),
-        };
-        let _ = pub_.publish(msg);
+        let mut msg: oxide_gnss_msgs::msg::OxideSatellites = info.to_ros_msg();
+        msg.header.stamp = now_timestamp();
+
+        if let Err(e) = pub_.publish(msg) {
+            error!(error = %e, "Failed to publish satellites");
+        } else {
+            debug!(
+                num_sats = info.num_sats,
+                num_used = info.sats.iter().filter(|s| s.sv_used).count(),
+                "Published satellites"
+            );
+        }
     }
 
     /// Publish integrity status to ~/integrity and ~/operational (Bool).

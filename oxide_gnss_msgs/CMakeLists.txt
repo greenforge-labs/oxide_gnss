@@ -11,6 +11,8 @@ find_package(std_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/OxideIntegrity.msg"
+  "msg/OxideSatellite.msg"
+  "msg/OxideSatellites.msg"
   "msg/SecSigDetails.msg"
   DEPENDENCIES std_msgs
 )

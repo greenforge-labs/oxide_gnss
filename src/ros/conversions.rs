@@ -1,7 +1,7 @@
 //! Conversions from internal types to ROS2 message types.
 
 use crate::config::CoordinateFrame;
-use crate::device::ubx::{HpPosData, PvtData, SecSigData};
+use crate::device::ubx::{HpPosData, PvtData, SatInfo, SatStatus, SecSigData};
 use crate::device::{JammingStateData, SpoofingStateData};
 use crate::state::{AntennaStatus, FixType, GnssIntegrity};
 use crate::transform;
@@ -191,6 +191,81 @@ pub fn now_timestamp() -> builtin_interfaces::msg::Time {
     }
 }
 
+/// Convert SatStatus to oxide_gnss_msgs/OxideSatellite.
+impl ToRosMessage<oxide_gnss_msgs::msg::OxideSatellite> for SatStatus {
+    fn to_ros_msg(&self) -> oxide_gnss_msgs::msg::OxideSatellite {
+        use oxide_gnss_msgs::msg::OxideSatellite as Msg;
+
+        let mut msg = Msg::default();
+
+        msg.gnss_id = self.gnss_id;
+        msg.sv_id = self.sv_id;
+        msg.cno = self.cno;
+        msg.elevation = self.elev;
+        msg.azimuth = self.azim;
+        msg.pr_residual = self.pr_res;
+        msg.used_in_solution = self.sv_used;
+
+        // Extract quality indicator from flags (bits 4-6)
+        msg.signal_quality = ((self.flags >> 4) & 0x07) as u8;
+
+        // Extract health from flags (bits 8-9)
+        let health_bits = (self.flags >> 8) & 0x03;
+        msg.health = match health_bits {
+            1 => Msg::HEALTH_HEALTHY,
+            2 => Msg::HEALTH_UNHEALTHY,
+            _ => Msg::HEALTH_UNKNOWN,
+        };
+
+        // Extract orbit source from flags (bits 10-12)
+        msg.orbit_source = ((self.flags >> 10) & 0x07) as u8;
+
+        msg
+    }
+}
+
+/// Convert SatInfo to oxide_gnss_msgs/OxideSatellites.
+impl ToRosMessage<oxide_gnss_msgs::msg::OxideSatellites> for SatInfo {
+    fn to_ros_msg(&self) -> oxide_gnss_msgs::msg::OxideSatellites {
+        use oxide_gnss_msgs::msg::OxideSatellite as SatMsg;
+
+        let mut msg = oxide_gnss_msgs::msg::OxideSatellites::default();
+
+        msg.header.frame_id = "gnss".to_string();
+        msg.num_satellites = self.num_sats;
+
+        // Convert individual satellites
+        msg.satellites = self.sats.iter().map(|s| s.to_ros_msg()).collect();
+
+        // Count satellites used in solution
+        let used_sats: Vec<&SatStatus> = self.sats.iter().filter(|s| s.sv_used).collect();
+        msg.num_used = used_sats.len() as u8;
+
+        // Compute signal quality metrics from used satellites
+        if !used_sats.is_empty() {
+            let cno_values: Vec<u8> = used_sats.iter().map(|s| s.cno).collect();
+            msg.mean_cno = cno_values.iter().map(|&c| c as f32).sum::<f32>() / cno_values.len() as f32;
+            msg.min_cno = *cno_values.iter().min().unwrap_or(&0);
+            msg.sats_above_threshold = cno_values.iter().filter(|&&c| c >= 30).count() as u8;
+        }
+
+        // Count per-constellation (only used satellites)
+        for sat in &used_sats {
+            match sat.gnss_id {
+                SatMsg::GNSS_GPS => msg.num_gps += 1,
+                SatMsg::GNSS_GLONASS => msg.num_glonass += 1,
+                SatMsg::GNSS_GALILEO => msg.num_galileo += 1,
+                SatMsg::GNSS_BEIDOU => msg.num_beidou += 1,
+                SatMsg::GNSS_SBAS => msg.num_sbas += 1,
+                SatMsg::GNSS_QZSS => msg.num_qzss += 1,
+                _ => {}
+            }
+        }
+
+        msg
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -293,6 +368,104 @@ mod tests {
             fix_type_to_status(FixType::RtkFixed),
             sensor_msgs::msg::NavSatStatus::STATUS_GBAS_FIX
         );
+    }
+
+    fn sample_sat_status(gnss_id: u8, sv_id: u8, cno: u8, used: bool) -> SatStatus {
+        SatStatus {
+            gnss_id,
+            sv_id,
+            cno,
+            elev: 45,
+            azim: 180,
+            pr_res: 10,
+            flags: 0x0150, // quality=5, health=1 (healthy), orbit=1
+            sv_used: used,
+        }
+    }
+
+    #[test]
+    fn test_sat_status_to_ros_msg() {
+        use oxide_gnss_msgs::msg::OxideSatellite as Msg;
+
+        let sat = sample_sat_status(Msg::GNSS_GPS, 12, 42, true);
+        let msg: Msg = sat.to_ros_msg();
+
+        assert_eq!(msg.gnss_id, Msg::GNSS_GPS);
+        assert_eq!(msg.sv_id, 12);
+        assert_eq!(msg.cno, 42);
+        assert_eq!(msg.elevation, 45);
+        assert_eq!(msg.azimuth, 180);
+        assert!(msg.used_in_solution);
+        assert_eq!(msg.signal_quality, 5);
+        assert_eq!(msg.health, Msg::HEALTH_HEALTHY);
+    }
+
+    #[test]
+    fn test_sat_info_to_ros_msg() {
+        use oxide_gnss_msgs::msg::OxideSatellite as SatMsg;
+
+        let info = SatInfo {
+            num_sats: 5,
+            sats: vec![
+                sample_sat_status(SatMsg::GNSS_GPS, 1, 35, true),
+                sample_sat_status(SatMsg::GNSS_GPS, 2, 40, true),
+                sample_sat_status(SatMsg::GNSS_GALILEO, 10, 38, true),
+                sample_sat_status(SatMsg::GNSS_GLONASS, 5, 25, false), // not used
+                sample_sat_status(SatMsg::GNSS_BEIDOU, 20, 32, true),
+            ],
+        };
+
+        let msg: oxide_gnss_msgs::msg::OxideSatellites = info.to_ros_msg();
+
+        assert_eq!(msg.num_satellites, 5);
+        assert_eq!(msg.num_used, 4); // 4 satellites used
+        assert_eq!(msg.satellites.len(), 5);
+
+        // Signal quality metrics (from used sats only: 35, 40, 38, 32)
+        assert!((msg.mean_cno - 36.25).abs() < 0.01); // (35+40+38+32)/4
+        assert_eq!(msg.min_cno, 32);
+        assert_eq!(msg.sats_above_threshold, 4); // all used sats >= 30
+
+        // Per-constellation counts (used only)
+        assert_eq!(msg.num_gps, 2);
+        assert_eq!(msg.num_galileo, 1);
+        assert_eq!(msg.num_glonass, 0); // not used
+        assert_eq!(msg.num_beidou, 1);
+    }
+
+    #[test]
+    fn test_sat_info_empty() {
+        let info = SatInfo {
+            num_sats: 0,
+            sats: vec![],
+        };
+
+        let msg: oxide_gnss_msgs::msg::OxideSatellites = info.to_ros_msg();
+
+        assert_eq!(msg.num_satellites, 0);
+        assert_eq!(msg.num_used, 0);
+        assert_eq!(msg.mean_cno, 0.0);
+        assert_eq!(msg.min_cno, 0);
+    }
+
+    #[test]
+    fn test_sat_info_none_used() {
+        use oxide_gnss_msgs::msg::OxideSatellite as SatMsg;
+
+        let info = SatInfo {
+            num_sats: 2,
+            sats: vec![
+                sample_sat_status(SatMsg::GNSS_GPS, 1, 35, false),
+                sample_sat_status(SatMsg::GNSS_GPS, 2, 40, false),
+            ],
+        };
+
+        let msg: oxide_gnss_msgs::msg::OxideSatellites = info.to_ros_msg();
+
+        assert_eq!(msg.num_satellites, 2);
+        assert_eq!(msg.num_used, 0);
+        assert_eq!(msg.mean_cno, 0.0); // No used sats
+        assert_eq!(msg.num_gps, 0);
     }
 }
 

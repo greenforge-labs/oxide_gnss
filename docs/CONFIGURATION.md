@@ -440,7 +440,7 @@ Topics are created based on your mode and feature configuration. Only enabled to
 |-------|------|------------|-------------|
 | `~/integrity` | `oxide_gnss_msgs/OxideIntegrity` | `integrity: true` | Safety integrity status |
 | `~/operational` | `std_msgs/Bool` | `integrity: true` | Go/no-go signal |
-| `~/satellites` | `std_msgs/String` | `satellites: true` | Satellite info (JSON) |
+| `~/satellites` | `oxide_gnss_msgs/OxideSatellites` | `satellites: true` | Per-satellite status |
 | `~/baseline_pose` | `geometry_msgs/PoseWithCovarianceStamped` | `mode: moving_base_rover` | Baseline to moving base |
 
 ---

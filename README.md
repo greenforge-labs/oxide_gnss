@@ -106,7 +106,7 @@ Topics are created based on your mode and feature configuration:
 |-------|------|----------|
 | `~/integrity` | `oxide_gnss_msgs/OxideIntegrity` | `integrity: true` |
 | `~/operational` | `std_msgs/Bool` | `integrity: true` |
-| `~/satellites` | `std_msgs/String` | `satellites: true` |
+| `~/satellites` | `oxide_gnss_msgs/OxideSatellites` | `satellites: true` |
 | `~/baseline_pose` | `geometry_msgs/PoseWithCovarianceStamped` | `mode: moving_base_rover` |
 
 ### Safety Integrity Monitoring
@@ -206,6 +206,9 @@ git clone https://github.com/ros2-rust/ros2_rust.git
 
 # Import ros2-rust dependencies (message packages with Rust bindings)
 vcs import . < ros2_rust/ros2_rust_jazzy.repos
+
+# Create symlink for message package (required for colcon discovery)
+ln -s oxide_gnss/oxide_gnss_msgs oxide_gnss_msgs
 ```
 
 #### 3. Initial build

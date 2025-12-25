@@ -51,7 +51,14 @@ git clone https://github.com/ros2-rust/ros2_rust.git
 
 # Import ros2-rust dependencies
 vcs import . < ros2_rust/ros2_rust_jazzy.repos
+
+# Create symlink for message package (required for colcon to discover it)
+ln -s oxide_gnss/oxide_gnss_msgs oxide_gnss_msgs
 ```
+
+> **Note:** The `oxide_gnss_msgs` package is nested inside `oxide_gnss` for source control,
+> but colcon requires it at the `src/` level. The symlink makes it discoverable while
+> keeping the source in the main repository.
 
 ### 3. Initial Build
 
