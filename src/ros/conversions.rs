@@ -196,31 +196,26 @@ impl ToRosMessage<oxide_gnss_msgs::msg::OxideSatellite> for SatStatus {
     fn to_ros_msg(&self) -> oxide_gnss_msgs::msg::OxideSatellite {
         use oxide_gnss_msgs::msg::OxideSatellite as Msg;
 
-        let mut msg = Msg::default();
-
-        msg.gnss_id = self.gnss_id;
-        msg.sv_id = self.sv_id;
-        msg.cno = self.cno;
-        msg.elevation = self.elev;
-        msg.azimuth = self.azim;
-        msg.pr_residual = self.pr_res;
-        msg.used_in_solution = self.sv_used;
-
-        // Extract quality indicator from flags (bits 4-6)
-        msg.signal_quality = ((self.flags >> 4) & 0x07) as u8;
-
         // Extract health from flags (bits 8-9)
         let health_bits = (self.flags >> 8) & 0x03;
-        msg.health = match health_bits {
+        let health = match health_bits {
             1 => Msg::HEALTH_HEALTHY,
             2 => Msg::HEALTH_UNHEALTHY,
             _ => Msg::HEALTH_UNKNOWN,
         };
 
-        // Extract orbit source from flags (bits 10-12)
-        msg.orbit_source = ((self.flags >> 10) & 0x07) as u8;
-
-        msg
+        Msg {
+            gnss_id: self.gnss_id,
+            sv_id: self.sv_id,
+            cno: self.cno,
+            elevation: self.elev,
+            azimuth: self.azim,
+            pr_residual: self.pr_res,
+            used_in_solution: self.sv_used,
+            signal_quality: ((self.flags >> 4) & 0x07) as u8,
+            health,
+            orbit_source: ((self.flags >> 10) & 0x07) as u8,
+        }
     }
 }
 
@@ -244,7 +239,8 @@ impl ToRosMessage<oxide_gnss_msgs::msg::OxideSatellites> for SatInfo {
         // Compute signal quality metrics from used satellites
         if !used_sats.is_empty() {
             let cno_values: Vec<u8> = used_sats.iter().map(|s| s.cno).collect();
-            msg.mean_cno = cno_values.iter().map(|&c| c as f32).sum::<f32>() / cno_values.len() as f32;
+            msg.mean_cno =
+                cno_values.iter().map(|&c| c as f32).sum::<f32>() / cno_values.len() as f32;
             msg.min_cno = *cno_values.iter().min().unwrap_or(&0);
             msg.sats_above_threshold = cno_values.iter().filter(|&&c| c >= 30).count() as u8;
         }
