@@ -414,6 +414,67 @@ device:
       pdop_mask: 8.0
 ```
 
+### Timepulse (PPS) Configuration
+
+Configure the precise timing pulse output for sensor synchronization.
+
+#### Basic 1 PPS Output
+
+```yaml
+device:
+  ublox:
+    timepulse:
+      enabled: true
+      frequency_hz: 1           # 1 pulse per second
+      pulse_length_us: 100000   # 100ms pulse width
+      polarity: rising          # Rising edge at time mark
+      time_grid: gps            # Align to GPS time
+```
+
+#### Configuration Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `enabled` | bool | Enable/disable timepulse output |
+| `frequency_hz` | u32 | Output frequency when locked (1 = 1 PPS) |
+| `frequency_unlocked_hz` | u32 | Frequency before GNSS lock (optional) |
+| `pulse_length_us` | u32 | Pulse width in microseconds |
+| `pulse_length_unlocked_us` | u32 | Pulse width before lock (optional) |
+| `polarity` | enum | `rising` or `falling` edge at time mark |
+| `time_grid` | enum | `utc`, `gps`, `glonass`, `beidou`, `galileo` |
+| `align_to_tow` | bool | Align to top of second |
+| `use_locked_params` | bool | Switch to locked params when fix valid |
+| `sync_to_gnss` | bool | Synchronize to GNSS time |
+| `cable_delay_ns` | i16 | Antenna cable delay compensation (ns) |
+
+#### Use Cases
+
+**Camera Trigger (Short Pulse):**
+```yaml
+device:
+  ublox:
+    timepulse:
+      enabled: true
+      frequency_hz: 10          # 10 Hz trigger rate
+      pulse_length_us: 1000     # 1ms pulse
+      polarity: rising
+      time_grid: gps
+```
+
+**LiDAR Synchronization (50% Duty Cycle):**
+```yaml
+device:
+  ublox:
+    timepulse:
+      enabled: true
+      frequency_hz: 1
+      pulse_length_us: 500000   # 500ms (50% of 1 second)
+      time_grid: utc
+      align_to_tow: true
+```
+
+> **Hardware Note:** The timepulse signal is output on the TIMEPULSE pin of the ZED-F9P module. Refer to your carrier board documentation for the physical connector location.
+
 ### Legacy Configuration
 
 If you omit `mode:`, the driver uses legacy mode with explicit message configuration:

@@ -25,7 +25,7 @@ pub use ntrip::{NtripConfig, NtripConnectionConfig, NtripVersion};
 pub use ublox::{
     BeidouConfig, DynamicModel, GnssConstellationConfig, MessageConfig, NavSpgConfig,
     PortProtocols, PortSettings, ProtocolConfig, QzssConfig, RateConfig, SbasConfig, SignalConfig,
-    UartPortConfig, UbloxConfig,
+    TimeGrid, TimepulseConfig, TimepulsePolarity, UartPortConfig, UbloxConfig,
 };
 
 use serde::Deserialize;

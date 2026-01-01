@@ -56,6 +56,10 @@ pub struct UbloxConfig {
     /// Navigation engine configuration (CFG-NAVSPG-*)
     #[serde(default)]
     pub nav_spg: NavSpgConfig,
+
+    /// Timepulse (PPS) configuration (CFG-TP-*)
+    #[serde(default)]
+    pub timepulse: Option<TimepulseConfig>,
 }
 
 /// Dynamic platform model for the navigation engine.
@@ -147,6 +151,125 @@ pub struct NavSpgConfig {
     /// Valid range: 0.0-25.5 (stored as u16 scaled by 10).
     #[serde(default)]
     pub pdop_mask: Option<f32>,
+}
+
+/// Time grid reference for timepulse alignment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TimeGrid {
+    /// UTC time reference
+    #[default]
+    Utc,
+    /// GPS time reference
+    Gps,
+    /// GLONASS time reference
+    Glonass,
+    /// BeiDou time reference
+    Beidou,
+    /// Galileo time reference
+    Galileo,
+}
+
+/// Timepulse (PPS) output configuration (CFG-TP-*).
+///
+/// Configures the precise timing pulse output on the TIMEPULSE pin.
+/// This is commonly used for:
+/// - Camera trigger synchronization
+/// - LiDAR time alignment
+/// - IMU timestamp calibration
+/// - Multi-receiver time synchronization
+///
+/// # Example
+/// ```yaml
+/// timepulse:
+///   enabled: true
+///   frequency_hz: 1           # 1 PPS (one pulse per second)
+///   pulse_length_us: 100000   # 100ms pulse width
+///   polarity: rising          # Rising edge aligned to time
+///   time_grid: gps            # Align to GPS time
+///   lock_required: true       # Only pulse when fix is valid
+/// ```
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct TimepulseConfig {
+    /// Enable the timepulse output (CFG-TP-TP1_ENA)
+    #[serde(default)]
+    pub enabled: Option<bool>,
+
+    /// Output frequency in Hz when GNSS time is locked (CFG-TP-FREQ_LOCK_TP1)
+    ///
+    /// Common values: 1 (1 PPS), 10, 100, 1000, etc.
+    /// Set to 1 for standard PPS output.
+    #[serde(default)]
+    pub frequency_hz: Option<u32>,
+
+    /// Output frequency in Hz before GNSS lock (CFG-TP-FREQ_TP1)
+    ///
+    /// If not specified, defaults to same as frequency_hz.
+    #[serde(default)]
+    pub frequency_unlocked_hz: Option<u32>,
+
+    /// Pulse length in microseconds when locked (CFG-TP-LEN_LOCK_TP1)
+    ///
+    /// For 1 PPS at 50% duty cycle, use 500000 (500ms).
+    /// For a short trigger pulse, use 1000-100000 (1-100ms).
+    #[serde(default)]
+    pub pulse_length_us: Option<u32>,
+
+    /// Pulse length in microseconds before lock (CFG-TP-LEN_TP1)
+    ///
+    /// If not specified, defaults to same as pulse_length_us.
+    #[serde(default)]
+    pub pulse_length_unlocked_us: Option<u32>,
+
+    /// Polarity of the pulse (CFG-TP-POL_TP1)
+    ///
+    /// - `rising`: Rising edge at the time mark (default)
+    /// - `falling`: Falling edge at the time mark
+    #[serde(default)]
+    pub polarity: Option<TimepulsePolarity>,
+
+    /// Time grid to align the pulse to (CFG-TP-TIMEGRID_TP1)
+    ///
+    /// Options: utc, gps, glonass, beidou, galileo
+    #[serde(default)]
+    pub time_grid: Option<TimeGrid>,
+
+    /// Align pulse to top of second (CFG-TP-ALIGN_TO_TOW_TP1)
+    ///
+    /// When true, pulses are aligned to the top of each second.
+    #[serde(default)]
+    pub align_to_tow: Option<bool>,
+
+    /// Use locked parameters when GNSS time is available (CFG-TP-USE_LOCKED_TP1)
+    ///
+    /// When true, switches to locked frequency/length when fix is valid.
+    /// When false, always uses unlocked parameters.
+    #[serde(default)]
+    pub use_locked_params: Option<bool>,
+
+    /// Synchronize pulse to GNSS time (CFG-TP-SYNC_GNSS_TP1)
+    ///
+    /// When true, pulse timing is synchronized to GNSS.
+    #[serde(default)]
+    pub sync_to_gnss: Option<bool>,
+
+    /// Antenna cable delay compensation in nanoseconds (CFG-TP-ANT_CABLE_DELAY)
+    ///
+    /// Compensates for signal propagation delay in the antenna cable.
+    /// Typical values: 0-100ns depending on cable length.
+    #[serde(default)]
+    pub cable_delay_ns: Option<i16>,
+}
+
+/// Polarity of timepulse output.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TimepulsePolarity {
+    /// Rising edge aligned to the time mark
+    #[default]
+    Rising,
+    /// Falling edge aligned to the time mark
+    Falling,
 }
 
 /// Measurement and navigation rate configuration.

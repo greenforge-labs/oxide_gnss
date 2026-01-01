@@ -98,6 +98,24 @@ device:
     #   pdop_mask: 6.0
 
     # -------------------------------------------------------------------------
+    # Timepulse (PPS) Configuration (optional)
+    # -------------------------------------------------------------------------
+    # Configure precise timing pulse output for sensor synchronization.
+    # timepulse:
+    #   enabled: true
+    #   frequency_hz: 1           # 1 PPS (pulses per second)
+    #   pulse_length_us: 100000   # Pulse width in microseconds
+    #   polarity: rising          # rising or falling edge at time mark
+    #   time_grid: gps            # utc, gps, glonass, beidou, galileo
+    #   align_to_tow: true        # Align to top of second
+    #   # Advanced options:
+    #   # frequency_unlocked_hz: 1    # Frequency before GNSS lock
+    #   # pulse_length_unlocked_us: 100000
+    #   # use_locked_params: true
+    #   # sync_to_gnss: true
+    #   # cable_delay_ns: 50          # Antenna cable delay compensation
+
+    # -------------------------------------------------------------------------
     # GNSS Signal/Constellation Selection (optional)
     # -------------------------------------------------------------------------
     # Uncomment to customize which constellations are used.

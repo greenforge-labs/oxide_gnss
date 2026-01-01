@@ -128,6 +128,11 @@ pub fn build_cfg_vals_from_config(config: &UbloxConfig) -> Vec<CfgVal> {
         vals.push(CfgVal::NavSpgOutfilPdop(pdop_scaled));
     }
 
+    // Timepulse (PPS) configuration (CFG-TP-*)
+    if let Some(ref tp) = config.timepulse {
+        build_timepulse_cfg_vals(tp, &mut vals);
+    }
+
     // Message output rates
     for (msg, rate) in &config.messages.usb {
         if let Some(val) = parse_message_rate("usb", msg, *rate) {
@@ -207,6 +212,95 @@ fn build_signal_cfg_vals(signals: &crate::config::SignalConfig, vals: &mut Vec<C
     // SignalQzssL1sEna not available in ublox crate
     if let Some(l2c) = signals.qzss.l2c {
         vals.push(CfgVal::SignalQzssL2cEna(l2c));
+    }
+}
+
+/// Build CfgVal entries for timepulse (PPS) configuration.
+fn build_timepulse_cfg_vals(tp: &crate::config::TimepulseConfig, vals: &mut Vec<CfgVal>) {
+    // Enable/disable timepulse output
+    if let Some(enabled) = tp.enabled {
+        vals.push(CfgVal::TpTp1Ena(enabled));
+    }
+
+    // Frequency when locked (primary setting)
+    if let Some(freq) = tp.frequency_hz {
+        vals.push(CfgVal::TpFreqLockTp1(freq));
+        // Also set unlocked frequency if not specified separately
+        if tp.frequency_unlocked_hz.is_none() {
+            vals.push(CfgVal::TpFreqTp1(freq));
+        }
+    }
+
+    // Frequency when unlocked (before GNSS lock)
+    if let Some(freq) = tp.frequency_unlocked_hz {
+        vals.push(CfgVal::TpFreqTp1(freq));
+    }
+
+    // Pulse length when locked (in microseconds)
+    if let Some(len_us) = tp.pulse_length_us {
+        vals.push(CfgVal::TpLenLockTp1(len_us));
+        // Also set unlocked length if not specified separately
+        if tp.pulse_length_unlocked_us.is_none() {
+            vals.push(CfgVal::TpLenTp1(len_us));
+        }
+    }
+
+    // Pulse length when unlocked
+    if let Some(len_us) = tp.pulse_length_unlocked_us {
+        vals.push(CfgVal::TpLenTp1(len_us));
+    }
+
+    // Polarity (true = rising edge at time mark)
+    if let Some(polarity) = tp.polarity {
+        let pol_val = match polarity {
+            crate::config::TimepulsePolarity::Rising => true,
+            crate::config::TimepulsePolarity::Falling => false,
+        };
+        vals.push(CfgVal::TpPolTp1(pol_val));
+    }
+
+    // Time grid alignment
+    if let Some(time_grid) = tp.time_grid {
+        let grid = match time_grid {
+            crate::config::TimeGrid::Utc => ublox::AlignmentToReferenceTime::Utc,
+            crate::config::TimeGrid::Gps => ublox::AlignmentToReferenceTime::Gps,
+            crate::config::TimeGrid::Glonass => ublox::AlignmentToReferenceTime::Glo,
+            crate::config::TimeGrid::Beidou => ublox::AlignmentToReferenceTime::Bds,
+            crate::config::TimeGrid::Galileo => ublox::AlignmentToReferenceTime::Gal,
+        };
+        vals.push(CfgVal::TpTimegridTp1(grid));
+    }
+
+    // Align to top of second
+    if let Some(align) = tp.align_to_tow {
+        vals.push(CfgVal::TpAlignToTowTp1(align));
+    }
+
+    // Use locked parameters when GNSS is available
+    if let Some(use_locked) = tp.use_locked_params {
+        vals.push(CfgVal::TpUseLockedTp1(use_locked));
+    }
+
+    // Sync to GNSS time
+    if let Some(sync) = tp.sync_to_gnss {
+        vals.push(CfgVal::TpSyncGnssTp1(sync));
+    }
+
+    // Antenna cable delay compensation
+    if let Some(delay_ns) = tp.cable_delay_ns {
+        vals.push(CfgVal::TpAntCableDelay(delay_ns));
+    }
+
+    // Set pulse definition to frequency mode (not period)
+    // This is needed when using frequency_hz settings
+    if tp.frequency_hz.is_some() || tp.frequency_unlocked_hz.is_some() {
+        vals.push(CfgVal::TpPulseDef(ublox::TpPulse::Freq));
+    }
+
+    // Set pulse length definition to absolute length (not ratio)
+    // This is needed when using pulse_length_us settings
+    if tp.pulse_length_us.is_some() || tp.pulse_length_unlocked_us.is_some() {
+        vals.push(CfgVal::TpPulseLengthDef(ublox::TpPulseLength::Length));
     }
 }
 

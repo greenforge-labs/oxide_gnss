@@ -53,6 +53,16 @@ device:
       # PDOP mask - reject solutions with poor geometry
       # pdop_mask: 6.0
 
+    # Timepulse (PPS) configuration - for sensor synchronization
+    # Outputs precise timing pulse on TIMEPULSE pin
+    timepulse:
+      enabled: true
+      frequency_hz: 1           # 1 PPS output
+      pulse_length_us: 100000   # 100ms pulse width
+      polarity: rising          # Rising edge at GPS second
+      time_grid: gps            # Align to GPS time
+      align_to_tow: true        # Align to top of second
+
     # GNSS constellation configuration
     # Uncomment to customize which constellations/signals are used
     signals:
