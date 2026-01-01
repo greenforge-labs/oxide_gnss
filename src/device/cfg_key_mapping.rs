@@ -133,6 +133,11 @@ pub fn build_cfg_vals_from_config(config: &UbloxConfig) -> Vec<CfgVal> {
         build_timepulse_cfg_vals(tp, &mut vals);
     }
 
+    // Base station position configuration (CFG-TMODE-*)
+    if let Some(ref bp) = config.base_position {
+        build_base_position_cfg_vals(bp, &mut vals);
+    }
+
     // Message output rates
     for (msg, rate) in &config.messages.usb {
         if let Some(val) = parse_message_rate("usb", msg, *rate) {
@@ -301,6 +306,67 @@ fn build_timepulse_cfg_vals(tp: &crate::config::TimepulseConfig, vals: &mut Vec<
     // This is needed when using pulse_length_us settings
     if tp.pulse_length_us.is_some() || tp.pulse_length_unlocked_us.is_some() {
         vals.push(CfgVal::TpPulseLengthDef(ublox::TpPulseLength::Length));
+    }
+}
+
+/// Build CfgVal entries for base station position configuration.
+fn build_base_position_cfg_vals(bp: &crate::config::BasePositionConfig, vals: &mut Vec<CfgVal>) {
+    // Set the time mode based on configuration
+    let tmode = match bp.mode {
+        crate::config::BasePositionMode::Disabled => ublox::CfgTModeModes::Disabled,
+        crate::config::BasePositionMode::SurveyIn => ublox::CfgTModeModes::SurveyIn,
+        crate::config::BasePositionMode::Fixed => ublox::CfgTModeModes::Fixed,
+    };
+    vals.push(CfgVal::TModeModeDef(tmode));
+
+    // Survey-in configuration
+    if let Some(ref svin) = bp.survey_in {
+        if let Some(min_dur) = svin.min_duration_s {
+            vals.push(CfgVal::TModeSvInMinDur(min_dur));
+        }
+        if let Some(acc_limit) = svin.accuracy_limit_m {
+            // Accuracy is stored in 0.1mm units (e.g., 2.0m = 20000)
+            let acc_0_1mm = (acc_limit * 10000.0).round() as u32;
+            vals.push(CfgVal::TModeSvInAccLimit(acc_0_1mm));
+        }
+    }
+
+    // Fixed position configuration
+    if let Some(ref fixed) = bp.fixed {
+        // Use LLH (latitude/longitude/height) format
+        vals.push(CfgVal::TModePosTypeDef(ublox::TModePosType::LLH));
+
+        if let Some(lat) = fixed.latitude {
+            // Latitude in 1e-7 degrees, with high-precision component in 1e-9 degrees
+            let lat_scaled = lat * 1e7;
+            let lat_main = lat_scaled.trunc() as i32;
+            let lat_hp = ((lat_scaled.fract()) * 100.0).round() as i8;
+            vals.push(CfgVal::TModeLat(lat_main));
+            vals.push(CfgVal::TModeLatHp(lat_hp));
+        }
+
+        if let Some(lon) = fixed.longitude {
+            // Longitude in 1e-7 degrees, with high-precision component in 1e-9 degrees
+            let lon_scaled = lon * 1e7;
+            let lon_main = lon_scaled.trunc() as i32;
+            let lon_hp = ((lon_scaled.fract()) * 100.0).round() as i8;
+            vals.push(CfgVal::TModeLon(lon_main));
+            vals.push(CfgVal::TModeLonHp(lon_hp));
+        }
+
+        if let Some(height) = fixed.height_m {
+            // Height in cm, with high-precision component in 0.1mm
+            let height_cm = (height * 100.0).trunc() as i32;
+            let height_hp = (((height * 100.0).fract()) * 100.0).round() as i8;
+            vals.push(CfgVal::TModeHeight(height_cm));
+            vals.push(CfgVal::TModeHeightHp(height_hp));
+        }
+
+        if let Some(acc) = fixed.accuracy_m {
+            // Accuracy in 0.1mm units
+            let acc_0_1mm = (acc * 10000.0).round() as u32;
+            vals.push(CfgVal::TModeFixedPosAcc(acc_0_1mm));
+        }
     }
 }
 

@@ -60,6 +60,12 @@ pub struct UbloxConfig {
     /// Timepulse (PPS) configuration (CFG-TP-*)
     #[serde(default)]
     pub timepulse: Option<TimepulseConfig>,
+
+    /// Base station position configuration (CFG-TMODE-*)
+    ///
+    /// For static_base mode: configure survey-in or fixed position.
+    #[serde(default)]
+    pub base_position: Option<BasePositionConfig>,
 }
 
 /// Dynamic platform model for the navigation engine.
@@ -270,6 +276,100 @@ pub enum TimepulsePolarity {
     Rising,
     /// Falling edge aligned to the time mark
     Falling,
+}
+
+/// Base station position configuration (CFG-TMODE-*).
+///
+/// Configures the receiver for base station operation with either
+/// survey-in (auto-determine position) or fixed (known coordinates) mode.
+///
+/// # Example - Survey-In Mode
+/// ```yaml
+/// base_position:
+///   mode: survey_in
+///   survey_in:
+///     min_duration_s: 60
+///     accuracy_limit_m: 2.0
+/// ```
+///
+/// # Example - Fixed Position Mode
+/// ```yaml
+/// base_position:
+///   mode: fixed
+///   fixed:
+///     latitude: -35.12345678
+///     longitude: 149.12345678
+///     height_m: 600.123
+/// ```
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct BasePositionConfig {
+    /// Base station mode
+    #[serde(default)]
+    pub mode: BasePositionMode,
+
+    /// Survey-in configuration (used when mode = survey_in)
+    #[serde(default)]
+    pub survey_in: Option<SurveyInConfig>,
+
+    /// Fixed position configuration (used when mode = fixed)
+    #[serde(default)]
+    pub fixed: Option<FixedPositionConfig>,
+}
+
+/// Base station position mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BasePositionMode {
+    /// Disabled - not operating as base station
+    #[default]
+    Disabled,
+    /// Survey-in - automatically determine position
+    SurveyIn,
+    /// Fixed - use known coordinates
+    Fixed,
+}
+
+/// Survey-in configuration for base station position determination.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct SurveyInConfig {
+    /// Minimum survey-in duration in seconds (CFG-TMODE-SVIN_MIN_DUR)
+    ///
+    /// The receiver will continue surveying for at least this long,
+    /// even if accuracy is achieved earlier.
+    /// Typical values: 60-300 seconds.
+    #[serde(default)]
+    pub min_duration_s: Option<u32>,
+
+    /// Required accuracy limit in meters (CFG-TMODE-SVIN_ACC_LIMIT)
+    ///
+    /// Survey-in completes when this 3D accuracy is achieved
+    /// (and min_duration has elapsed).
+    /// Typical values: 1.0-5.0 meters.
+    #[serde(default)]
+    pub accuracy_limit_m: Option<f32>,
+}
+
+/// Fixed position configuration for base station with known coordinates.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct FixedPositionConfig {
+    /// Latitude in degrees (WGS84)
+    #[serde(default)]
+    pub latitude: Option<f64>,
+
+    /// Longitude in degrees (WGS84)
+    #[serde(default)]
+    pub longitude: Option<f64>,
+
+    /// Height above ellipsoid in meters (WGS84)
+    #[serde(default)]
+    pub height_m: Option<f64>,
+
+    /// Position accuracy estimate in meters (CFG-TMODE-FIXED_POS_ACC)
+    ///
+    /// Used by the receiver to weight the fixed position.
+    /// Lower values indicate higher confidence in the coordinates.
+    #[serde(default)]
+    pub accuracy_m: Option<f32>,
 }
 
 /// Measurement and navigation rate configuration.

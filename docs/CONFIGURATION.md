@@ -475,6 +475,54 @@ device:
 
 > **Hardware Note:** The timepulse signal is output on the TIMEPULSE pin of the ZED-F9P module. Refer to your carrier board documentation for the physical connector location.
 
+### Base Station Position Configuration
+
+Configure the receiver's position for base station operation.
+
+#### Survey-In Mode (Auto-Determine Position)
+
+```yaml
+mode: static_base
+
+device:
+  ublox:
+    base_position:
+      mode: survey_in
+      survey_in:
+        min_duration_s: 60      # Minimum 60 seconds
+        accuracy_limit_m: 2.0   # Stop when 2m accuracy achieved
+```
+
+#### Fixed Position Mode (Known Coordinates)
+
+```yaml
+mode: static_base
+
+device:
+  ublox:
+    base_position:
+      mode: fixed
+      fixed:
+        latitude: -35.12345678    # WGS84 degrees
+        longitude: 149.12345678
+        height_m: 600.123         # Height above ellipsoid
+        accuracy_m: 0.01          # Position accuracy (optional)
+```
+
+#### Configuration Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `mode` | enum | `disabled`, `survey_in`, `fixed` |
+| `survey_in.min_duration_s` | u32 | Minimum survey duration (seconds) |
+| `survey_in.accuracy_limit_m` | f32 | Target 3D accuracy (meters) |
+| `fixed.latitude` | f64 | Latitude in degrees (WGS84) |
+| `fixed.longitude` | f64 | Longitude in degrees (WGS84) |
+| `fixed.height_m` | f64 | Height above ellipsoid (meters) |
+| `fixed.accuracy_m` | f32 | Position accuracy estimate (meters) |
+
+> **Note:** For the best results with fixed mode, obtain coordinates from a professional survey or long-duration PPP solution.
+
 ### Legacy Configuration
 
 If you omit `mode:`, the driver uses legacy mode with explicit message configuration:

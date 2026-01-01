@@ -38,6 +38,23 @@ device:
     nav_spg:
       dynamic_model: stationary   # No movement expected
 
+    # Base station position configuration
+    # Option 1: Survey-in (auto-determine position)
+    base_position:
+      mode: survey_in
+      survey_in:
+        min_duration_s: 60        # Minimum 60 seconds
+        accuracy_limit_m: 2.0     # Stop when 2m 3D accuracy achieved
+
+    # Option 2: Fixed position (known coordinates) - uncomment to use
+    # base_position:
+    #   mode: fixed
+    #   fixed:
+    #     latitude: -35.12345678    # WGS84 degrees
+    #     longitude: 149.12345678
+    #     height_m: 600.123         # Height above ellipsoid (m)
+    #     accuracy_m: 0.01          # Position accuracy (m)
+
     # UART2 baudrate for RTCM output (to radio or direct connection)
     ports:
       uart2:
