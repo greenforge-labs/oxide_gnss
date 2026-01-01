@@ -63,6 +63,12 @@ device:
       time_grid: gps            # Align to GPS time
       align_to_tow: true        # Align to top of second
 
+    # Time mark (EXTINT) - external event timestamping
+    # Enables TIM-TM2 message for precise GNSS-synchronized timestamps
+    # when signal detected on EXTINT pin (e.g., camera shutter feedback)
+    time_mark:
+      enabled: true
+
     # GNSS constellation configuration
     # Uncomment to customize which constellations/signals are used
     signals:

@@ -116,6 +116,31 @@ device:
     #   # cable_delay_ns: 50          # Antenna cable delay compensation
 
     # -------------------------------------------------------------------------
+    # Time Mark (EXTINT) Configuration (optional)
+    # -------------------------------------------------------------------------
+    # Enable TIM-TM2 message output for external event timestamping.
+    # Provides nanosecond-precision GNSS timestamps when EXTINT pin is triggered.
+    # time_mark:
+    #   enabled: true
+
+    # -------------------------------------------------------------------------
+    # Base Station Position (for static_base mode)
+    # -------------------------------------------------------------------------
+    # Configure survey-in or fixed position for base station operation.
+    # base_position:
+    #   mode: survey_in           # disabled, survey_in, or fixed
+    #   survey_in:
+    #     min_duration_s: 60      # Minimum survey duration
+    #     accuracy_limit_m: 2.0   # Target 3D accuracy
+    #   # For fixed mode:
+    #   # mode: fixed
+    #   # fixed:
+    #   #   latitude: -35.12345678
+    #   #   longitude: 149.12345678
+    #   #   height_m: 600.123
+    #   #   accuracy_m: 0.01
+
+    # -------------------------------------------------------------------------
     # GNSS Signal/Constellation Selection (optional)
     # -------------------------------------------------------------------------
     # Uncomment to customize which constellations are used.

@@ -66,6 +66,12 @@ pub struct UbloxConfig {
     /// For static_base mode: configure survey-in or fixed position.
     #[serde(default)]
     pub base_position: Option<BasePositionConfig>,
+
+    /// Time mark (EXTINT) configuration
+    ///
+    /// Enable TIM-TM2 message output for external event timestamping.
+    #[serde(default)]
+    pub time_mark: Option<TimeMarkConfig>,
 }
 
 /// Dynamic platform model for the navigation engine.
@@ -370,6 +376,26 @@ pub struct FixedPositionConfig {
     /// Lower values indicate higher confidence in the coordinates.
     #[serde(default)]
     pub accuracy_m: Option<f32>,
+}
+
+/// Time mark (EXTINT) configuration for external event timestamping.
+///
+/// Enables TIM-TM2 message output which provides precise GNSS-synchronized
+/// timestamps when an external signal is detected on the EXTINT pin.
+///
+/// # Example
+/// ```yaml
+/// time_mark:
+///   enabled: true
+/// ```
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct TimeMarkConfig {
+    /// Enable TIM-TM2 message output
+    ///
+    /// When enabled, the receiver outputs TIM-TM2 messages when
+    /// external events are detected on the EXTINT pin.
+    #[serde(default)]
+    pub enabled: Option<bool>,
 }
 
 /// Measurement and navigation rate configuration.

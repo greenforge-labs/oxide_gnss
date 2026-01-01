@@ -26,7 +26,7 @@ pub use ublox::{
     BasePositionConfig, BasePositionMode, BeidouConfig, DynamicModel, FixedPositionConfig,
     GnssConstellationConfig, MessageConfig, NavSpgConfig, PortProtocols, PortSettings,
     ProtocolConfig, QzssConfig, RateConfig, SbasConfig, SignalConfig, SurveyInConfig, TimeGrid,
-    TimepulseConfig, TimepulsePolarity, UartPortConfig, UbloxConfig,
+    TimeMarkConfig, TimepulseConfig, TimepulsePolarity, UartPortConfig, UbloxConfig,
 };
 
 use serde::Deserialize;
@@ -333,7 +333,12 @@ impl Config {
 
         // Enable protection level calculation when integrity feature is active
         let nav_spg = if self.features.integrity {
-            NavSpgConfig { pl_ena: Some(true) }
+            NavSpgConfig {
+                pl_ena: Some(true),
+                dynamic_model: None,
+                elevation_mask: None,
+                pdop_mask: None,
+            }
         } else {
             self.device
                 .ublox
@@ -341,6 +346,11 @@ impl Config {
                 .map(|u| u.nav_spg.clone())
                 .unwrap_or_default()
         };
+
+        // Pass through optional configs from user
+        let timepulse = self.device.ublox.as_ref().and_then(|u| u.timepulse.clone());
+        let base_position = self.device.ublox.as_ref().and_then(|u| u.base_position.clone());
+        let time_mark = self.device.ublox.as_ref().and_then(|u| u.time_mark.clone());
 
         UbloxConfig {
             family: self.device.ublox.as_ref().and_then(|u| u.family.clone()),
@@ -350,6 +360,9 @@ impl Config {
             ports,
             signals,
             nav_spg,
+            timepulse,
+            base_position,
+            time_mark,
         }
     }
 

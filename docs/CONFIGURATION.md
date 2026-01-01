@@ -523,6 +523,24 @@ device:
 
 > **Note:** For the best results with fixed mode, obtain coordinates from a professional survey or long-duration PPP solution.
 
+### Time Mark (External Event Timestamping)
+
+Enable TIM-TM2 message output for precise timestamping of external events on the EXTINT pin.
+
+```yaml
+device:
+  ublox:
+    time_mark:
+      enabled: true
+```
+
+When enabled, the driver parses TIM-TM2 messages containing:
+- GPS week and time-of-week with nanosecond precision
+- Rising/falling edge timestamps
+- Accuracy estimate
+
+> **Note:** The ROS2 topic latency means the timestamp *arrives* delayed, but the timestamp *content* has nanosecond precision aligned to GNSS time. Useful for post-processing correlation, not real-time triggering (use timepulse for that).
+
 ### Legacy Configuration
 
 If you omit `mode:`, the driver uses legacy mode with explicit message configuration:

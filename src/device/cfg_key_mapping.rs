@@ -4,7 +4,10 @@
 //! and the `ublox` crate's `CfgVal` enum variants.
 
 use tracing::warn;
-use ublox::cfg_val::CfgVal;
+use ublox::cfg_nav5::NavDynamicModel;
+use ublox::cfg_rate::AlignmentToReferenceTime;
+use ublox::cfg_tmode2::CfgTModeModes;
+use ublox::cfg_val::{CfgVal, TModePosType, TpPulse, TpPulseLength};
 
 use crate::config::UbloxConfig;
 
@@ -69,48 +72,42 @@ pub fn build_cfg_vals_from_config(config: &UbloxConfig) -> Vec<CfgVal> {
     if let Some(dynamic_model) = config.nav_spg.dynamic_model {
         // Convert our DynamicModel enum to ublox NavDynamicModel
         let ublox_model = match dynamic_model {
-            crate::config::DynamicModel::Portable => ublox::NavDynamicModel::Portable,
-            crate::config::DynamicModel::Stationary => ublox::NavDynamicModel::Stationary,
-            crate::config::DynamicModel::Pedestrian => ublox::NavDynamicModel::Pedestrian,
-            crate::config::DynamicModel::Automotive => ublox::NavDynamicModel::Automotive,
-            crate::config::DynamicModel::Sea => ublox::NavDynamicModel::Sea,
+            crate::config::DynamicModel::Portable => NavDynamicModel::Portable,
+            crate::config::DynamicModel::Stationary => NavDynamicModel::Stationary,
+            crate::config::DynamicModel::Pedestrian => NavDynamicModel::Pedestrian,
+            crate::config::DynamicModel::Automotive => NavDynamicModel::Automotive,
+            crate::config::DynamicModel::Sea => NavDynamicModel::Sea,
             crate::config::DynamicModel::AirborneLight => {
-                ublox::NavDynamicModel::AirborneWithLess1gAcceleration
+                NavDynamicModel::AirborneWithLess1gAcceleration
             }
             crate::config::DynamicModel::AirborneMedium => {
-                ublox::NavDynamicModel::AirborneWithLess2gAcceleration
+                NavDynamicModel::AirborneWithLess2gAcceleration
             }
             crate::config::DynamicModel::AirborneHigh => {
-                ublox::NavDynamicModel::AirborneWithLess4gAcceleration
+                NavDynamicModel::AirborneWithLess4gAcceleration
             }
             // Models not directly supported in ublox crate - use raw value via Portable + warning
             // The F9P firmware supports these but ublox-rs may not have them yet
             crate::config::DynamicModel::Wrist => {
                 warn!("Wrist dynamic model may require newer ublox crate; using raw value 9");
                 // Fall back to a supported model that's closest, or we could use unchecked
-                ublox::NavDynamicModel::Portable
+                NavDynamicModel::Portable
             }
             crate::config::DynamicModel::Bike => {
                 warn!("Bike dynamic model may require newer ublox crate; using raw value 10");
-                ublox::NavDynamicModel::Portable
+                NavDynamicModel::Portable
             }
             crate::config::DynamicModel::Mower => {
-                warn!(
-                    "Mower dynamic model (11) not in ublox crate; defaulting to Automotive"
-                );
-                ublox::NavDynamicModel::Automotive
+                warn!("Mower dynamic model (11) not in ublox crate; defaulting to Automotive");
+                NavDynamicModel::Automotive
             }
             crate::config::DynamicModel::Escooter => {
-                warn!(
-                    "E-scooter dynamic model (12) not in ublox crate; defaulting to Automotive"
-                );
-                ublox::NavDynamicModel::Automotive
+                warn!("E-scooter dynamic model (12) not in ublox crate; defaulting to Automotive");
+                NavDynamicModel::Automotive
             }
             crate::config::DynamicModel::Robot => {
-                warn!(
-                    "Robot dynamic model (13) not in ublox crate; defaulting to Automotive"
-                );
-                ublox::NavDynamicModel::Automotive
+                warn!("Robot dynamic model (13) not in ublox crate; defaulting to Automotive");
+                NavDynamicModel::Automotive
             }
         };
         vals.push(CfgVal::NavSpgDynModel(ublox_model));
@@ -136,6 +133,14 @@ pub fn build_cfg_vals_from_config(config: &UbloxConfig) -> Vec<CfgVal> {
     // Base station position configuration (CFG-TMODE-*)
     if let Some(ref bp) = config.base_position {
         build_base_position_cfg_vals(bp, &mut vals);
+    }
+
+    // Time mark (TIM-TM2) configuration
+    if let Some(ref tm) = config.time_mark {
+        if tm.enabled == Some(true) {
+            // Enable TIM-TM2 message output on USB (rate 1 = every measurement)
+            vals.push(CfgVal::MsgOutUbxTimTm2Usb(1));
+        }
     }
 
     // Message output rates
@@ -267,11 +272,11 @@ fn build_timepulse_cfg_vals(tp: &crate::config::TimepulseConfig, vals: &mut Vec<
     // Time grid alignment
     if let Some(time_grid) = tp.time_grid {
         let grid = match time_grid {
-            crate::config::TimeGrid::Utc => ublox::AlignmentToReferenceTime::Utc,
-            crate::config::TimeGrid::Gps => ublox::AlignmentToReferenceTime::Gps,
-            crate::config::TimeGrid::Glonass => ublox::AlignmentToReferenceTime::Glo,
-            crate::config::TimeGrid::Beidou => ublox::AlignmentToReferenceTime::Bds,
-            crate::config::TimeGrid::Galileo => ublox::AlignmentToReferenceTime::Gal,
+            crate::config::TimeGrid::Utc => AlignmentToReferenceTime::Utc,
+            crate::config::TimeGrid::Gps => AlignmentToReferenceTime::Gps,
+            crate::config::TimeGrid::Glonass => AlignmentToReferenceTime::Glo,
+            crate::config::TimeGrid::Beidou => AlignmentToReferenceTime::Bds,
+            crate::config::TimeGrid::Galileo => AlignmentToReferenceTime::Gal,
         };
         vals.push(CfgVal::TpTimegridTp1(grid));
     }
@@ -299,13 +304,13 @@ fn build_timepulse_cfg_vals(tp: &crate::config::TimepulseConfig, vals: &mut Vec<
     // Set pulse definition to frequency mode (not period)
     // This is needed when using frequency_hz settings
     if tp.frequency_hz.is_some() || tp.frequency_unlocked_hz.is_some() {
-        vals.push(CfgVal::TpPulseDef(ublox::TpPulse::Freq));
+        vals.push(CfgVal::TpPulseDef(TpPulse::Freq));
     }
 
     // Set pulse length definition to absolute length (not ratio)
     // This is needed when using pulse_length_us settings
     if tp.pulse_length_us.is_some() || tp.pulse_length_unlocked_us.is_some() {
-        vals.push(CfgVal::TpPulseLengthDef(ublox::TpPulseLength::Length));
+        vals.push(CfgVal::TpPulseLengthDef(TpPulseLength::Length));
     }
 }
 
@@ -313,9 +318,9 @@ fn build_timepulse_cfg_vals(tp: &crate::config::TimepulseConfig, vals: &mut Vec<
 fn build_base_position_cfg_vals(bp: &crate::config::BasePositionConfig, vals: &mut Vec<CfgVal>) {
     // Set the time mode based on configuration
     let tmode = match bp.mode {
-        crate::config::BasePositionMode::Disabled => ublox::CfgTModeModes::Disabled,
-        crate::config::BasePositionMode::SurveyIn => ublox::CfgTModeModes::SurveyIn,
-        crate::config::BasePositionMode::Fixed => ublox::CfgTModeModes::Fixed,
+        crate::config::BasePositionMode::Disabled => CfgTModeModes::Disabled,
+        crate::config::BasePositionMode::SurveyIn => CfgTModeModes::SurveyIn,
+        crate::config::BasePositionMode::Fixed => CfgTModeModes::Fixed,
     };
     vals.push(CfgVal::TModeModeDef(tmode));
 
@@ -334,7 +339,7 @@ fn build_base_position_cfg_vals(bp: &crate::config::BasePositionConfig, vals: &m
     // Fixed position configuration
     if let Some(ref fixed) = bp.fixed {
         // Use LLH (latitude/longitude/height) format
-        vals.push(CfgVal::TModePosTypeDef(ublox::TModePosType::LLH));
+        vals.push(CfgVal::TModePosTypeDef(TModePosType::LLH));
 
         if let Some(lat) = fixed.latitude {
             // Latitude in 1e-7 degrees, with high-precision component in 1e-9 degrees

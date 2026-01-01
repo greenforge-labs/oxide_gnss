@@ -27,6 +27,7 @@ use ublox::{
     rxm_cor::{CorrectionMsgUsed, MsgDecrypted, MsgEncrypted, RxmCorRef, RxmCorStatusInfo},
     sec_sig::{JammingState, SecSigFlags, SecSigRef, SpoofingState},
     sec_siglog::SecSiglogRef,
+    tim_tm2::{TimTm2Ref, TimTm2TimeBase},
     GnssFixType, Parser, ParserBuilder, UbxPacket,
 };
 
@@ -64,6 +65,8 @@ pub struct UbxHandler {
     pub rel_pos_ned: Option<RelPosNedData>,
     /// Last received protection level data (NAV-PL)
     pub nav_pl: Option<NavPlData>,
+    /// Last received time mark data (TIM-TM2)
+    pub tim_tm2: Option<TimTm2Data>,
 }
 
 /// Parsed High Precision Position (NAV-HPPOSLLH).
@@ -341,6 +344,54 @@ impl From<PlInvalidityReason> for NavPlInvalidityReason {
             }
             PlInvalidityReason::NotVerifiedForConfig => NavPlInvalidityReason::NotVerifiedForConfig,
             _ => NavPlInvalidityReason::NotAvailable, // Reserved values
+        }
+    }
+}
+
+/// Parsed Time Mark data (TIM-TM2).
+///
+/// Contains precise timestamp of external event on EXTINT pin.
+#[derive(Debug, Clone)]
+pub struct TimTm2Data {
+    /// Channel (EXTINT) on which the pulse was measured
+    pub channel: u8,
+    /// Rising edge counter
+    pub count: u16,
+    /// GPS week number of rising edge
+    pub week_rising: u16,
+    /// GPS week number of falling edge
+    pub week_falling: u16,
+    /// Time of week of rising edge in seconds (nanosecond precision)
+    pub tow_rising_s: f64,
+    /// Time of week of falling edge in seconds (nanosecond precision)
+    pub tow_falling_s: f64,
+    /// Accuracy estimate in nanoseconds
+    pub accuracy_ns: u32,
+    /// New rising edge detected
+    pub new_rising_edge: bool,
+    /// New falling edge detected
+    pub new_falling_edge: bool,
+    /// Time is valid (UTC available)
+    pub time_valid: bool,
+    /// Time base used for measurement
+    pub time_base: TimTm2TimeBaseData,
+}
+
+/// Time base for TIM-TM2 measurement.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TimTm2TimeBaseData {
+    #[default]
+    Receiver,
+    Gnss,
+    Utc,
+}
+
+impl From<TimTm2TimeBase> for TimTm2TimeBaseData {
+    fn from(base: TimTm2TimeBase) -> Self {
+        match base {
+            TimTm2TimeBase::Receiver => TimTm2TimeBaseData::Receiver,
+            TimTm2TimeBase::Gnss => TimTm2TimeBaseData::Gnss,
+            TimTm2TimeBase::Utc => TimTm2TimeBaseData::Utc,
         }
     }
 }
@@ -681,6 +732,8 @@ pub struct ProcessResult {
     pub rel_pos_ned: Option<RelPosNedData>,
     /// Protection level data (NAV-PL)
     pub nav_pl: Option<NavPlData>,
+    /// Time mark data (TIM-TM2) for external event timestamping
+    pub tim_tm2: Option<TimTm2Data>,
 }
 
 impl UbxHandler {
@@ -705,6 +758,7 @@ impl UbxHandler {
             mon_rf: None,
             rel_pos_ned: None,
             nav_pl: None,
+            tim_tm2: None,
         }
     }
 
@@ -744,6 +798,7 @@ impl UbxHandler {
         let mut new_mon_rf = None;
         let mut new_rel_pos_ned = None;
         let mut new_nav_pl = None;
+        let mut new_tim_tm2 = None;
         let mut ack_result = None;
         let mut nav_pvt_count = 0u64;
         let mut other_count = 0u64;
@@ -898,6 +953,17 @@ impl UbxHandler {
                             trace!(pos_valid = pl.pos_valid, tmir = pl.tmir, "NAV-PL received");
                             new_nav_pl = Some(pl);
                         }
+                        ublox::proto27::PacketRef::TimTm2(msg) => {
+                            let tm2 = Self::parse_tim_tm2(&msg);
+                            debug!(
+                                ch = tm2.channel,
+                                count = tm2.count,
+                                rising = tm2.new_rising_edge,
+                                falling = tm2.new_falling_edge,
+                                "TIM-TM2 received"
+                            );
+                            new_tim_tm2 = Some(tm2);
+                        }
                         _ => {
                             other_count += 1;
                         }
@@ -960,6 +1026,9 @@ impl UbxHandler {
         if let Some(ref pl) = new_nav_pl {
             self.nav_pl = Some(pl.clone());
         }
+        if let Some(ref tm2) = new_tim_tm2 {
+            self.tim_tm2 = Some(tm2.clone());
+        }
 
         ProcessResult {
             pvt: new_pvt,
@@ -977,6 +1046,31 @@ impl UbxHandler {
             mon_rf: new_mon_rf,
             rel_pos_ned: new_rel_pos_ned,
             nav_pl: new_nav_pl,
+            tim_tm2: new_tim_tm2,
+        }
+    }
+
+    /// Parse a TIM-TM2 packet into our TimTm2Data structure.
+    fn parse_tim_tm2(msg: &TimTm2Ref) -> TimTm2Data {
+        let flags = msg.flags();
+        // Convert TOW from ms + sub-ms nanoseconds to seconds
+        let tow_rising_s =
+            (msg.tow_ms_r() as f64) / 1000.0 + (msg.tow_sub_ms_r() as f64) / 1_000_000_000.0;
+        let tow_falling_s =
+            (msg.tow_ms_f() as f64) / 1000.0 + (msg.tow_sub_ms_f() as f64) / 1_000_000_000.0;
+
+        TimTm2Data {
+            channel: msg.ch(),
+            count: msg.count(),
+            week_rising: msg.wn_r(),
+            week_falling: msg.wn_f(),
+            tow_rising_s,
+            tow_falling_s,
+            accuracy_ns: msg.acc_est(),
+            new_rising_edge: flags.new_rising_edge(),
+            new_falling_edge: flags.new_falling_edge(),
+            time_valid: flags.time_valid(),
+            time_base: flags.time_base().into(),
         }
     }
 
