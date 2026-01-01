@@ -344,6 +344,76 @@ device:
       nav_ratio: 1          # Nav solution per measurement
 ```
 
+### Navigation Engine Configuration
+
+Fine-tune the navigation filter for your specific application.
+
+#### Dynamic Platform Model
+
+The dynamic model optimizes the navigation filter for different motion profiles:
+
+```yaml
+device:
+  ublox:
+    nav_spg:
+      dynamic_model: robot    # See options below
+```
+
+| Model | Description | Use Case |
+|-------|-------------|----------|
+| `portable` | Low dynamics, general purpose (default) | Handheld devices |
+| `stationary` | No movement expected | Base stations |
+| `pedestrian` | Walking speed (<30 km/h) | Wearables, carts |
+| `automotive` | Car-like dynamics (<100 km/h) | Ground vehicles |
+| `sea` | Sea-level, low vertical dynamics | Marine vessels |
+| `airborne_light` | <1g acceleration | Light aircraft, balloons |
+| `airborne_medium` | <2g acceleration | General aviation |
+| `airborne_high` | <4g acceleration | High-performance aircraft |
+| `wrist` | Wrist-worn device | Smartwatches |
+| `bike` | Bicycle dynamics | E-bikes, cycling |
+| `mower` | Low speed, frequent turns | Robotic lawn mowers |
+| `escooter` | E-scooter dynamics | Micro-mobility |
+| `robot` | Generic robot platform | **Most robotics applications** |
+
+> **Note:** Models `mower`, `escooter`, and `robot` require F9P firmware ≥1.32 and may fall back to `automotive` if not supported by the ublox crate.
+
+#### Elevation Mask
+
+Reject satellites below a minimum elevation angle to reduce multipath:
+
+```yaml
+device:
+  ublox:
+    nav_spg:
+      elevation_mask: 10    # Degrees (0-90), reject satellites below this
+```
+
+Useful in urban canyons or forested environments where low-elevation satellites are more susceptible to multipath.
+
+#### PDOP Mask
+
+Reject navigation solutions with poor geometry:
+
+```yaml
+device:
+  ublox:
+    nav_spg:
+      pdop_mask: 6.0        # Reject solutions with PDOP > 6.0
+```
+
+Lower values are more restrictive. Typical values: 6.0-10.0.
+
+#### Combined Example
+
+```yaml
+device:
+  ublox:
+    nav_spg:
+      dynamic_model: robot
+      elevation_mask: 15
+      pdop_mask: 8.0
+```
+
 ### Legacy Configuration
 
 If you omit `mode:`, the driver uses legacy mode with explicit message configuration:

@@ -65,6 +65,69 @@ pub fn build_cfg_vals_from_config(config: &UbloxConfig) -> Vec<CfgVal> {
         vals.push(CfgVal::NavSpgPlEna(pl_ena));
     }
 
+    // Dynamic platform model
+    if let Some(dynamic_model) = config.nav_spg.dynamic_model {
+        // Convert our DynamicModel enum to ublox NavDynamicModel
+        let ublox_model = match dynamic_model {
+            crate::config::DynamicModel::Portable => ublox::NavDynamicModel::Portable,
+            crate::config::DynamicModel::Stationary => ublox::NavDynamicModel::Stationary,
+            crate::config::DynamicModel::Pedestrian => ublox::NavDynamicModel::Pedestrian,
+            crate::config::DynamicModel::Automotive => ublox::NavDynamicModel::Automotive,
+            crate::config::DynamicModel::Sea => ublox::NavDynamicModel::Sea,
+            crate::config::DynamicModel::AirborneLight => {
+                ublox::NavDynamicModel::AirborneWithLess1gAcceleration
+            }
+            crate::config::DynamicModel::AirborneMedium => {
+                ublox::NavDynamicModel::AirborneWithLess2gAcceleration
+            }
+            crate::config::DynamicModel::AirborneHigh => {
+                ublox::NavDynamicModel::AirborneWithLess4gAcceleration
+            }
+            // Models not directly supported in ublox crate - use raw value via Portable + warning
+            // The F9P firmware supports these but ublox-rs may not have them yet
+            crate::config::DynamicModel::Wrist => {
+                warn!("Wrist dynamic model may require newer ublox crate; using raw value 9");
+                // Fall back to a supported model that's closest, or we could use unchecked
+                ublox::NavDynamicModel::Portable
+            }
+            crate::config::DynamicModel::Bike => {
+                warn!("Bike dynamic model may require newer ublox crate; using raw value 10");
+                ublox::NavDynamicModel::Portable
+            }
+            crate::config::DynamicModel::Mower => {
+                warn!(
+                    "Mower dynamic model (11) not in ublox crate; defaulting to Automotive"
+                );
+                ublox::NavDynamicModel::Automotive
+            }
+            crate::config::DynamicModel::Escooter => {
+                warn!(
+                    "E-scooter dynamic model (12) not in ublox crate; defaulting to Automotive"
+                );
+                ublox::NavDynamicModel::Automotive
+            }
+            crate::config::DynamicModel::Robot => {
+                warn!(
+                    "Robot dynamic model (13) not in ublox crate; defaulting to Automotive"
+                );
+                ublox::NavDynamicModel::Automotive
+            }
+        };
+        vals.push(CfgVal::NavSpgDynModel(ublox_model));
+    }
+
+    // Elevation mask (minimum satellite elevation in degrees)
+    if let Some(elev) = config.nav_spg.elevation_mask {
+        vals.push(CfgVal::NavSpgInfilMinElev(elev));
+    }
+
+    // PDOP mask (position dilution of precision threshold)
+    if let Some(pdop) = config.nav_spg.pdop_mask {
+        // PDOP is stored as u16 scaled by 10 (e.g., 6.0 -> 60)
+        let pdop_scaled = (pdop * 10.0).round() as u16;
+        vals.push(CfgVal::NavSpgOutfilPdop(pdop_scaled));
+    }
+
     // Message output rates
     for (msg, rate) in &config.messages.usb {
         if let Some(val) = parse_message_rate("usb", msg, *rate) {

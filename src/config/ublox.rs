@@ -58,12 +58,95 @@ pub struct UbloxConfig {
     pub nav_spg: NavSpgConfig,
 }
 
+/// Dynamic platform model for the navigation engine.
+///
+/// This affects the navigation filter's assumptions about motion dynamics.
+/// Choosing the correct model improves position accuracy and filter stability.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DynamicModel {
+    /// Low dynamics, general purpose (default)
+    #[default]
+    Portable,
+    /// No movement expected - for base stations
+    Stationary,
+    /// Walking speed dynamics (<30 km/h)
+    Pedestrian,
+    /// Car-like dynamics (<100 km/h)
+    Automotive,
+    /// Sea-level, low vertical dynamics
+    Sea,
+    /// Airborne with <1g acceleration
+    #[serde(alias = "airborne_1g")]
+    AirborneLight,
+    /// Airborne with <2g acceleration
+    #[serde(alias = "airborne_2g")]
+    AirborneMedium,
+    /// Airborne with <4g acceleration
+    #[serde(alias = "airborne_4g")]
+    AirborneHigh,
+    /// Wrist-worn device (smartwatch)
+    Wrist,
+    /// Bicycle dynamics
+    Bike,
+    /// Robotic lawn mower (low speed, frequent turns)
+    Mower,
+    /// E-scooter dynamics
+    Escooter,
+    /// Generic robot platform
+    Robot,
+}
+
+impl DynamicModel {
+    /// Convert to the u-blox protocol value.
+    pub fn to_ublox_value(self) -> u8 {
+        match self {
+            DynamicModel::Portable => 0,
+            DynamicModel::Stationary => 2,
+            DynamicModel::Pedestrian => 3,
+            DynamicModel::Automotive => 4,
+            DynamicModel::Sea => 5,
+            DynamicModel::AirborneLight => 6,
+            DynamicModel::AirborneMedium => 7,
+            DynamicModel::AirborneHigh => 8,
+            DynamicModel::Wrist => 9,
+            DynamicModel::Bike => 10,
+            DynamicModel::Mower => 11,
+            DynamicModel::Escooter => 12,
+            DynamicModel::Robot => 13,
+        }
+    }
+}
+
 /// Navigation engine configuration (CFG-NAVSPG-*).
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct NavSpgConfig {
     /// Enable protection level calculation and output (CFG-NAVSPG-PL_ENA)
     #[serde(default)]
     pub pl_ena: Option<bool>,
+
+    /// Dynamic platform model (CFG-NAVSPG-DYNMODEL)
+    ///
+    /// Configures the navigation filter for specific motion dynamics.
+    /// Choose the model that best matches your application.
+    #[serde(default)]
+    pub dynamic_model: Option<DynamicModel>,
+
+    /// Minimum elevation angle for satellites (CFG-NAVSPG-INFIL_MINELEV)
+    ///
+    /// Satellites below this elevation (in degrees) are rejected.
+    /// Useful for reducing multipath in urban or forested environments.
+    /// Valid range: 0-90 degrees.
+    #[serde(default)]
+    pub elevation_mask: Option<i8>,
+
+    /// PDOP mask / threshold (CFG-NAVSPG-OUTFIL_PDOP)
+    ///
+    /// Solutions with PDOP above this value are rejected.
+    /// Value is in PDOP units (e.g., 6.0 means reject if PDOP > 6.0).
+    /// Valid range: 0.0-25.5 (stored as u16 scaled by 10).
+    #[serde(default)]
+    pub pdop_mask: Option<f32>,
 }
 
 /// Measurement and navigation rate configuration.

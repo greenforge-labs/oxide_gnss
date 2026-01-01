@@ -23,9 +23,9 @@ pub use integrity::{IntegrityConfig, IntegrityThresholdsConfig};
 pub use modes::{Feature, FeaturesConfig, ModePreset, OperatingMode};
 pub use ntrip::{NtripConfig, NtripConnectionConfig, NtripVersion};
 pub use ublox::{
-    BeidouConfig, GnssConstellationConfig, MessageConfig, NavSpgConfig, PortProtocols,
-    PortSettings, ProtocolConfig, QzssConfig, RateConfig, SbasConfig, SignalConfig, UartPortConfig,
-    UbloxConfig,
+    BeidouConfig, DynamicModel, GnssConstellationConfig, MessageConfig, NavSpgConfig,
+    PortProtocols, PortSettings, ProtocolConfig, QzssConfig, RateConfig, SbasConfig, SignalConfig,
+    UartPortConfig, UbloxConfig,
 };
 
 use serde::Deserialize;
