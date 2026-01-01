@@ -32,7 +32,7 @@ builtin_interfaces = { version = "*", optional = true }
 oxide_gnss_msgs = { version = "0.1", optional = true }
 
 # GNSS Protocols
-# Using forked ublox with NAV-PL support (feature/nav-pl-support branch)
+# Using forked ublox with NAV-PL support (message parsing + CfgVal config keys)
 ublox = { git = "https://github.com/gsokoll/ublox.git", branch = "feature/nav-pl-support", features = ["alloc", "ubx_proto23", "ubx_proto27"] }
 rtcm-rs = "0.11"
 

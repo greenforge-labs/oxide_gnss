@@ -533,6 +533,15 @@ impl GnssIntegrity {
         msg.min_cno = self.min_cno;
         msg.sats_above_cno_threshold = self.sats_above_cno_threshold;
 
+        // Protection levels
+        msg.protection_level_valid = self.protection_level_valid;
+        msg.horizontal_pl_m = self.horizontal_pl_m;
+        msg.vertical_pl_m = self.vertical_pl_m;
+        msg.velocity_pl_ms = self.velocity_pl_ms;
+        msg.target_mir = self.target_mir;
+        msg.pl_frame = self.pl_frame;
+        msg.pl_invalidity_reason = self.pl_invalidity_reason;
+
         msg
     }
 }

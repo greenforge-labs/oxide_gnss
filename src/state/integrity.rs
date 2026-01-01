@@ -121,7 +121,7 @@ impl Default for IntegrityThresholds {
 ///
 /// This structure combines all quality metrics from various UBX messages
 /// into a single integrity assessment, as proposed in Section 6.4.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct GnssIntegrity {
     /// Overall integrity level
     pub level: IntegrityLevel,
@@ -201,6 +201,59 @@ pub struct GnssIntegrity {
     pub pl_frame: u8,
     /// Protection level invalidity reason (0=valid, 1=not available, 2=not trustworthy, 3=not verified)
     pub pl_invalidity_reason: u8,
+}
+
+impl Default for GnssIntegrity {
+    fn default() -> Self {
+        Self {
+            level: IntegrityLevel::Failed, // Default to failed until data received
+            status_message: "Initializing".to_string(),
+            
+            // Position quality
+            fix_type: FixType::default(),
+            carrier_solution: 0,
+            differential_applied: false,
+            num_satellites: 0,
+            h_accuracy_m: 0.0,
+            v_accuracy_m: 0.0,
+            pdop: 0.0,
+            position_covariance: [0.0; 9],
+            velocity_covariance: [0.0; 9],
+            covariance_valid: false,
+
+            // RTK status
+            correction_age_s: -1.0,
+            correction_received: false,
+            correction_used: false,
+
+            // Security
+            jamming_state: JammingStateData::default(),
+            spoofing_state: SpoofingStateData::default(),
+            security_events: 0,
+
+            // Hardware
+            antenna_status: AntennaStatus::default(),
+            jamming_indicator: 0,
+
+            // Communication
+            comm_ports: 0,
+            comm_tx_errors: 0,
+
+            // Signal quality
+            mean_cno: 0.0,
+            min_cno: 0,
+            sats_above_cno_threshold: 0,
+
+            // Protection Level
+            protection_level_valid: false,
+            horizontal_pl_m: 0.0,
+            vertical_pl_m: 0.0,
+            velocity_pl_ms: 0.0,
+            target_mir: 0.0,
+            pl_frame: 0,
+            pl_invalidity_reason: 0, // Default to "Not Available" (0)
+        }
+    }
 }
 
 /// Integrity aggregator that combines quality metrics from multiple sources.
@@ -420,11 +473,15 @@ impl IntegrityAggregator {
         };
 
         // Convert invalidity reason enum to u8 for ROS message
+        // Mapping aligned with UBX-NAV-PL manual:
+        // 0: Not available (also used for Valid as there is no invalidity reason)
+        // 1: Solution not trustworthy (1-29)
+        // 30: PL not verified for this receiver configuration (30-100)
         self.current.pl_invalidity_reason = match pl.pos_invalidity_reason {
             NavPlInvalidityReason::Valid => 0,
-            NavPlInvalidityReason::NotAvailable => 1,
-            NavPlInvalidityReason::SolutionNotTrustworthy => 2,
-            NavPlInvalidityReason::NotVerifiedForConfig => 3,
+            NavPlInvalidityReason::NotAvailable => 0,
+            NavPlInvalidityReason::SolutionNotTrustworthy => 1,
+            NavPlInvalidityReason::NotVerifiedForConfig => 30,
         };
 
         if pl.pos_valid {

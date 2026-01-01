@@ -23,7 +23,7 @@ pub use integrity::{IntegrityConfig, IntegrityThresholdsConfig};
 pub use modes::{Feature, FeaturesConfig, ModePreset, OperatingMode};
 pub use ntrip::{NtripConfig, NtripConnectionConfig, NtripVersion};
 pub use ublox::{
-    BeidouConfig, GnssConstellationConfig, MessageConfig, PortProtocols, PortSettings,
+    BeidouConfig, GnssConstellationConfig, MessageConfig, NavSpgConfig, PortProtocols, PortSettings,
     ProtocolConfig, QzssConfig, RateConfig, SbasConfig, SignalConfig, UartPortConfig, UbloxConfig,
 };
 
@@ -329,6 +329,19 @@ impl Config {
             .map(|u| u.signals.clone())
             .unwrap_or_default();
 
+        // Enable protection level calculation when integrity feature is active
+        let nav_spg = if self.features.integrity {
+            NavSpgConfig {
+                pl_ena: Some(true),
+            }
+        } else {
+            self.device
+                .ublox
+                .as_ref()
+                .map(|u| u.nav_spg.clone())
+                .unwrap_or_default()
+        };
+
         UbloxConfig {
             family: self.device.ublox.as_ref().and_then(|u| u.family.clone()),
             rate,
@@ -336,6 +349,7 @@ impl Config {
             messages,
             ports,
             signals,
+            nav_spg,
         }
     }
 

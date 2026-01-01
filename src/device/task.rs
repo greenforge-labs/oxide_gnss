@@ -595,6 +595,12 @@ impl DeviceTask {
                 .await;
         }
 
+        // Handle NAV-PL (protection levels for integrity monitoring)
+        if let Some(ref pl) = result.nav_pl {
+            self.integrity.update_nav_pl(pl);
+            integrity_updated = true;
+        }
+
         // Compute and send integrity update if any relevant data changed
         if integrity_updated {
             // Note: Correction age is now device-reported via NAV-PVT flags3,

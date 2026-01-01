@@ -52,6 +52,18 @@ pub struct UbloxConfig {
     /// GNSS signal/constellation configuration
     #[serde(default)]
     pub signals: SignalConfig,
+
+    /// Navigation engine configuration (CFG-NAVSPG-*)
+    #[serde(default)]
+    pub nav_spg: NavSpgConfig,
+}
+
+/// Navigation engine configuration (CFG-NAVSPG-*).
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct NavSpgConfig {
+    /// Enable protection level calculation and output (CFG-NAVSPG-PL_ENA)
+    #[serde(default)]
+    pub pl_ena: Option<bool>,
 }
 
 /// Measurement and navigation rate configuration.

@@ -60,6 +60,11 @@ pub fn build_cfg_vals_from_config(config: &UbloxConfig) -> Vec<CfgVal> {
     // Signal/constellation settings
     build_signal_cfg_vals(&config.signals, &mut vals);
 
+    // Navigation engine settings (CFG-NAVSPG-*)
+    if let Some(pl_ena) = config.nav_spg.pl_ena {
+        vals.push(CfgVal::NavSpgPlEna(pl_ena));
+    }
+
     // Message output rates
     for (msg, rate) in &config.messages.usb {
         if let Some(val) = parse_message_rate("usb", msg, *rate) {
@@ -268,6 +273,7 @@ fn parse_message_rate(port: &str, msg: &str, rate: u8) -> Option<CfgVal> {
         ("usb", "NAV_ODO") => Some(CfgVal::MsgOutUbxNavOdoUsb(rate)),
         ("usb", "NAV_COV") => Some(CfgVal::MsgOutUbxNavCovUsb(rate)),
         ("usb", "NAV_RELPOSNED") => Some(CfgVal::MsgOutUbxNavRelposNedUsb(rate)),
+        ("usb", "NAV_PL") => Some(CfgVal::MsgOutUbxNavPlUsb(rate)),
         ("usb", "MON_RF") => Some(CfgVal::MsgOutUbxMonRfUsb(rate)),
         ("usb", "MON_COMMS") => Some(CfgVal::MsgOutUbxMoncommsUsb(rate)),
         ("usb", "MON_HW") => Some(CfgVal::MsgOutUbxMonHwUsb(rate)),
@@ -287,6 +293,7 @@ fn parse_message_rate(port: &str, msg: &str, rate: u8) -> Option<CfgVal> {
         ("uart1", "NAV_POSECEF") => Some(CfgVal::MsgOutUbxNavPosEcefUart1(rate)),
         ("uart1", "NAV_COV") => Some(CfgVal::MsgOutUbxNavCovUart1(rate)),
         ("uart1", "NAV_RELPOSNED") => Some(CfgVal::MsgOutUbxNavRelposNedUart1(rate)),
+        ("uart1", "NAV_PL") => Some(CfgVal::MsgOutUbxNavPlUart1(rate)),
         ("uart1", "MON_RF") => Some(CfgVal::MsgOutUbxMonRfUart1(rate)),
         ("uart1", "MON_COMMS") => Some(CfgVal::MsgOutUbxMoncommsUart1(rate)),
         ("uart1", "MON_HW") => Some(CfgVal::MsgOutUbxMonHwUart1(rate)),
@@ -306,6 +313,7 @@ fn parse_message_rate(port: &str, msg: &str, rate: u8) -> Option<CfgVal> {
         ("uart2", "NAV_POSECEF") => Some(CfgVal::MsgOutUbxNavPosEcefUart2(rate)),
         ("uart2", "NAV_COV") => Some(CfgVal::MsgOutUbxNavCovUart2(rate)),
         ("uart2", "NAV_RELPOSNED") => Some(CfgVal::MsgOutUbxNavRelposNedUart2(rate)),
+        ("uart2", "NAV_PL") => Some(CfgVal::MsgOutUbxNavPlUart2(rate)),
         ("uart2", "NAV_SVIN") => Some(CfgVal::MsgOutUbxNavSvinUart2(rate)),
         ("uart2", "MON_RF") => Some(CfgVal::MsgOutUbxMonRfUart2(rate)),
         ("uart2", "MON_COMMS") => Some(CfgVal::MsgOutUbxMoncommsUart2(rate)),

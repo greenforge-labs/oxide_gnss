@@ -130,7 +130,8 @@ impl Feature {
         match self {
             Self::HighPrecision => &["NAV_HPPOSLLH"],
             // NAV_SAT required for C/N0 signal quality checks
-            Self::Integrity => &["SEC_SIG", "MON_RF", "MON_COMMS", "NAV_SAT"],
+            // NAV_PL required for protection level reporting
+            Self::Integrity => &["SEC_SIG", "MON_RF", "MON_COMMS", "NAV_SAT", "NAV_PL"],
             Self::Satellites => &["NAV_SAT"],
             Self::Heading => &["NAV_RELPOSNED"],
             Self::DeadReckoning => &[], // ESF messages - not yet implemented
