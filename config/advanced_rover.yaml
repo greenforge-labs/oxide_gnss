@@ -38,6 +38,21 @@ device:
       measurement_ms: 100   # 10 Hz (100ms per measurement)
       nav_ratio: 1          # One nav solution per measurement
 
+    # Navigation engine configuration
+    nav_spg:
+      # Dynamic platform model - optimize filter for your application
+      # Options: portable, stationary, pedestrian, automotive, sea,
+      #          airborne_light, airborne_medium, airborne_high,
+      #          wrist, bike, mower, escooter, robot
+      dynamic_model: robot      # Generic robot platform
+
+      # Elevation mask - reject satellites below this angle (degrees)
+      # Helps reduce multipath in challenging environments
+      elevation_mask: 10
+
+      # PDOP mask - reject solutions with poor geometry
+      # pdop_mask: 6.0
+
     # GNSS constellation configuration
     # Uncomment to customize which constellations/signals are used
     signals:

@@ -18,4 +18,8 @@ device:
     min_satellites: 4
     max_hdop: 5.0
 
+  ublox:
+    nav_spg:
+      dynamic_model: portable   # General purpose, low dynamics
+
 # No NTRIP needed for standalone mode

@@ -20,6 +20,10 @@ device:
     min_satellites: 4
     max_hdop: 5.0
 
+  ublox:
+    nav_spg:
+      dynamic_model: automotive   # Ground vehicle dynamics
+
 ntrip:
   host: "ntrip.data.gnss.ga.gov.au"
   port: 2101

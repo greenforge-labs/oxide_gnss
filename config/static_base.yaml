@@ -34,6 +34,10 @@ device:
       measurement_ms: 1000  # 1 Hz for static base
       nav_ratio: 1
 
+    # Navigation engine - stationary for base station
+    nav_spg:
+      dynamic_model: stationary   # No movement expected
+
     # UART2 baudrate for RTCM output (to radio or direct connection)
     ports:
       uart2:

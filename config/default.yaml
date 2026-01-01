@@ -81,6 +81,23 @@ device:
     #     baudrate: 460800
 
     # -------------------------------------------------------------------------
+    # Navigation Engine Configuration (optional)
+    # -------------------------------------------------------------------------
+    # Fine-tune the navigation filter for your application.
+    # nav_spg:
+    #   # Dynamic platform model - optimize for motion profile
+    #   # Options: portable (default), stationary, pedestrian, automotive, sea,
+    #   #          airborne_light (<1g), airborne_medium (<2g), airborne_high (<4g),
+    #   #          wrist, bike, mower, escooter, robot
+    #   dynamic_model: automotive
+    #
+    #   # Elevation mask - reject satellites below this angle (degrees, 0-90)
+    #   elevation_mask: 10
+    #
+    #   # PDOP mask - reject solutions with PDOP above threshold
+    #   pdop_mask: 6.0
+
+    # -------------------------------------------------------------------------
     # GNSS Signal/Constellation Selection (optional)
     # -------------------------------------------------------------------------
     # Uncomment to customize which constellations are used.

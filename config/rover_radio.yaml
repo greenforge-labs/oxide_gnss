@@ -35,6 +35,11 @@ device:
       measurement_ms: 100   # 10 Hz
       nav_ratio: 1
 
+    # Navigation engine configuration
+    nav_spg:
+      dynamic_model: automotive   # Ground vehicle dynamics
+      elevation_mask: 10          # Reject low satellites (multipath reduction)
+
     # UART2 baudrate for receiving RTCM from radio
     ports:
       uart2:

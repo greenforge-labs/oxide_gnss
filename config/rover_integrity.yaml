@@ -41,6 +41,10 @@ device:
       measurement_ms: 100   # 10 Hz
       nav_ratio: 1
 
+    # Navigation engine configuration
+    nav_spg:
+      dynamic_model: automotive   # Ground vehicle dynamics
+
 # =============================================================================
 # NTRIP Configuration
 # =============================================================================

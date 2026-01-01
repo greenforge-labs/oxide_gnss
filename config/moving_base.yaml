@@ -36,6 +36,10 @@ device:
       measurement_ms: 200   # 5 Hz (matches navigation rate_hz)
       nav_ratio: 1
 
+    # Navigation engine configuration
+    nav_spg:
+      dynamic_model: automotive   # Vehicle-mounted base
+
     # UART2 baudrate for RTCM output to rover
     ports:
       uart2:

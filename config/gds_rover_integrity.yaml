@@ -41,6 +41,11 @@ device:
       measurement_ms: 100   # 10 Hz
       nav_ratio: 1
 
+    # Navigation engine configuration
+    nav_spg:
+      dynamic_model: automotive   # Ground vehicle dynamics
+      elevation_mask: 10          # Reject low satellites
+
     # GNSS constellation configuration
     # Uncomment to customize which constellations/signals are used
     signals:
