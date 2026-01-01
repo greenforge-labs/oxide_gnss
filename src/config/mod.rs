@@ -23,8 +23,9 @@ pub use integrity::{IntegrityConfig, IntegrityThresholdsConfig};
 pub use modes::{Feature, FeaturesConfig, ModePreset, OperatingMode};
 pub use ntrip::{NtripConfig, NtripConnectionConfig, NtripVersion};
 pub use ublox::{
-    BeidouConfig, GnssConstellationConfig, MessageConfig, NavSpgConfig, PortProtocols, PortSettings,
-    ProtocolConfig, QzssConfig, RateConfig, SbasConfig, SignalConfig, UartPortConfig, UbloxConfig,
+    BeidouConfig, GnssConstellationConfig, MessageConfig, NavSpgConfig, PortProtocols,
+    PortSettings, ProtocolConfig, QzssConfig, RateConfig, SbasConfig, SignalConfig, UartPortConfig,
+    UbloxConfig,
 };
 
 use serde::Deserialize;
@@ -331,9 +332,7 @@ impl Config {
 
         // Enable protection level calculation when integrity feature is active
         let nav_spg = if self.features.integrity {
-            NavSpgConfig {
-                pl_ena: Some(true),
-            }
+            NavSpgConfig { pl_ena: Some(true) }
         } else {
             self.device
                 .ublox

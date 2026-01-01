@@ -208,7 +208,7 @@ impl Default for GnssIntegrity {
         Self {
             level: IntegrityLevel::Failed, // Default to failed until data received
             status_message: "Initializing".to_string(),
-            
+
             // Position quality
             fix_type: FixType::default(),
             carrier_solution: 0,
