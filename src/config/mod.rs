@@ -349,7 +349,11 @@ impl Config {
 
         // Pass through optional configs from user
         let timepulse = self.device.ublox.as_ref().and_then(|u| u.timepulse.clone());
-        let base_position = self.device.ublox.as_ref().and_then(|u| u.base_position.clone());
+        let base_position = self
+            .device
+            .ublox
+            .as_ref()
+            .and_then(|u| u.base_position.clone());
         let time_mark = self.device.ublox.as_ref().and_then(|u| u.time_mark.clone());
 
         UbloxConfig {
