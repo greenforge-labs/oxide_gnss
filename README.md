@@ -1,42 +1,81 @@
 # oxide_gnss
 
-A Rust-based ROS2 GNSS driver for u-blox ZED-F9P devices with integrated NTRIP client.
+A Rust-based ROS 2 GNSS driver for u-blox receivers (ZED-F9P focus) with an integrated NTRIP client and optional integrity monitoring.
+
+This repository contains:
+
+- `oxide_gnss`: the ROS 2 node
+- `oxide_gnss_msgs`: custom message definitions (`OxideIntegrity`, `OxideSatellites`, `OxideSatellite`)
+
+## Documentation
+
+- **User manual (end users):** [`docs/USER_MANUAL.md`](docs/USER_MANUAL.md)
+- **ROS 2 topics reference:** [`docs/TOPICS.md`](docs/TOPICS.md)
+- **Integrity monitoring:** [`docs/INTEGRITY.md`](docs/INTEGRITY.md)
+- **Development guide (build/dev/CI):** [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)
 
 ## Overview
 
-oxide_gnss provides a reliable, safety-focused GNSS driver for ROS2 applications. It connects to u-blox ZED-F9P GNSS receivers and publishes position, velocity, and diagnostic information to ROS2 topics.
+`oxide_gnss` connects to a u-blox GNSS receiver and publishes position, velocity, time, and diagnostics to ROS 2 topics. In RTK rover modes it can fetch RTCM corrections via the built-in NTRIP client.
 
-### Key Features
+### Key features
 
-- **Rust implementation** — Memory-safe, reliable operation
-- **Integrated NTRIP client** — Receive RTK corrections from casters like AusCORS
-- **Comprehensive diagnostics** — Safety-critical status monitoring
-- **ROS2 Jazzy+** — Modern ROS2 support via ros2-rust
+- **Rust implementation** — memory-safe, reliable operation
+- **Mode-based configuration** — presets for common rover/base scenarios
+- **Integrated NTRIP client** — receive RTK corrections from NTRIP casters
+- **Integrity monitoring (optional)** — publishes `~/integrity` and `~/operational`
+- **ROS diagnostics** — publishes `/diagnostics` for status visibility
 
 ## Status
 
-🚧 **Under Development** — Not yet ready for production use.
+Under active development; configuration and interfaces may change.
 
-## Supported Hardware
+## Supported ROS 2
 
-| Manufacturer | Model | Status |
-|--------------|-------|--------|
-| u-blox | ZED-F9P | 🎯 Exclusive target |
+Humble and newer.
+
+## Supported hardware
+
+| Manufacturer | Model | Notes |
+|--------------|-------|-------|
+| u-blox | ZED-F9P | Primary target |
+| u-blox | Other u-blox devices | May work depending on firmware message support |
 
 ## Quick Start
 
-See the [Building](#building) section for installation.
+For full build/setup instructions, see [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 
-Once built, source the workspace:
+Once built, source your workspace:
 ```bash
 source install/setup.bash
 ```
 
-Then follow the [Launching](#launching) instructions below.
+### 1. Install udev rules (recommended)
+
+```bash
+sudo cp src/oxide_gnss/udev/99-oxide-gnss.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules && sudo udevadm trigger
+sudo usermod -aG dialout $USER
+```
+
+Log out/in (or reboot) after changing group membership.
+
+### 2. Launch
+
+```bash
+ros2 launch oxide_gnss oxide_gnss.launch.py \
+  config_file:=/absolute/path/to/your/config.yaml
+```
+
+Example configs are in `config/`.
 
 ## Configuration
 
 Configuration is via YAML files. See the `config/` directory for examples.
+
+For the full end-user workflow (modes, features, NTRIP, integrity, and a complete parameter reference), see:
+
+- [`docs/USER_MANUAL.md`](docs/USER_MANUAL.md)
 
 ### Mode-Based Configuration (Recommended)
 
@@ -83,13 +122,17 @@ ntrip:
 | `integrity` | Jamming/spoofing detection | `~/integrity`, `~/operational` |
 | `satellites` | Per-satellite info | `~/satellites` |
 
-See [CONFIGURATION.md](docs/CONFIGURATION.md) for full details.
+See also:
 
-## ROS2 Interface
+- [`docs/TOPICS.md`](docs/TOPICS.md) (topic list, types, and UBX requirements)
+
+## ROS 2 Interface
 
 ### Published Topics
 
 Topics are created based on your mode and feature configuration:
+
+For a complete topic reference (including required UBX messages), see [`docs/TOPICS.md`](docs/TOPICS.md).
 
 **Core Topics (always enabled):**
 
@@ -112,6 +155,8 @@ Topics are created based on your mode and feature configuration:
 ### Safety Integrity Monitoring
 
 The driver includes built-in safety integrity monitoring that aggregates quality metrics from multiple UBX messages.
+
+For the integrity model, required messages, and threshold meanings, see [`docs/INTEGRITY.md`](docs/INTEGRITY.md).
 
 **Integrity Levels:**
 - **OK (0)** — All checks pass, full operation permitted
@@ -154,191 +199,20 @@ The driver publishes comprehensive diagnostics including:
 - Age of differential corrections
 - NTRIP connection status
 
-## Building
+## Development
 
-### Prerequisites
+See [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) for:
 
-- **ROS2** — Humble, Jazzy, Kilted, or Rolling (Jazzy on Ubuntu 24.04 recommended)
-- **Rust toolchain** — stable, install via [rustup](https://rustup.rs/)
-  ```bash
-  # Install Rust using rustup (recommended over apt)
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-  source ~/.cargo/env
-  
-  # Set the default toolchain
-  rustup default stable
-  ```
-- **libclang-dev** — required for bindgen: `sudo apt install libclang-dev`
-- **vcstool** — for importing repos: `sudo apt install python3-vcstool`
-- **minicom** — for testing serial communication: `sudo apt install minicom`
-- **python3-pip** — for installing colcon plugins: `sudo apt install python3-pip`
+- Workspace setup (ros2-rust + colcon-cargo)
+- Building with `colcon` or `cargo`
+- CI parity checks and troubleshooting
 
-### Development Environment Setup
-
-The ros2-rust ecosystem requires some setup before building. This only needs to be done once per workspace.
-
-#### 1. Install colcon-cargo plugins
-
-Ubuntu 24.04 uses PEP 668 which restricts pip installs. For ROS2 build tools, use `--break-system-packages`:
+Common commands:
 
 ```bash
-# Install colcon-cargo plugins with --break-system-packages flag (required for Ubuntu 24.04)
-pip install --break-system-packages \
-    git+https://github.com/colcon/colcon-cargo.git \
-    git+https://github.com/colcon/colcon-ros-cargo.git
-
-# Install cargo-ament-build (required for colcon to build Rust packages)
-cargo install cargo-ament-build
-```
-
-#### 2. Set up workspace with ros2-rust
-
-```bash
-# Create workspace
-mkdir -p ~/ros2_ws/src
-cd ~/ros2_ws/src
-
-# Clone this package (includes oxide_gnss driver and oxide_gnss_msgs)
-git clone https://github.com/gsokoll/oxide_gnss.git
-
-# Clone ros2-rust
-git clone https://github.com/ros2-rust/ros2_rust.git
-
-# Import ros2-rust dependencies (message packages with Rust bindings)
-vcs import . < ros2_rust/ros2_rust_jazzy.repos
-
-# Create symlink for message package (required for colcon discovery)
-ln -s oxide_gnss/oxide_gnss_msgs oxide_gnss_msgs
-```
-
-#### 3. Initial build
-
-```bash
-cd ~/ros2_ws
-source /opt/ros/jazzy/setup.bash
-
-# Build message definitions first (must complete before driver)
-colcon build --packages-select oxide_gnss_msgs \
-    --allow-overriding builtin_interfaces std_msgs geometry_msgs \
-    sensor_msgs diagnostic_msgs action_msgs
-
-# Source to make messages available
-source install/setup.bash
-
-# Build the driver
-colcon build --packages-select oxide_gnss \
-    --allow-overriding builtin_interfaces std_msgs geometry_msgs \
-    sensor_msgs diagnostic_msgs action_msgs
-
-# Source to make driver available
-source install/setup.bash
-```
-
-This creates `.cargo/config.toml` in the workspace root with patches that redirect ROS2 crates to the locally-built versions.
-
-### Rebuilding
-
-After the initial setup, you can rebuild with:
-
-```bash
-cd ~/ros2_ws
-source /opt/ros/jazzy/setup.bash
-
-# Rebuild just the driver (fast - messages rarely change)
-colcon build --packages-select oxide_gnss \
-    --allow-overriding builtin_interfaces std_msgs geometry_msgs \
-    sensor_msgs diagnostic_msgs action_msgs
-
-source install/setup.bash
-```
-
-If you've modified `oxide_gnss_msgs`, rebuild both:
-
-```bash
-colcon build --packages-select oxide_gnss_msgs oxide_gnss \
-    --allow-overriding builtin_interfaces std_msgs geometry_msgs \
-    sensor_msgs diagnostic_msgs action_msgs
-
-source install/setup.bash
-```
-
-### Pre-commit Checks
-
-Before pushing, run these checks to match CI:
-
-```bash
-# Format check
 cargo fmt --all -- --check
-
-# Clippy lints (treats warnings as errors)
 cargo clippy --features ros2 -- -D warnings
-
-# Run tests
 cargo test --features ros2
-```
-
-### Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| `No task extension to 'build' a 'ros.ament_cargo' package` | Install colcon-cargo plugins (step 1) |
-| `failed to resolve patches` | Delete `.cargo/` and `install/` dirs, rebuild |
-| `externally-managed-environment` error | Use `--break-system-packages` with pip |
-| ROS2 crates not found by cargo | Run colcon build first to generate patches |
-| `command 'cargo' not found` | Run `source ~/.cargo/env` after installing rustup |
-| `error: no matching package named 'builtin_interfaces' found` | Run `colcon build --packages-up-to oxide_gnss` |
-| `Config file not found` / `os error 2` | Use absolute path for `config_file` param |
-| `Permission denied (os error 13)` opening `/dev/gnss_*` | Ensure your user is in the `dialout` group (`sudo usermod -aG dialout $USER` then log out/in), or set `MODE="0666"` in the udev rule to relax device permissions |
-| `CMake Error: The source directory ... does not exist` | Stale build cache. Run `rm -rf build/ install/` and rebuild |
-
-## Quick Start
-
-### 1. Install Udev Rules (Required for Device Stability)
-
-To ensure consistent device naming, install the provided udev rules:
-
-```bash
-# Copy rules to system directory
-sudo cp src/oxide_gnss/udev/99-oxide-gnss.rules /etc/udev/rules.d/
-
-# Reload rules and trigger
-sudo udevadm control --reload-rules && sudo udevadm trigger
-```
-
-This creates symbolic links like `/dev/gnss_f9p_YOURSERIAL` for your ZED-F9P device.
-
-By default, these serial devices are typically owned by `root:dialout` with
-mode `0660`. The **recommended** approach is to ensure your user is in the
-`dialout` group so that ROS2 nodes can open the ports without root:
-
-```bash
-sudo usermod -aG dialout $USER
-# Log out and back in (or reboot) for the new group membership to take effect
-```
-
-On single-user development machines where strict permissions are less
-important, you may **as a last resort** set `MODE="0666"` in the udev rules to
-allow all users to access the device.
-
-### 2. Launching
-
-**Single Device:**
-```bash
-cd ~/ros2_ws
-ros2 launch oxide_gnss oxide_gnss.launch.py config_file:=src/oxide_gnss/config/rover_ntrip.yaml
-```
-
-**Multiple Devices (e.g., Moving Base + Rover):**
-```bash
-# Terminal 1 - Base
-ros2 launch oxide_gnss oxide_gnss.launch.py \
-    config_file:=src/oxide_gnss/config/moving_base.yaml \
-    namespace:=gnss_base
-
-# Terminal 2 - Rover
-ros2 launch oxide_gnss oxide_gnss.launch.py \
-    config_file:=src/oxide_gnss/config/moving_base_rover.yaml \
-    namespace:=gnss_rover
 ```
 
 ## License

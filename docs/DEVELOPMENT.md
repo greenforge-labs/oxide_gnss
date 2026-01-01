@@ -233,7 +233,9 @@ oxide_gnss/                 # Repository root
 ├── launch/
 │   └── oxide_gnss.launch.py
 └── docs/
-    ├── CONFIGURATION.md
+    ├── USER_MANUAL.md
+    ├── TOPICS.md
+    ├── INTEGRITY.md
     └── DEVELOPMENT.md
 ```
 
@@ -376,7 +378,7 @@ colcon build --packages-up-to oxide_gnss
 
 4. **Document**:
    - Add to `MESSAGE_REQUIREMENTS` in `config/ublox.rs`
-   - Update `docs/CONFIGURATION.md`
+   - Update `docs/USER_MANUAL.md` and/or `docs/TOPICS.md`
 
 ### Adding a New ROS Topic
 
@@ -385,7 +387,7 @@ colcon build --packages-up-to oxide_gnss
 3. Add publish method with `Option` check
 4. Call from `RosTask::handle_message()`
 5. Update `Config::enabled_topics()` in `config/mod.rs`
-6. Document in `CONFIGURATION.md`
+6. Document in `USER_MANUAL.md` and `TOPICS.md`
 
 ### Adding a New Feature Flag
 
@@ -395,7 +397,7 @@ colcon build --packages-up-to oxide_gnss
 4. Update `FeaturesConfig` with new field
 5. Update `enabled_features()` to include it
 6. Add to mode presets' `allowed_features` if appropriate
-7. Document in `CONFIGURATION.md`
+7. Document in `USER_MANUAL.md` and `TOPICS.md` (and `INTEGRITY.md` if relevant)
 
 ### Adding a New Operating Mode
 
@@ -404,7 +406,7 @@ colcon build --packages-up-to oxide_gnss
 3. Update `ModePreset::for_mode()` match
 4. Update `Config::enabled_topics()` if mode has special topics
 5. Create example config file in `config/`
-6. Document in `CONFIGURATION.md`
+6. Document in `USER_MANUAL.md` and `TOPICS.md`
 
 ---
 
