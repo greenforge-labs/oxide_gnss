@@ -111,7 +111,7 @@ impl Default for IntegrityThresholds {
             max_horizontal_pl_m: 0.50, // 50cm horizontal PL alert limit
             max_vertical_pl_m: 1.00,   // 1m vertical PL alert limit
             max_velocity_pl_ms: 0.10,  // 10cm/s velocity PL alert limit
-            max_tmir_per_epoch: 1e-5,  // 10^-5 %MI/epoch
+            max_tmir_per_epoch: 6.0,   // 6 %MI/epoch (device default is typically 5e0 = 5%)
             require_valid_pl: false,   // Don't require PL by default (backward compat)
         }
     }

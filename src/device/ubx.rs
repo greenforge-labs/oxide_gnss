@@ -895,7 +895,7 @@ impl UbxHandler {
                         }
                         ublox::proto27::PacketRef::NavPl(msg) => {
                             let pl = Self::parse_nav_pl(&msg);
-                            debug!(pos_valid = pl.pos_valid, tmir = pl.tmir, "NAV-PL received");
+                            trace!(pos_valid = pl.pos_valid, tmir = pl.tmir, "NAV-PL received");
                             new_nav_pl = Some(pl);
                         }
                         _ => {

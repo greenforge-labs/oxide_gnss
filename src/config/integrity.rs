@@ -93,7 +93,8 @@ pub struct IntegrityThresholdsConfig {
     #[serde(default = "default_max_velocity_pl_ms")]
     pub max_velocity_pl_ms: f32,
 
-    /// Maximum TMIR (Target Misleading Information Risk) per epoch (default: 1e-5)
+    /// Maximum TMIR (Target Misleading Information Risk) per epoch (default: 6.0)
+    /// Device default is typically 5.0 (5% MI/epoch with tmir_coeff=5, tmir_exp=0)
     #[serde(default = "default_max_tmir_per_epoch")]
     pub max_tmir_per_epoch: f64,
 
@@ -143,7 +144,7 @@ fn default_max_velocity_pl_ms() -> f32 {
     0.10
 }
 fn default_max_tmir_per_epoch() -> f64 {
-    1e-5
+    6.0
 }
 fn default_require_valid_pl() -> bool {
     false
