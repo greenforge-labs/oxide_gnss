@@ -17,7 +17,29 @@ string status_message
 # Operational status (true if level is OK or DEGRADED)
 bool operational
 
-# Position quality
+# =============================================================================
+# Individual Check Results (true = passed)
+# Enables pass/fail grid visualization for diagnosing integrity state changes
+# =============================================================================
+bool check_fix_type_ok          # Fix type is acceptable (not NoFix/2D/DR/TimeOnly)
+bool check_satellites_ok        # Satellite count meets threshold
+bool check_h_accuracy_ok        # Horizontal accuracy within limit
+bool check_v_accuracy_ok        # Vertical accuracy within limit
+bool check_pdop_ok              # PDOP within limit
+bool check_carrier_ok           # Carrier solution is RTK Fixed (when RTK expected)
+bool check_correction_age_ok    # Correction age within limit
+bool check_signal_quality_ok    # Signal quality (C/N0) within limits
+bool check_jamming_ok           # No critical jamming detected
+bool check_spoofing_ok          # No multiple spoofers detected
+bool check_antenna_ok           # Antenna status is OK (not open/short)
+bool check_pl_horizontal_ok     # Horizontal PL within alert limit
+bool check_pl_vertical_ok       # Vertical PL within alert limit
+bool check_pl_velocity_ok       # Velocity PL within alert limit
+bool check_pl_valid_ok          # Protection level validity check passed
+
+# =============================================================================
+# Position Quality
+# =============================================================================
 uint8 fix_type              # 0=none, 1=dead-reck, 2=2D, 3=3D, 4=GNSS+DR, 5=time-only, 6=RTK-float, 7=RTK-fixed
 uint8 carrier_solution      # 0=none, 1=float, 2=fixed
 bool differential_applied   # Differential corrections applied
@@ -31,10 +53,8 @@ float32 mean_cno            # Mean C/N0 of satellites used in solution (dB-Hz)
 uint8 min_cno               # Minimum C/N0 among used satellites (dB-Hz)
 uint8 sats_above_cno_threshold  # Satellites with C/N0 >= 30 dB-Hz
 
-# Covariance data
-bool covariance_valid       # True if covariance data is valid
-float64[9] position_covariance   # ENU position covariance (row-major 3x3)
-float64[9] velocity_covariance   # ENU velocity covariance (row-major 3x3)
+# Covariance validity (matrices available in NavSatFix/TwistWithCovarianceStamped)
+bool covariance_valid       # True if NAV-COV data was received from device
 
 # RTK/Correction status
 float32 correction_age_s    # Age of differential corrections (-1 if no RTK)

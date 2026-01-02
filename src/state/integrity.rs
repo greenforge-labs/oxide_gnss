@@ -128,6 +128,39 @@ pub struct GnssIntegrity {
     /// Human-readable status message
     pub status_message: String,
 
+    // Individual check results (true = passed)
+    // These enable pass/fail grid visualization for diagnosing integrity state changes
+    /// Fix type is acceptable (not NoFix/2D/DR/TimeOnly)
+    pub check_fix_type_ok: bool,
+    /// Satellite count meets threshold
+    pub check_satellites_ok: bool,
+    /// Horizontal accuracy within limit
+    pub check_h_accuracy_ok: bool,
+    /// Vertical accuracy within limit
+    pub check_v_accuracy_ok: bool,
+    /// PDOP within limit
+    pub check_pdop_ok: bool,
+    /// Carrier solution is RTK Fixed (when RTK expected)
+    pub check_carrier_ok: bool,
+    /// Correction age within limit
+    pub check_correction_age_ok: bool,
+    /// Signal quality (C/N0) within limits
+    pub check_signal_quality_ok: bool,
+    /// No critical jamming detected
+    pub check_jamming_ok: bool,
+    /// No multiple spoofers detected
+    pub check_spoofing_ok: bool,
+    /// Antenna status is OK (not open/short)
+    pub check_antenna_ok: bool,
+    /// Horizontal PL within alert limit
+    pub check_pl_horizontal_ok: bool,
+    /// Vertical PL within alert limit
+    pub check_pl_vertical_ok: bool,
+    /// Velocity PL within alert limit
+    pub check_pl_velocity_ok: bool,
+    /// Protection level validity check passed
+    pub check_pl_valid_ok: bool,
+
     // Position quality
     /// Fix type (0=none, 1=dead-reck, 2=2D, 3=3D, 4=GNSS+DR, 5=time-only)
     pub fix_type: FixType,
@@ -143,11 +176,7 @@ pub struct GnssIntegrity {
     pub v_accuracy_m: f32,
     /// Position DOP
     pub pdop: f32,
-    /// Position covariance matrix (ENU, row-major, 3x3)
-    pub position_covariance: [f32; 9],
-    /// Velocity covariance matrix (ENU, row-major, 3x3)
-    pub velocity_covariance: [f32; 9],
-    /// Covariance data valid
+    /// Covariance data valid (matrices available in NavSatFix/TwistWithCovarianceStamped)
     pub covariance_valid: bool,
 
     // RTK status
@@ -209,6 +238,23 @@ impl Default for GnssIntegrity {
             level: IntegrityLevel::Failed, // Default to failed until data received
             status_message: "Initializing".to_string(),
 
+            // Check results default to false (not passed) until computed
+            check_fix_type_ok: false,
+            check_satellites_ok: false,
+            check_h_accuracy_ok: false,
+            check_v_accuracy_ok: false,
+            check_pdop_ok: false,
+            check_carrier_ok: false,
+            check_correction_age_ok: false,
+            check_signal_quality_ok: false,
+            check_jamming_ok: false,
+            check_spoofing_ok: false,
+            check_antenna_ok: false,
+            check_pl_horizontal_ok: false,
+            check_pl_vertical_ok: false,
+            check_pl_velocity_ok: false,
+            check_pl_valid_ok: false,
+
             // Position quality
             fix_type: FixType::default(),
             carrier_solution: 0,
@@ -217,8 +263,6 @@ impl Default for GnssIntegrity {
             h_accuracy_m: 0.0,
             v_accuracy_m: 0.0,
             pdop: 0.0,
-            position_covariance: [0.0; 9],
-            velocity_covariance: [0.0; 9],
             covariance_valid: false,
 
             // RTK status
@@ -298,41 +342,12 @@ impl IntegrityAggregator {
     }
 
     /// Update with position/velocity covariance data (NAV-COV).
+    ///
+    /// Note: Covariance matrices are available in NavSatFix/TwistWithCovarianceStamped.
+    /// This only tracks validity for integrity monitoring.
     pub fn update_covariance(&mut self, cov: &CovData) {
         self.last_cov = Some(cov.clone());
-
         self.current.covariance_valid = cov.pos_cov_valid && cov.vel_cov_valid;
-
-        if cov.pos_cov_valid {
-            // Convert NED covariance to ENU (swap N<->E, negate D->U)
-            // NED: [NN, NE, ND, EE, ED, DD] -> ENU: [EE, EN, EU, NN, NU, UU]
-            self.current.position_covariance = [
-                cov.pos_cov[3],  // EE
-                cov.pos_cov[1],  // EN (same as NE)
-                -cov.pos_cov[4], // EU (negated ED)
-                cov.pos_cov[1],  // NE (same as EN)
-                cov.pos_cov[0],  // NN
-                -cov.pos_cov[2], // NU (negated ND)
-                -cov.pos_cov[4], // UE (negated DE)
-                -cov.pos_cov[2], // UN (negated DN)
-                cov.pos_cov[5],  // UU (same as DD)
-            ];
-        }
-
-        if cov.vel_cov_valid {
-            // Same NED->ENU conversion for velocity covariance
-            self.current.velocity_covariance = [
-                cov.vel_cov[3],  // EE
-                cov.vel_cov[1],  // EN
-                -cov.vel_cov[4], // EU
-                cov.vel_cov[1],  // NE
-                cov.vel_cov[0],  // NN
-                -cov.vel_cov[2], // NU
-                -cov.vel_cov[4], // UE
-                -cov.vel_cov[2], // UN
-                cov.vel_cov[5],  // UU
-            ];
-        }
     }
 
     /// Update with ECEF position data (NAV-POSECEF).
@@ -514,7 +529,8 @@ impl IntegrityAggregator {
 
     /// Compute the overall integrity level based on current data.
     ///
-    /// Returns the computed `GnssIntegrity` with updated level and status message.
+    /// Returns the computed `GnssIntegrity` with updated level, status message,
+    /// and individual check results for diagnostic visibility.
     pub fn compute(&mut self) -> GnssIntegrity {
         let mut issues: Vec<&str> = Vec::new();
         let mut level = IntegrityLevel::Ok;
@@ -526,6 +542,8 @@ impl IntegrityAggregator {
         if let Some(last_pvt) = self.last_pvt_update {
             let age = now.duration_since(last_pvt).as_secs_f32();
             if age > self.thresholds.max_pvt_age_s {
+                // Reset all checks to false on stale data
+                self.reset_check_results();
                 self.current.level = IntegrityLevel::Failed;
                 self.current.status_message = format!(
                     "GNSS data stale ({:.1}s > {:.1}s threshold)",
@@ -534,176 +552,233 @@ impl IntegrityAggregator {
                 return self.current.clone();
             }
         } else {
-            // Never received PVT data
+            // Never received PVT data - reset all checks
+            self.reset_check_results();
             self.current.level = IntegrityLevel::Failed;
             self.current.status_message = "Waiting for GNSS data".to_string();
             return self.current.clone();
         }
 
         // =========================================================================
-        // LEVEL 0: CRITICAL CHECKS (Operation MUST stop if failed)
+        // EVALUATE ALL CHECKS (set boolean results for diagnostic visibility)
         // =========================================================================
 
-        // Check fix type
-        match self.current.fix_type {
-            FixType::NoFix => {
-                level = IntegrityLevel::Critical;
+        // Fix type check
+        let fix_type_ok = !matches!(
+            self.current.fix_type,
+            FixType::NoFix | FixType::Fix2D | FixType::DeadReckoning | FixType::TimeOnly
+        );
+        self.current.check_fix_type_ok = fix_type_ok;
+        if !fix_type_ok {
+            level = level.max(IntegrityLevel::Critical);
+            if matches!(self.current.fix_type, FixType::NoFix) {
                 issues.push("No GNSS fix");
-            }
-            FixType::Fix2D | FixType::DeadReckoning | FixType::TimeOnly => {
-                level = level.max(IntegrityLevel::Critical);
+            } else {
                 issues.push("Insufficient fix type");
             }
-            _ => {}
         }
 
-        // Check minimum satellites (critical threshold)
-        if self.current.num_satellites < self.thresholds.min_satellites_critical {
+        // Satellite count check (critical threshold)
+        let sats_critical_ok =
+            self.current.num_satellites >= self.thresholds.min_satellites_critical;
+        // Satellite count check includes both critical and high thresholds
+        let sats_high_ok = self.current.num_satellites >= self.thresholds.min_satellites_high;
+        self.current.check_satellites_ok = sats_critical_ok && sats_high_ok;
+        if !sats_critical_ok {
             level = level.max(IntegrityLevel::Critical);
             issues.push("Too few satellites");
         }
 
-        // Check jamming state
-        if matches!(self.current.jamming_state, JammingStateData::Critical) {
+        // Jamming check
+        let jamming_ok = !matches!(self.current.jamming_state, JammingStateData::Critical);
+        self.current.check_jamming_ok = jamming_ok;
+        if !jamming_ok {
             level = level.max(IntegrityLevel::Critical);
             issues.push("Critical jamming detected");
         }
 
-        // Check spoofing state
-        if matches!(self.current.spoofing_state, SpoofingStateData::Multiple) {
+        // Spoofing check
+        let spoofing_ok = !matches!(self.current.spoofing_state, SpoofingStateData::Multiple);
+        self.current.check_spoofing_ok = spoofing_ok;
+        if !spoofing_ok {
             level = level.max(IntegrityLevel::Critical);
             issues.push("Multiple spoofers detected");
         }
 
-        // Check antenna status (critical if short or open)
-        match self.current.antenna_status {
-            AntennaStatus::Short => {
-                level = level.max(IntegrityLevel::Critical);
-                issues.push("Antenna short circuit");
+        // Antenna check
+        let antenna_ok = !matches!(
+            self.current.antenna_status,
+            AntennaStatus::Short | AntennaStatus::Open
+        );
+        self.current.check_antenna_ok = antenna_ok;
+        if !antenna_ok {
+            level = level.max(IntegrityLevel::Critical);
+            match self.current.antenna_status {
+                AntennaStatus::Short => issues.push("Antenna short circuit"),
+                AntennaStatus::Open => issues.push("Antenna open circuit"),
+                _ => {}
             }
-            AntennaStatus::Open => {
-                level = level.max(IntegrityLevel::Critical);
-                issues.push("Antenna open circuit");
-            }
-            _ => {}
         }
 
-        // Check protection level validity (if required)
-        if self.thresholds.require_valid_pl {
+        // Protection level validity check (if required)
+        let pl_valid_ok = if self.thresholds.require_valid_pl {
             if let Some(ref pl) = self.last_nav_pl {
-                if !pl.pos_valid {
+                let valid = pl.pos_valid
+                    && !matches!(
+                        pl.pos_invalidity_reason,
+                        NavPlInvalidityReason::SolutionNotTrustworthy
+                    );
+                if !valid {
                     level = level.max(IntegrityLevel::Critical);
-                    issues.push("Protection level invalid");
+                    if !pl.pos_valid {
+                        issues.push("Protection level invalid");
+                    } else {
+                        issues.push("Solution not trustworthy");
+                    }
                 }
-                // Check if solution is not trustworthy
-                if matches!(
-                    pl.pos_invalidity_reason,
-                    NavPlInvalidityReason::SolutionNotTrustworthy
-                ) {
-                    level = level.max(IntegrityLevel::Critical);
-                    issues.push("Solution not trustworthy");
-                }
+                valid
             } else {
                 level = level.max(IntegrityLevel::Critical);
                 issues.push("Protection level not available");
+                false
+            }
+        } else {
+            // Not required, so always passes
+            true
+        };
+        self.current.check_pl_valid_ok = pl_valid_ok;
+
+        // =========================================================================
+        // LEVEL 1: HIGH QUALITY CHECKS (Degraded operation if failed)
+        // Only evaluate if not already CRITICAL
+        // =========================================================================
+
+        // Carrier solution check (for RTK applications)
+        let carrier_ok = !(self.current.carrier_solution < 2 && self.current.differential_applied);
+        self.current.check_carrier_ok = carrier_ok;
+        if level < IntegrityLevel::Critical && !carrier_ok {
+            level = level.max(IntegrityLevel::Degraded);
+            issues.push("RTK not fixed");
+        }
+
+        // Horizontal accuracy check
+        let h_accuracy_ok = self.current.h_accuracy_m <= self.thresholds.max_h_accuracy_m;
+        self.current.check_h_accuracy_ok = h_accuracy_ok;
+        if level < IntegrityLevel::Critical && !h_accuracy_ok {
+            level = level.max(IntegrityLevel::Degraded);
+            issues.push("Horizontal accuracy exceeded");
+        }
+
+        // Vertical accuracy check
+        let v_accuracy_ok = self.current.v_accuracy_m <= self.thresholds.max_v_accuracy_m;
+        self.current.check_v_accuracy_ok = v_accuracy_ok;
+        if level < IntegrityLevel::Critical && !v_accuracy_ok {
+            level = level.max(IntegrityLevel::Degraded);
+            issues.push("Vertical accuracy exceeded");
+        }
+
+        // PDOP check
+        let pdop_ok = self.current.pdop <= self.thresholds.max_pdop;
+        self.current.check_pdop_ok = pdop_ok;
+        if level < IntegrityLevel::Critical && !pdop_ok {
+            level = level.max(IntegrityLevel::Degraded);
+            issues.push("PDOP too high");
+        }
+
+        // Satellite count (high quality threshold) - already computed above
+        if level < IntegrityLevel::Critical && sats_critical_ok && !sats_high_ok {
+            level = level.max(IntegrityLevel::Degraded);
+            issues.push("Low satellite count");
+        }
+
+        // Correction age check
+        let correction_age_ok = !(self.current.differential_applied
+            && self.current.correction_age_s >= 0.0
+            && self.current.correction_age_s > self.thresholds.max_correction_age_s);
+        self.current.check_correction_age_ok = correction_age_ok;
+        if level < IntegrityLevel::Critical && !correction_age_ok {
+            level = level.max(IntegrityLevel::Degraded);
+            issues.push("Correction age exceeded");
+        }
+
+        // Signal quality check (combines min and mean C/N0)
+        let min_cno_ok =
+            self.current.min_cno == 0 || self.current.min_cno >= self.thresholds.min_cno_degraded;
+        let mean_cno_ok = self.current.mean_cno == 0.0
+            || self.current.mean_cno >= self.thresholds.min_mean_cno_degraded;
+        let signal_quality_ok = min_cno_ok && mean_cno_ok;
+        self.current.check_signal_quality_ok = signal_quality_ok;
+        if level < IntegrityLevel::Critical {
+            if !min_cno_ok {
+                level = level.max(IntegrityLevel::Degraded);
+                issues.push("Weak satellite signal");
+            }
+            if !mean_cno_ok {
+                level = level.max(IntegrityLevel::Degraded);
+                issues.push("Low mean signal quality");
             }
         }
 
         // =========================================================================
-        // LEVEL 1: HIGH QUALITY CHECKS (Degraded operation if failed)
+        // PROTECTION LEVEL CHECKS (ISO 26262/SOTIF compliant bounds)
         // =========================================================================
 
-        // Only check Level 1 if we passed Level 0
-        if level < IntegrityLevel::Critical {
-            // Check carrier solution for RTK applications
-            if self.current.carrier_solution < 2 && self.current.differential_applied {
-                level = level.max(IntegrityLevel::Degraded);
-                issues.push("RTK not fixed");
-            }
-
-            // Check horizontal accuracy
-            if self.current.h_accuracy_m > self.thresholds.max_h_accuracy_m {
-                level = level.max(IntegrityLevel::Degraded);
-                issues.push("Horizontal accuracy exceeded");
-            }
-
-            // Check vertical accuracy
-            if self.current.v_accuracy_m > self.thresholds.max_v_accuracy_m {
-                level = level.max(IntegrityLevel::Degraded);
-                issues.push("Vertical accuracy exceeded");
-            }
-
-            // Check PDOP
-            if self.current.pdop > self.thresholds.max_pdop {
-                level = level.max(IntegrityLevel::Degraded);
-                issues.push("PDOP too high");
-            }
-
-            // Check satellite count (high quality threshold)
-            if self.current.num_satellites < self.thresholds.min_satellites_high {
-                level = level.max(IntegrityLevel::Degraded);
-                issues.push("Low satellite count");
-            }
-
-            // Check correction age for RTK (device-reported)
-            // Only check if correction age is available (>= 0) and differential is applied
-            if self.current.differential_applied
-                && self.current.correction_age_s >= 0.0
-                && self.current.correction_age_s > self.thresholds.max_correction_age_s
-            {
-                level = level.max(IntegrityLevel::Degraded);
-                issues.push("Correction age exceeded");
-            }
-
-            // Check signal quality - minimum C/N0 (weakest satellite)
-            // Only check if we have signal quality data (min_cno > 0)
-            if self.current.min_cno > 0 && self.current.min_cno < self.thresholds.min_cno_degraded {
-                level = level.max(IntegrityLevel::Degraded);
-                issues.push("Weak satellite signal");
-            }
-
-            // Check signal quality - mean C/N0
-            // Only check if we have signal quality data (mean_cno > 0)
-            if self.current.mean_cno > 0.0
-                && self.current.mean_cno < self.thresholds.min_mean_cno_degraded
-            {
-                level = level.max(IntegrityLevel::Degraded);
-                issues.push("Low mean signal quality");
-            }
-
-            // =========================================================================
-            // PROTECTION LEVEL CHECKS (ISO 26262/SOTIF compliant bounds)
-            // =========================================================================
-
-            // Check protection levels if available and valid
-            if let Some(ref pl) = self.last_nav_pl {
-                if pl.pos_valid {
-                    // Check horizontal protection level against alert limit
-                    if self.current.horizontal_pl_m > self.thresholds.max_horizontal_pl_m {
-                        level = level.max(IntegrityLevel::Degraded);
-                        issues.push("Horizontal PL exceeds alert limit");
-                    }
-
-                    // Check vertical protection level against alert limit
-                    if self.current.vertical_pl_m > self.thresholds.max_vertical_pl_m {
-                        level = level.max(IntegrityLevel::Degraded);
-                        issues.push("Vertical PL exceeds alert limit");
-                    }
-                }
-
-                if pl.vel_valid {
-                    // Check velocity protection level against alert limit
-                    if self.current.velocity_pl_ms > self.thresholds.max_velocity_pl_ms {
-                        level = level.max(IntegrityLevel::Degraded);
-                        issues.push("Velocity PL exceeds alert limit");
-                    }
-                }
-
-                // Check TMIR (Target Misleading Information Risk)
-                if pl.tmir > self.thresholds.max_tmir_per_epoch {
+        // Horizontal PL check
+        let pl_horizontal_ok = if let Some(ref pl) = self.last_nav_pl {
+            if pl.pos_valid {
+                let ok = self.current.horizontal_pl_m <= self.thresholds.max_horizontal_pl_m;
+                if level < IntegrityLevel::Critical && !ok {
                     level = level.max(IntegrityLevel::Degraded);
-                    issues.push("TMIR exceeds threshold");
+                    issues.push("Horizontal PL exceeds alert limit");
                 }
+                ok
+            } else {
+                true // Not available, don't fail
+            }
+        } else {
+            true // Not available, don't fail
+        };
+        self.current.check_pl_horizontal_ok = pl_horizontal_ok;
+
+        // Vertical PL check
+        let pl_vertical_ok = if let Some(ref pl) = self.last_nav_pl {
+            if pl.pos_valid {
+                let ok = self.current.vertical_pl_m <= self.thresholds.max_vertical_pl_m;
+                if level < IntegrityLevel::Critical && !ok {
+                    level = level.max(IntegrityLevel::Degraded);
+                    issues.push("Vertical PL exceeds alert limit");
+                }
+                ok
+            } else {
+                true // Not available, don't fail
+            }
+        } else {
+            true // Not available, don't fail
+        };
+        self.current.check_pl_vertical_ok = pl_vertical_ok;
+
+        // Velocity PL check
+        let pl_velocity_ok = if let Some(ref pl) = self.last_nav_pl {
+            if pl.vel_valid {
+                let ok = self.current.velocity_pl_ms <= self.thresholds.max_velocity_pl_ms;
+                if level < IntegrityLevel::Critical && !ok {
+                    level = level.max(IntegrityLevel::Degraded);
+                    issues.push("Velocity PL exceeds alert limit");
+                }
+                ok
+            } else {
+                true // Not available, don't fail
+            }
+        } else {
+            true // Not available, don't fail
+        };
+        self.current.check_pl_velocity_ok = pl_velocity_ok;
+
+        // TMIR check (included in PL validity conceptually)
+        if let Some(ref pl) = self.last_nav_pl {
+            if pl.tmir > self.thresholds.max_tmir_per_epoch && level < IntegrityLevel::Critical {
+                level = level.max(IntegrityLevel::Degraded);
+                issues.push("TMIR exceeds threshold");
             }
         }
 
@@ -735,6 +810,25 @@ impl IntegrityAggregator {
         self.current.status_message = status_message;
 
         self.current.clone()
+    }
+
+    /// Reset all check results to false (used when data is stale/unavailable)
+    fn reset_check_results(&mut self) {
+        self.current.check_fix_type_ok = false;
+        self.current.check_satellites_ok = false;
+        self.current.check_h_accuracy_ok = false;
+        self.current.check_v_accuracy_ok = false;
+        self.current.check_pdop_ok = false;
+        self.current.check_carrier_ok = false;
+        self.current.check_correction_age_ok = false;
+        self.current.check_signal_quality_ok = false;
+        self.current.check_jamming_ok = false;
+        self.current.check_spoofing_ok = false;
+        self.current.check_antenna_ok = false;
+        self.current.check_pl_horizontal_ok = false;
+        self.current.check_pl_vertical_ok = false;
+        self.current.check_pl_velocity_ok = false;
+        self.current.check_pl_valid_ok = false;
     }
 
     /// Get the current integrity state without recomputing.
@@ -834,20 +928,29 @@ mod tests {
     }
 
     #[test]
-    fn test_covariance_ned_to_enu() {
+    fn test_covariance_valid_flag() {
         let mut agg = IntegrityAggregator::new();
         let cov = CovData {
             itow: 0,
             pos_cov_valid: true,
             vel_cov_valid: true,
-            pos_cov: [1.0, 0.5, 0.1, 2.0, 0.2, 3.0], // NN, NE, ND, EE, ED, DD
+            pos_cov: [1.0, 0.5, 0.1, 2.0, 0.2, 3.0],
             vel_cov: [0.1, 0.05, 0.01, 0.2, 0.02, 0.3],
         };
         agg.update_covariance(&cov);
 
-        // Check ENU conversion: EE should be at [0], NN at [4], UU at [8]
-        assert_eq!(agg.current.position_covariance[0], 2.0); // EE
-        assert_eq!(agg.current.position_covariance[4], 1.0); // NN
-        assert_eq!(agg.current.position_covariance[8], 3.0); // UU
+        // Covariance matrices are now in NavSatFix/Twist; we only track validity
+        assert!(agg.current().covariance_valid);
+
+        // Test partial validity
+        let cov_partial = CovData {
+            itow: 0,
+            pos_cov_valid: true,
+            vel_cov_valid: false,
+            pos_cov: [1.0; 6],
+            vel_cov: [0.0; 6],
+        };
+        agg.update_covariance(&cov_partial);
+        assert!(!agg.current().covariance_valid); // Both must be valid
     }
 }

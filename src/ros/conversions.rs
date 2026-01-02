@@ -481,6 +481,23 @@ impl GnssIntegrity {
         msg.status_message = self.status_message.clone();
         msg.operational = operational;
 
+        // Individual check results
+        msg.check_fix_type_ok = self.check_fix_type_ok;
+        msg.check_satellites_ok = self.check_satellites_ok;
+        msg.check_h_accuracy_ok = self.check_h_accuracy_ok;
+        msg.check_v_accuracy_ok = self.check_v_accuracy_ok;
+        msg.check_pdop_ok = self.check_pdop_ok;
+        msg.check_carrier_ok = self.check_carrier_ok;
+        msg.check_correction_age_ok = self.check_correction_age_ok;
+        msg.check_signal_quality_ok = self.check_signal_quality_ok;
+        msg.check_jamming_ok = self.check_jamming_ok;
+        msg.check_spoofing_ok = self.check_spoofing_ok;
+        msg.check_antenna_ok = self.check_antenna_ok;
+        msg.check_pl_horizontal_ok = self.check_pl_horizontal_ok;
+        msg.check_pl_vertical_ok = self.check_pl_vertical_ok;
+        msg.check_pl_velocity_ok = self.check_pl_velocity_ok;
+        msg.check_pl_valid_ok = self.check_pl_valid_ok;
+
         // Position quality
         msg.fix_type = self.fix_type as u8;
         msg.carrier_solution = self.carrier_solution;
@@ -490,10 +507,8 @@ impl GnssIntegrity {
         msg.v_accuracy_m = self.v_accuracy_m;
         msg.pdop = self.pdop;
 
-        // Covariance (convert f32 to f64)
+        // Covariance validity (matrices available in NavSatFix/TwistWithCovarianceStamped)
         msg.covariance_valid = self.covariance_valid;
-        msg.position_covariance = self.position_covariance.map(|v| v as f64);
-        msg.velocity_covariance = self.velocity_covariance.map(|v| v as f64);
 
         // RTK/Correction status
         msg.correction_age_s = self.correction_age_s;

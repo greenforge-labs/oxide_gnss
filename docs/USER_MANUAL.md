@@ -562,7 +562,7 @@ RTCM output keys on UART2 for base modes:
 
 If you enable integrity, Oxide publishes:
 
-- `~/integrity` (detailed integrity metrics)
+- `~/integrity` (detailed integrity metrics with individual check results)
 - `~/operational` (simple boolean go/no-go)
 
 Enable it with:
@@ -580,7 +580,17 @@ integrity:
     ...
 ```
 
-For the conceptual model, see `docs/INTEGRITY.md`.
+## 7.0 Diagnostic Visibility
+
+The `~/integrity` message includes **15 `check_*` boolean fields** showing pass/fail status for each individual check. This enables visualization tools like Foxglove to display a grid of pass/fail indicators, making it easy to identify which specific checks cause state changes.
+
+Example check fields:
+- `check_fix_type_ok` — Fix type is acceptable
+- `check_satellites_ok` — Satellite count meets threshold
+- `check_jamming_ok` — No critical jamming detected
+- `check_pl_horizontal_ok` — Horizontal protection level within alert limit
+
+For the full list of check fields and their meanings, see `docs/INTEGRITY.md`.
 
 ## 7.1 The `~/operational` output
 

@@ -164,30 +164,19 @@ For the integrity model, required messages, and threshold meanings, see [`docs/I
 - **CRITICAL (2)** — Critical checks failed, operation should stop
 - **FAILED (3)** — System unavailable or data stale
 
+**Diagnostic Visibility:**
+
+The `~/integrity` message includes 15 `check_*` boolean fields showing pass/fail for each individual check. This enables visualization tools like Foxglove to display pass/fail grids, making it easy to identify which specific checks cause state changes.
+
 **Data Sources:**
 - NAV-PVT: Fix type, satellites, accuracy, PDOP
 - NAV-PL: Protection levels with TMIR (ISO 26262 integrity bounds)
-- NAV-COV: Position/velocity covariance matrices
+- NAV-COV: Covariance validity (matrices in NavSatFix/Twist)
 - SEC-SIG: Jamming/spoofing detection
 - SEC-SIGLOG: Security event log
 - RXM-COR: Differential correction status
 - MON-COMMS: Communication port status
 - MON-HW: Antenna status, jamming indicator
-
-**Example integrity JSON:**
-```json
-{
-  "level": 0,
-  "level_name": "OK",
-  "status_message": "All integrity checks passed",
-  "fix_type": 5,
-  "num_satellites": 12,
-  "h_accuracy_m": 0.02,
-  "jamming_state": "Ok",
-  "spoofing_state": "Ok",
-  "operational": true
-}
-```
 
 ### Diagnostics
 

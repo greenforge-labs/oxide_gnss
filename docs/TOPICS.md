@@ -52,13 +52,19 @@ Diagnostic information about device and NTRIP status.
 
 **Type:** `oxide_gnss_msgs/OxideIntegrity`
 
-Integrity monitoring data including fix quality, jamming/spoofing status, and signal quality.
+Integrity monitoring data including fix quality, jamming/spoofing status, signal quality, and **individual check results** for diagnostic visibility.
 
 - **Requires:** `features.integrity: true`
 - **UBX Messages:** `NAV_PVT`, `SEC_SIG`, `MON_RF`, `MON_COMMS`, `NAV_SAT`
 - **Rate:** Configurable via `ros.rates.integrity_hz` (default: 1.0 Hz)
 
-See [INTEGRITY.md](INTEGRITY.md) for detailed documentation.
+**Key Fields:**
+- `level` — Integrity level (0=OK, 1=DEGRADED, 2=CRITICAL, 3=FAILED)
+- `operational` — Boolean go/no-go signal
+- `check_*` — 15 boolean fields showing pass/fail for each individual check (enables Foxglove pass/fail grids)
+- Position quality, signal quality, security status, protection levels
+
+See [INTEGRITY.md](INTEGRITY.md) for detailed field documentation.
 
 ### `~/operational`
 

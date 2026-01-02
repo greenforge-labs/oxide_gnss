@@ -258,11 +258,40 @@ All fields are optional - omitted fields use defaults.
 
 The `~/integrity` topic publishes `oxide_gnss_msgs/OxideIntegrity`:
 
+### 7.1 Status Fields
+
 | Field | Type | Description |
 |-------|------|-------------|
 | `level` | uint8 | Overall integrity (0=OK, 1=DEGRADED, 2=CRITICAL, 3=FAILED) |
 | `status_message` | string | Human-readable summary of issues |
 | `operational` | bool | Whether system is operational per threshold |
+
+### 7.2 Check Result Fields (Diagnostic Visibility)
+
+These boolean fields indicate pass/fail status for each individual check, enabling visualization tools like Foxglove to display a grid of pass/fail indicators:
+
+| Field | Description | Level if Failed |
+|-------|-------------|-----------------|
+| `check_fix_type_ok` | Fix type is acceptable | CRITICAL |
+| `check_satellites_ok` | Satellite count meets threshold | CRITICAL/DEGRADED |
+| `check_h_accuracy_ok` | Horizontal accuracy within limit | DEGRADED |
+| `check_v_accuracy_ok` | Vertical accuracy within limit | DEGRADED |
+| `check_pdop_ok` | PDOP within limit | DEGRADED |
+| `check_carrier_ok` | Carrier solution is RTK Fixed | DEGRADED |
+| `check_correction_age_ok` | Correction age within limit | DEGRADED |
+| `check_signal_quality_ok` | Signal quality (C/N0) within limits | DEGRADED |
+| `check_jamming_ok` | No critical jamming detected | CRITICAL |
+| `check_spoofing_ok` | No multiple spoofers detected | CRITICAL |
+| `check_antenna_ok` | Antenna status OK (not open/short) | CRITICAL |
+| `check_pl_horizontal_ok` | Horizontal PL within alert limit | DEGRADED |
+| `check_pl_vertical_ok` | Vertical PL within alert limit | DEGRADED |
+| `check_pl_velocity_ok` | Velocity PL within alert limit | DEGRADED |
+| `check_pl_valid_ok` | Protection level validity passed | CRITICAL/DEGRADED |
+
+### 7.3 Position Quality Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
 | `fix_type` | uint8 | Current fix type |
 | `carrier_solution` | uint8 | 0=none, 1=float, 2=fixed |
 | `differential_applied` | bool | Whether RTK/DGNSS is in use |
@@ -270,12 +299,20 @@ The `~/integrity` topic publishes `oxide_gnss_msgs/OxideIntegrity`:
 | `h_accuracy_m` | float32 | Horizontal accuracy (m) |
 | `v_accuracy_m` | float32 | Vertical accuracy (m) |
 | `pdop` | float32 | Position DOP |
-| `covariance_valid` | bool | Whether covariance data is valid |
-| `position_covariance` | float64[9] | ENU position covariance matrix |
-| `velocity_covariance` | float64[9] | ENU velocity covariance matrix |
+| `covariance_valid` | bool | Whether NAV-COV data was received (matrices in NavSatFix/Twist) |
+
+### 7.4 RTK/Correction Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
 | `correction_age_s` | float32 | Age of RTK corrections (-1 if N/A) |
 | `correction_received` | bool | Whether corrections have been received |
 | `correction_used` | bool | Whether corrections were used |
+
+### 7.5 Security/Hardware Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
 | `jamming_state` | uint8 | 0=unknown, 1=ok, 2=warning, 3=critical |
 | `spoofing_state` | uint8 | 0=unknown, 1=ok, 2=indicated, 3=multiple |
 | `security_events` | uint32 | Number of security events logged |
@@ -283,9 +320,26 @@ The `~/integrity` topic publishes `oxide_gnss_msgs/OxideIntegrity`:
 | `antenna_status` | uint8 | 0=unknown, 1=ok, 2=open, 3=short |
 | `comm_ports` | uint8 | Number of communication ports |
 | `comm_tx_errors` | uint8 | TX errors detected |
+
+### 7.6 Signal Quality Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
 | `mean_cno` | float32 | Mean C/N0 of satellites used (dB-Hz) |
 | `min_cno` | uint8 | Minimum C/N0 among used satellites (dB-Hz) |
 | `sats_above_cno_threshold` | uint8 | Satellites with C/N0 >= 30 dB-Hz |
+
+### 7.7 Protection Level Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `protection_level_valid` | bool | PL data valid and current |
+| `horizontal_pl_m` | float32 | Horizontal protection level (m) |
+| `vertical_pl_m` | float32 | Vertical protection level (m) |
+| `velocity_pl_ms` | float32 | Velocity protection level (m/s) |
+| `target_mir` | float64 | Target Misleading Information Risk |
+| `pl_frame` | uint8 | PL reference frame |
+| `pl_invalidity_reason` | uint8 | Reason if PL invalid |
 
 ---
 
