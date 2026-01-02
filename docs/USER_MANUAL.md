@@ -130,8 +130,6 @@ For almost all deployments, **use mode-based configuration**.
   - Publishes `~/satellites` (can be higher bandwidth).
 - **`heading`**
   - Enables `~/baseline_pose` in moving-base-rover scenarios.
-- **`dead_reckoning`**
-  - Present as a config flag; currently not implemented as an output feature.
 
 ---
 
@@ -698,7 +696,6 @@ Supported feature flags:
 - `integrity` (bool, default `false`)
 - `satellites` (bool, default `false`)
 - `heading` (bool, default `false`)
-- `dead_reckoning` (bool, default `false`)
 
 **Notes:**
 

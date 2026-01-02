@@ -98,8 +98,6 @@ pub enum Feature {
     Satellites,
     /// Enable heading from baseline (MB+R only)
     Heading,
-    /// Enable dead reckoning (F9R only)
-    DeadReckoning,
 }
 
 impl Feature {
@@ -110,7 +108,6 @@ impl Feature {
             Self::Integrity => "integrity",
             Self::Satellites => "satellites",
             Self::Heading => "heading",
-            Self::DeadReckoning => "dead_reckoning",
         }
     }
 
@@ -121,7 +118,6 @@ impl Feature {
             Self::Integrity => "Integrity monitoring (jamming/spoofing detection)",
             Self::Satellites => "Per-satellite signal information",
             Self::Heading => "Heading from baseline vector (moving base + rover)",
-            Self::DeadReckoning => "Dead reckoning sensor fusion (F9R only)",
         }
     }
 
@@ -134,7 +130,6 @@ impl Feature {
             Self::Integrity => &["SEC_SIG", "MON_RF", "MON_COMMS", "NAV_SAT", "NAV_PL"],
             Self::Satellites => &["NAV_SAT"],
             Self::Heading => &["NAV_RELPOSNED"],
-            Self::DeadReckoning => &[], // ESF messages - not yet implemented
         }
     }
 
@@ -145,7 +140,6 @@ impl Feature {
             Self::Integrity => &["~/integrity", "~/operational"],
             Self::Satellites => &["~/satellites"],
             Self::Heading => &["~/baseline_pose"],
-            Self::DeadReckoning => &[],
         }
     }
 }
@@ -174,10 +168,6 @@ pub struct FeaturesConfig {
     /// Enable heading from baseline (MB+R only)
     #[serde(default)]
     pub heading: bool,
-
-    /// Enable dead reckoning (F9R only)
-    #[serde(default)]
-    pub dead_reckoning: bool,
 }
 
 impl FeaturesConfig {
@@ -196,19 +186,12 @@ impl FeaturesConfig {
         if self.heading {
             features.push(Feature::Heading);
         }
-        if self.dead_reckoning {
-            features.push(Feature::DeadReckoning);
-        }
         features
     }
 
     /// Check if any features are enabled.
     pub fn has_features(&self) -> bool {
-        self.high_precision
-            || self.integrity
-            || self.satellites
-            || self.heading
-            || self.dead_reckoning
+        self.high_precision || self.integrity || self.satellites || self.heading
     }
 }
 
@@ -593,7 +576,6 @@ mod tests {
             integrity: true,
             satellites: false,
             heading: false,
-            dead_reckoning: false,
         };
         let enabled = config.enabled_features();
         assert_eq!(enabled.len(), 2);
