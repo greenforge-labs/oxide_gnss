@@ -7,6 +7,8 @@ mod cfg_key_mapping;
 mod config;
 mod serial;
 mod task;
+#[cfg(test)]
+pub mod test_fixtures;
 pub mod ubx;
 
 pub use cfg_key_mapping::build_cfg_vals_from_config;

@@ -261,6 +261,7 @@ impl DeviceConfigurator {
             Ok(inner) => inner,
             Err(_) => Err(DeviceError::Timeout {
                 operation: "waiting for ACK".to_string(),
+                timeout_ms: self.options.ack_timeout.as_millis() as u64,
             }),
         }
     }

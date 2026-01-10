@@ -607,11 +607,18 @@ impl DeviceTask {
             // set in update_pvt(). No host-side tracking needed.
 
             let integrity = self.integrity.compute();
-            let _ = self
+            if self
                 .channels
                 .msg_tx
                 .send(DeviceMessage::Integrity(integrity))
-                .await;
+                .await
+                .is_err()
+            {
+                warn!(
+                    target: crate::logging::category::DEVICE,
+                    "Failed to send integrity update - receiver may be shutting down"
+                );
+            }
         }
     }
 
@@ -662,12 +669,29 @@ impl DeviceTask {
 
         // Update GGA for NTRIP (uses reference, pvt still owned)
         let gga = GgaData::from_pvt(&pvt);
-        let _ = self.channels.gga_tx.send(Some(gga));
+        // GGA send to watch channel - receiver may be gone during shutdown
+        if self.channels.gga_tx.send(Some(gga)).is_err() {
+            warn!(
+                target: crate::logging::category::DEVICE,
+                "Failed to send GGA update - NTRIP task may be shutting down"
+            );
+        }
 
         // Send PVT message - ownership transferred, no clone needed
         // Note: Integrity is published separately in process_serial_data() via the
         // integrity_updated flag, avoiding duplicate publishing.
-        let _ = self.channels.msg_tx.send(DeviceMessage::Pvt(pvt)).await;
+        if self
+            .channels
+            .msg_tx
+            .send(DeviceMessage::Pvt(pvt))
+            .await
+            .is_err()
+        {
+            warn!(
+                target: crate::logging::category::DEVICE,
+                "Failed to send PVT message - receiver may be shutting down"
+            );
+        }
     }
 
     /// Inject RTCM correction data to the device.

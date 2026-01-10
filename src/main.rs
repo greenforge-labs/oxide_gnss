@@ -156,7 +156,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Convert and forward messages that need to reach ROS/supervisor
             // Internal messages (Covariance, PosEcef, etc.) return None and are skipped
             if let Some(gnss_msg) = msg.into_gnss_message() {
-                let _ = supervisor_msg_tx_device.send(gnss_msg).await;
+                if supervisor_msg_tx_device.send(gnss_msg).await.is_err() {
+                    tracing::warn!(
+                        target: oxide_gnss::logging::category::STATE,
+                        "Failed to forward device message to supervisor - shutting down"
+                    );
+                    break;
+                }
             }
         }
     });
@@ -164,18 +170,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let supervisor_msg_tx_ntrip = supervisor_msg_tx.clone();
     tokio::spawn(async move {
         while let Some(msg) = ntrip_msg_rx.recv().await {
-            match msg {
+            let send_result = match msg {
                 oxide_gnss::ntrip::NtripMessage::StateChanged(state) => {
-                    let _ = supervisor_msg_tx_ntrip
+                    supervisor_msg_tx_ntrip
                         .send(oxide_gnss::state::GnssMessage::NtripStateChanged(state))
-                        .await;
+                        .await
                 }
                 oxide_gnss::ntrip::NtripMessage::RtcmReceived { bytes } => {
-                    let _ = supervisor_msg_tx_ntrip
+                    supervisor_msg_tx_ntrip
                         .send(oxide_gnss::state::GnssMessage::RtcmReceived { bytes })
-                        .await;
+                        .await
                 }
-                _ => {}
+                _ => Ok(()),
+            };
+            if send_result.is_err() {
+                tracing::warn!(
+                    target: oxide_gnss::logging::category::STATE,
+                    "Failed to forward NTRIP message to supervisor - shutting down"
+                );
+                break;
             }
         }
     });

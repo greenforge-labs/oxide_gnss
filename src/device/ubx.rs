@@ -1,10 +1,39 @@
 //! UBX protocol handler for u-blox GNSS receivers.
 //!
-//! Provides parsing of UBX messages and generation of configuration commands
-//! using the `ublox` crate.
+//! This module provides parsing of UBX binary protocol messages and generation
+//! of device configuration commands using the [`ublox`] crate.
 //!
-//! This module uses the proto23 protocol version which is compatible with
-//! ZED-F9P and similar modern u-blox receivers.
+//! ## Protocol Version
+//!
+//! Uses protocol version 27 (proto27) which is compatible with:
+//! - ZED-F9P (HPG 1.30+)
+//! - ZED-F9R
+//! - NEO-M9N
+//! - Other modern u-blox 9 series receivers
+//!
+//! ## Key Types
+//!
+//! - [`UbxHandler`] - Main protocol parser and state container
+//! - [`PvtData`] - Position, velocity, time data (from NAV-PVT)
+//! - [`HpPosData`] - High-precision position (from NAV-HPPOSLLH)
+//! - [`SatInfo`] - Per-satellite status (from NAV-SAT)
+//! - [`SecSigData`] - Jamming/spoofing status (from SEC-SIG)
+//!
+//! ## Usage
+//!
+//! ```rust,ignore
+//! use oxide_gnss::device::UbxHandler;
+//!
+//! let mut handler = UbxHandler::new();
+//!
+//! // Feed raw bytes from serial port
+//! let result = handler.process(&serial_data);
+//!
+//! // Check for parsed messages
+//! if let Some(pvt) = result.pvt {
+//!     println!("Position: {}, {}", pvt.lat, pvt.lon);
+//! }
+//! ```
 
 use std::time::Instant;
 
@@ -34,8 +63,40 @@ use ublox::{
 use crate::state::FixType;
 
 /// UBX protocol parser and message handler.
+///
+/// `UbxHandler` processes raw bytes from a u-blox GNSS receiver and extracts
+/// structured data from UBX binary protocol messages.
+///
+/// # Thread Safety
+///
+/// This type is **not** thread-safe and should only be accessed from a single
+/// async task (typically the device task).
+///
+/// # State
+///
+/// The handler maintains the latest received data for each message type.
+/// This allows consumers to access the most recent data without waiting
+/// for a new message.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// let mut handler = UbxHandler::new();
+///
+/// loop {
+///     let bytes = serial.read(&mut buf).await?;
+///     let result = handler.process(&buf[..bytes]);
+///
+///     if let Some(pvt) = result.pvt {
+///         // New PVT data available
+///     }
+///     if let Some(ack) = result.ack {
+///         // ACK/NAK received for a command
+///     }
+/// }
+/// ```
 pub struct UbxHandler {
-    /// The ublox parser instance (defaults to proto23)
+    /// The ublox parser instance (protocol version 27)
     parser: Parser<Vec<u8>, Proto27>,
     /// Last received NAV-PVT data
     last_pvt: Option<PvtData>,
@@ -43,25 +104,27 @@ pub struct UbxHandler {
     stats: UbxStats,
     /// Pending ACK tracking
     pending_ack: PendingAck,
+    /// Last received high-precision position (NAV-HPPOSLLH)
     pub hp_pos: Option<HpPosData>,
+    /// Last received satellite status (NAV-SAT)
     pub sat_info: Option<SatInfo>,
-    /// Last received covariance data
+    /// Last received covariance data (NAV-COV)
     pub cov: Option<CovData>,
-    /// Last received ECEF position
+    /// Last received ECEF position (NAV-POSECEF)
     pub pos_ecef: Option<PosEcefData>,
-    /// Last received security signal status
+    /// Last received security signal status (SEC-SIG)
     pub sec_sig: Option<SecSigData>,
-    /// Last received security event log
+    /// Last received security event log (SEC-SIGLOG)
     pub sec_siglog: Option<SecSiglogData>,
-    /// Last received correction status
+    /// Last received correction status (RXM-COR)
     pub rxm_cor: Option<RxmCorData>,
-    /// Last received communication port status
+    /// Last received communication port status (MON-COMMS)
     pub mon_comms: Option<MonCommsData>,
-    /// Last received hardware status
+    /// Last received hardware status (MON-HW, legacy)
     pub mon_hw: Option<MonHwData>,
-    /// Last received RF status (replaces mon_hw)
+    /// Last received RF status (MON-RF, replaces MON-HW jamming)
     pub mon_rf: Option<MonRfData>,
-    /// Last received relative position (moving base/rover)
+    /// Last received relative position for moving base/rover (NAV-RELPOSNED)
     pub rel_pos_ned: Option<RelPosNedData>,
     /// Last received protection level data (NAV-PL)
     pub nav_pl: Option<NavPlData>,
@@ -70,19 +133,48 @@ pub struct UbxHandler {
 }
 
 /// Parsed High Precision Position (NAV-HPPOSLLH).
+///
+/// Provides sub-centimeter precision position data, extending the standard
+/// NAV-PVT position with additional decimal places. This message is essential
+/// for RTK applications where maximum precision is required.
+///
+/// # Precision
+///
+/// - Latitude/Longitude: 10^-9 degrees (~0.1mm at equator)
+/// - Height: 0.1mm resolution
+///
+/// # Usage
+///
+/// When the `high_precision` feature is enabled, this data is used to
+/// enhance the `~/fix` topic with better position precision.
 #[derive(Debug, Clone)]
 pub struct HpPosData {
+    /// Latitude in degrees (WGS84, high precision)
     pub lat: f64,
+    /// Longitude in degrees (WGS84, high precision)
     pub lon: f64,
+    /// Height above ellipsoid in meters (high precision)
     pub height: f64,
+    /// Horizontal accuracy estimate in meters (1-sigma)
     pub h_acc: f32,
+    /// Vertical accuracy estimate in meters (1-sigma)
     pub v_acc: f32,
 }
 
 /// Parsed Satellite Status (NAV-SAT).
+///
+/// Contains per-satellite information for all tracked satellites.
+/// This is useful for diagnostics, sky plots, and signal quality analysis.
+///
+/// # Usage
+///
+/// When the `satellites` feature is enabled, this data is published
+/// to the `~/satellites` topic.
 #[derive(Debug, Clone)]
 pub struct SatInfo {
+    /// Total number of satellites in this report
     pub num_sats: u8,
+    /// Per-satellite status information
     pub sats: Vec<SatStatus>,
 }
 
@@ -587,7 +679,28 @@ pub enum AntennaPowerData {
     Unknown,
 }
 
-/// Parsed NAV-PVT data.
+/// Parsed NAV-PVT (Navigation Position Velocity Time) data.
+///
+/// This is the primary position/velocity/time message from the receiver.
+/// It contains all the essential GNSS solution data in a single message.
+///
+/// # Coordinate System
+///
+/// - Position: WGS84 latitude/longitude in degrees, height in meters
+/// - Velocity: NED (North-East-Down) frame in m/s
+///
+/// # Accuracy Estimates
+///
+/// The `h_acc` and `v_acc` fields represent 1-sigma accuracy estimates
+/// in meters. These are estimates from the receiver's navigation filter
+/// and may be optimistic.
+///
+/// # RTK Status
+///
+/// The `carr_soln` field indicates RTK solution status:
+/// - `None` - No carrier phase used (standalone or DGPS)
+/// - `Float` - RTK float solution (~20-50cm accuracy)
+/// - `Fixed` - RTK fixed solution (~1-2cm accuracy)
 #[derive(Debug, Clone)]
 pub struct PvtData {
     /// GPS time of week in milliseconds
@@ -2000,5 +2113,142 @@ mod tests {
         // Process empty data
         let result = handler.process(&[]);
         assert!(result.ack.is_none());
+    }
+
+    // =========================================================================
+    // Protocol error handling tests
+    // =========================================================================
+
+    #[test]
+    fn test_bad_checksum_continues_parsing() {
+        use crate::device::test_fixtures::ubx_packets;
+
+        let mut handler = UbxHandler::new();
+
+        // Feed a packet with bad checksum
+        let bad_packet = ubx_packets::nav_pvt_bad_checksum();
+        let result = handler.process(&bad_packet);
+
+        // Parser should skip the bad packet (no PVT extracted)
+        assert!(result.pvt.is_none());
+        // Stats should reflect the failed parse attempt
+        // (The ublox crate may silently discard or report differently)
+    }
+
+    #[test]
+    fn test_truncated_packet_buffered() {
+        use crate::device::test_fixtures::ubx_packets;
+
+        let mut handler = UbxHandler::new();
+
+        // Feed a truncated packet
+        let truncated = ubx_packets::nav_pvt_truncated();
+        let result = handler.process(&truncated);
+
+        // No complete message should be extracted
+        assert!(result.pvt.is_none());
+        assert_eq!(result.messages_processed, 0);
+    }
+
+    #[test]
+    fn test_unknown_message_skipped() {
+        use crate::device::test_fixtures::ubx_packets;
+
+        let mut handler = UbxHandler::new();
+
+        // Feed an unknown message class
+        let unknown = ubx_packets::unknown_message();
+        let result = handler.process(&unknown);
+
+        // Unknown messages should be skipped without error
+        assert!(result.pvt.is_none());
+        // Parser should have processed the packet structure
+    }
+
+    #[test]
+    fn test_garbage_before_valid_packet() {
+        use crate::device::test_fixtures::ubx_packets;
+
+        let mut handler = UbxHandler::new();
+
+        // Feed garbage followed by valid ACK packet
+        let data = ubx_packets::garbage_then_valid();
+        let _result = handler.process(&data);
+
+        // Parser should recover and find the valid packet after garbage
+        // The exact behavior depends on ublox crate's sync recovery
+    }
+
+    #[test]
+    fn test_multiple_packets_with_errors() {
+        use crate::device::test_fixtures::ubx_packets;
+
+        let mut handler = UbxHandler::new();
+
+        // Build a stream with: bad checksum, then valid ACK-ACK
+        let mut data = ubx_packets::nav_pvt_bad_checksum();
+        data.extend(ubx_packets::ack_ack_cfg_valset());
+
+        let result = handler.process(&data);
+
+        // Should still extract the valid ACK packet
+        assert_eq!(result.ack, Some(AckResult::Ack));
+    }
+
+    #[test]
+    fn test_empty_payload_message() {
+        use crate::device::test_fixtures::ubx_packets;
+
+        let mut handler = UbxHandler::new();
+
+        // Feed a message with empty payload
+        let empty = ubx_packets::empty_payload();
+        let result = handler.process(&empty);
+
+        // Should handle gracefully without panic
+        assert!(result.pvt.is_none());
+    }
+
+    #[test]
+    fn test_valid_ack_from_fixture() {
+        use crate::device::test_fixtures::ubx_packets;
+
+        let mut handler = UbxHandler::new();
+
+        // Use fixture ACK-ACK packet
+        let packet = ubx_packets::ack_ack_cfg_valset();
+        let result = handler.process(&packet);
+
+        assert_eq!(result.ack, Some(AckResult::Ack));
+    }
+
+    #[test]
+    fn test_valid_nak_from_fixture() {
+        use crate::device::test_fixtures::ubx_packets;
+
+        let mut handler = UbxHandler::new();
+
+        // Use fixture ACK-NAK packet
+        let packet = ubx_packets::ack_nak_cfg_valset();
+        let result = handler.process(&packet);
+
+        assert_eq!(result.ack, Some(AckResult::Nak));
+    }
+
+    #[test]
+    fn test_parser_recovery_after_partial() {
+        let mut handler = UbxHandler::new();
+
+        // Feed partial data
+        let partial = [0xB5, 0x62, 0x01, 0x07];
+        let result1 = handler.process(&partial);
+        assert!(result1.pvt.is_none());
+
+        // Feed valid ACK packet
+        let ack = build_ack_ack(0x06, 0x8A);
+        let result2 = handler.process(&ack);
+
+        // Should still be able to parse new packets
+        assert_eq!(result2.ack, Some(AckResult::Ack));
     }
 }

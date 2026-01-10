@@ -70,6 +70,9 @@ pub struct IntegrityThresholds {
     pub max_correction_age_s: f32,
     /// Maximum time (seconds) without PVT before declaring integrity FAILED
     pub max_pvt_age_s: f32,
+    /// Grace period (milliseconds) added to staleness checks to account for
+    /// async processing jitter. Default 200ms allows ~2 epochs at 10Hz.
+    pub jitter_grace_ms: u64,
     /// IntegrityLevel at which operational becomes false
     /// 0 = only Ok is operational (strictest)
     /// 1 = Ok or Degraded is operational (default)
@@ -104,6 +107,7 @@ impl Default for IntegrityThresholds {
             max_pdop: 3.0,
             max_correction_age_s: 10.0,
             max_pvt_age_s: 2.0,          // 2 seconds without data = Failed
+            jitter_grace_ms: 200,        // 200ms grace for async processing jitter
             operational_threshold: 1,    // Ok or Degraded = operational
             min_cno_degraded: 25,        // Weakest satellite < 25 dB-Hz = Degraded
             min_mean_cno_degraded: 35.0, // Mean C/N0 < 35 dB-Hz = Degraded
@@ -117,10 +121,36 @@ impl Default for IntegrityThresholds {
     }
 }
 
-/// Aggregated GNSS integrity data.
+/// Aggregated GNSS integrity data for safety-critical applications.
 ///
-/// This structure combines all quality metrics from various UBX messages
-/// into a single integrity assessment, as proposed in Section 6.4.
+/// This structure combines quality metrics from multiple UBX messages
+/// (NAV-PVT, SEC-SIG, MON-RF, NAV-PL, etc.) into a comprehensive
+/// integrity assessment suitable for autonomous systems.
+///
+/// # Integrity Levels
+///
+/// - **OK**: All checks pass, full operation permitted
+/// - **DEGRADED**: Some quality checks failed, reduced capability recommended
+/// - **CRITICAL**: Critical checks failed, operation should stop
+/// - **FAILED**: System unavailable or data stale
+///
+/// # ROS2 Integration
+///
+/// When the `integrity` feature is enabled, this data is published to:
+/// - `~/integrity` - Full integrity message with all metrics
+/// - `~/operational` - Simple boolean go/no-go signal
+///
+/// # Example Use
+///
+/// ```rust,ignore
+/// if integrity.level <= IntegrityLevel::Degraded {
+///     // GNSS solution is usable
+///     proceed_with_navigation(integrity.h_accuracy_m);
+/// } else {
+///     // GNSS solution is not reliable
+///     switch_to_fallback_navigation();
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct GnssIntegrity {
     /// Overall integrity level
@@ -541,7 +571,10 @@ impl IntegrityAggregator {
         let now = Instant::now();
         if let Some(last_pvt) = self.last_pvt_update {
             let age = now.duration_since(last_pvt).as_secs_f32();
-            if age > self.thresholds.max_pvt_age_s {
+            // Add grace period for async processing jitter (~2 epochs at 10Hz)
+            let grace_s = self.thresholds.jitter_grace_ms as f32 / 1000.0;
+            let threshold_with_grace = self.thresholds.max_pvt_age_s + grace_s;
+            if age > threshold_with_grace {
                 // Reset all checks to false on stale data
                 self.reset_check_results();
                 self.current.level = IntegrityLevel::Failed;

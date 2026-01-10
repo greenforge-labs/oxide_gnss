@@ -73,6 +73,12 @@ pub struct IntegrityThresholdsConfig {
     #[serde(default = "default_max_pvt_age_s")]
     pub max_pvt_age_s: f32,
 
+    /// Grace period (ms) added to staleness checks for async processing jitter (default: 200)
+    /// This accounts for delays between message reception and processing in async tasks.
+    /// ~200ms allows ~2 epochs at 10Hz GNSS update rate.
+    #[serde(default = "default_jitter_grace_ms")]
+    pub jitter_grace_ms: u64,
+
     /// Integrity level at which operational becomes false (default: 1)
     /// 0 = only OK is operational (strictest)
     /// 1 = OK or DEGRADED is operational (default)
@@ -131,6 +137,9 @@ fn default_min_mean_cno_degraded() -> f32 {
 fn default_max_pvt_age_s() -> f32 {
     2.0
 }
+fn default_jitter_grace_ms() -> u64 {
+    200
+}
 fn default_operational_threshold() -> u8 {
     1
 }
@@ -162,6 +171,7 @@ impl Default for IntegrityThresholdsConfig {
             min_cno_degraded: default_min_cno_degraded(),
             min_mean_cno_degraded: default_min_mean_cno_degraded(),
             max_pvt_age_s: default_max_pvt_age_s(),
+            jitter_grace_ms: default_jitter_grace_ms(),
             operational_threshold: default_operational_threshold(),
             max_horizontal_pl_m: default_max_horizontal_pl_m(),
             max_vertical_pl_m: default_max_vertical_pl_m(),
@@ -184,6 +194,7 @@ impl From<IntegrityThresholdsConfig> for IntegrityThresholds {
             min_cno_degraded: config.min_cno_degraded,
             min_mean_cno_degraded: config.min_mean_cno_degraded,
             max_pvt_age_s: config.max_pvt_age_s,
+            jitter_grace_ms: config.jitter_grace_ms,
             operational_threshold: config.operational_threshold,
             max_horizontal_pl_m: config.max_horizontal_pl_m,
             max_vertical_pl_m: config.max_vertical_pl_m,

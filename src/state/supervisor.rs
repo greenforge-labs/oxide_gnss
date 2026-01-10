@@ -292,6 +292,8 @@ pub async fn setup_shutdown_signals(handle: SupervisorHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
+    use tokio::time::timeout;
 
     #[tokio::test]
     async fn test_supervisor_creation() {
@@ -328,5 +330,262 @@ mod tests {
 
         shutdown_rx.changed().await.unwrap();
         assert!(*shutdown_rx.borrow());
+    }
+
+    // =========================================================================
+    // Channel behavior tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_message_channel_backpressure() {
+        // Create supervisor with small message buffer
+        let supervisor = Supervisor::with_channel_sizes(32, 4);
+        let msg_tx = supervisor.msg_tx();
+
+        // Fill the channel to capacity
+        for i in 0..4 {
+            let pvt = crate::device::test_fixtures::helpers::make_pvt();
+            let result = msg_tx.try_send(GnssMessage::Pvt(pvt));
+            assert!(result.is_ok(), "Send {} should succeed", i);
+        }
+
+        // Next send should fail (channel full)
+        let pvt = crate::device::test_fixtures::helpers::make_pvt();
+        let result = msg_tx.try_send(GnssMessage::Pvt(pvt));
+        assert!(result.is_err(), "Channel should be full");
+
+        // Verify error is capacity error
+        if let Err(e) = result {
+            assert!(
+                matches!(e, mpsc::error::TrySendError::Full(_)),
+                "Should be Full error"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_rtcm_channel_ordering() {
+        let mut supervisor = Supervisor::new();
+        let rtcm_tx = supervisor.rtcm_tx();
+        let mut rtcm_rx = supervisor.take_rtcm_rx();
+
+        // Send multiple RTCM messages
+        let messages = vec![vec![1, 2, 3], vec![4, 5, 6], vec![7, 8, 9]];
+
+        for msg in &messages {
+            rtcm_tx.send(msg.clone()).await.unwrap();
+        }
+
+        // Verify they arrive in order
+        for expected in &messages {
+            let received = rtcm_rx.recv().await.unwrap();
+            assert_eq!(&received, expected, "RTCM messages should preserve order");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_shutdown_signal_propagation() {
+        let supervisor = Supervisor::new();
+        let handle = supervisor.handle();
+
+        // Create multiple shutdown receivers (simulating multiple tasks)
+        let mut rx1 = supervisor.shutdown_rx();
+        let mut rx2 = supervisor.shutdown_rx();
+        let mut rx3 = supervisor.shutdown_rx();
+
+        // None should see shutdown yet
+        assert!(!*rx1.borrow());
+        assert!(!*rx2.borrow());
+        assert!(!*rx3.borrow());
+
+        // Trigger shutdown
+        handle.shutdown();
+
+        // All receivers should see the shutdown signal
+        rx1.changed().await.unwrap();
+        rx2.changed().await.unwrap();
+        rx3.changed().await.unwrap();
+
+        assert!(*rx1.borrow());
+        assert!(*rx2.borrow());
+        assert!(*rx3.borrow());
+    }
+
+    #[tokio::test]
+    async fn test_gga_watch_channel_latest_value() {
+        let supervisor = Supervisor::new();
+        let gga_tx = supervisor.gga_tx();
+        let gga_rx = supervisor.gga_rx();
+
+        // Initial value should be None
+        assert!(gga_rx.borrow().is_none());
+
+        // Send multiple GGA updates rapidly
+        for i in 1..=5 {
+            let gga = GgaData {
+                latitude: 37.0 + i as f64 * 0.001,
+                longitude: -122.0,
+                altitude: 50.0,
+                quality: 4,
+                num_satellites: 12,
+            };
+            gga_tx.send(Some(gga)).unwrap();
+        }
+
+        // Watch channel should have the latest value (i=5)
+        let latest = gga_rx.borrow();
+        assert!(latest.is_some());
+        let gga = latest.as_ref().unwrap();
+        assert!(
+            (gga.latitude - 37.005).abs() < 0.0001,
+            "Should have latest GGA value"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_channel_send_after_receiver_dropped() {
+        let mut supervisor = Supervisor::new();
+        let msg_tx = supervisor.msg_tx();
+
+        // Take and immediately drop the receiver
+        let _rx = supervisor.take_msg_rx();
+        drop(_rx);
+
+        // Send should fail gracefully (not panic)
+        let pvt = crate::device::test_fixtures::helpers::make_pvt();
+        let result = msg_tx.send(GnssMessage::Pvt(pvt)).await;
+        assert!(result.is_err(), "Send should fail when receiver is dropped");
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_message_producers() {
+        let mut supervisor = Supervisor::with_channel_sizes(32, 100);
+        let mut msg_rx = supervisor.take_msg_rx();
+
+        // Spawn multiple producers
+        let msg_tx1 = supervisor.msg_tx();
+        let msg_tx2 = supervisor.msg_tx();
+
+        let producer1 = tokio::spawn(async move {
+            for _ in 0..10 {
+                let pvt = crate::device::test_fixtures::helpers::make_pvt();
+                let _ = msg_tx1.send(GnssMessage::Pvt(pvt)).await;
+            }
+        });
+
+        let producer2 = tokio::spawn(async move {
+            for _ in 0..10 {
+                let msg = GnssMessage::RtcmReceived { bytes: 100 };
+                let _ = msg_tx2.send(msg).await;
+            }
+        });
+
+        // Wait for producers
+        producer1.await.unwrap();
+        producer2.await.unwrap();
+
+        // Count received messages
+        let mut pvt_count = 0;
+        let mut rtcm_count = 0;
+
+        // Use timeout to avoid hanging if messages are lost
+        while let Ok(Some(msg)) = timeout(Duration::from_millis(100), msg_rx.recv()).await {
+            match msg {
+                GnssMessage::Pvt(_) => pvt_count += 1,
+                GnssMessage::RtcmReceived { .. } => rtcm_count += 1,
+                _ => {}
+            }
+        }
+
+        assert_eq!(pvt_count, 10, "Should receive all PVT messages");
+        assert_eq!(rtcm_count, 10, "Should receive all RTCM messages");
+    }
+
+    #[tokio::test]
+    async fn test_take_rtcm_rx_only_once() {
+        let mut supervisor = Supervisor::new();
+
+        // First take should succeed
+        let _rx = supervisor.take_rtcm_rx();
+
+        // Second take should panic - we verify this doesn't happen in normal use
+        // by checking the Option is None after take
+        assert!(
+            supervisor.channels.rtcm_rx.is_none(),
+            "rtcm_rx should be None after take"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_take_msg_rx_only_once() {
+        let mut supervisor = Supervisor::new();
+
+        // First take should succeed
+        let _rx = supervisor.take_msg_rx();
+
+        // Verify internal state
+        assert!(
+            supervisor.channels.msg_rx.is_none(),
+            "msg_rx should be None after take"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_custom_channel_sizes() {
+        let supervisor = Supervisor::with_channel_sizes(16, 128);
+
+        // Verify channels were created (indirectly by using them)
+        let msg_tx = supervisor.msg_tx();
+        let rtcm_tx = supervisor.rtcm_tx();
+
+        // We can send without immediate blocking up to buffer size
+        for _ in 0..16 {
+            rtcm_tx.try_send(vec![1, 2, 3]).unwrap();
+        }
+        // 17th should fail
+        assert!(rtcm_tx.try_send(vec![1, 2, 3]).is_err());
+
+        // Message channel should have larger capacity
+        for _ in 0..128 {
+            let pvt = crate::device::test_fixtures::helpers::make_pvt();
+            msg_tx.try_send(GnssMessage::Pvt(pvt)).unwrap();
+        }
+        // 129th should fail
+        let pvt = crate::device::test_fixtures::helpers::make_pvt();
+        assert!(msg_tx.try_send(GnssMessage::Pvt(pvt)).is_err());
+    }
+
+    #[tokio::test]
+    async fn test_state_snapshot_isolation() {
+        let supervisor = Supervisor::new();
+
+        // Set initial state
+        supervisor.set_device_state(DeviceState::Active).await;
+        supervisor.set_fix_type(FixType::RtkFixed).await;
+
+        let handle = supervisor.handle();
+
+        // Take snapshot
+        let snapshot = handle.state_snapshot().await;
+        assert_eq!(snapshot.device_state, DeviceState::Active);
+        assert_eq!(snapshot.fix_type, FixType::RtkFixed);
+
+        // Modify state
+        supervisor
+            .set_device_state(DeviceState::configuring(1, 5))
+            .await;
+        supervisor.set_fix_type(FixType::NoFix).await;
+
+        // Snapshot should be unchanged (it's a copy)
+        assert_eq!(snapshot.device_state, DeviceState::Active);
+        assert_eq!(snapshot.fix_type, FixType::RtkFixed);
+
+        // New snapshot should reflect changes
+        let new_snapshot = handle.state_snapshot().await;
+        assert!(
+            matches!(new_snapshot.device_state, DeviceState::Configuring { .. }),
+            "Expected Configuring state"
+        );
+        assert_eq!(new_snapshot.fix_type, FixType::NoFix);
     }
 }

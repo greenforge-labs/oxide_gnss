@@ -2,6 +2,19 @@
 
 Thank you for your interest in contributing to oxide_gnss!
 
+## Communication
+
+- **Bug Reports & Feature Requests**: [GitHub Issues](https://github.com/gsokoll/oxide_gnss/issues)
+- **Questions & Discussions**: [GitHub Discussions](https://github.com/gsokoll/oxide_gnss/discussions)
+
+## Areas Where Contributions Are Welcome
+
+- **Documentation**: Improving guides, adding examples, fixing typos
+- **Testing**: Adding test coverage, especially for error paths
+- **New UBX Messages**: Adding support for additional u-blox protocol messages
+- **Bug Fixes**: Fixing reported issues
+- **Performance**: Optimizations that don't sacrifice readability
+
 ## Getting Started
 
 1. Fork the repository
@@ -65,9 +78,30 @@ This mirrors the GitHub Actions CI environment.
 
 ## Submitting Changes
 
-1. Run local CI checks: `just ci` or `./scripts/local_ci_test.sh jazzy`
-2. Push to your fork and open a Pull Request
-3. CI will automatically run format, clippy, and tests against multiple ROS2 distros (humble, jazzy, kilted, rolling)
+### Before Submitting
+
+1. **Run local CI checks**: `just ci` or `./scripts/local_ci_test.sh jazzy`
+2. **Ensure no `unwrap()` or `expect()`** in production code paths
+3. **Add tests** for new functionality
+4. **Update documentation** if adding/changing public APIs
+
+### Pull Request Process
+
+1. Push to your fork and open a Pull Request
+2. Fill out the PR template with a description of changes
+3. CI will automatically run format, clippy, and tests against multiple ROS2 distros
+4. Address any review feedback
+5. Maintainer will merge once approved and CI passes
+
+### Commit Message Format
+
+Use clear, descriptive commit messages:
+```
+feat: Add support for NAV-EOE message
+fix: Handle disconnection during RTCM streaming
+docs: Update CONFIGURATION.md with new threshold options
+test: Add integration tests for device reconnection
+```
 
 ## Reporting Issues
 

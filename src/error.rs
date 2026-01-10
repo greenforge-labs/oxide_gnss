@@ -84,12 +84,22 @@ pub enum DeviceError {
     Disconnected { port: String },
 
     /// Timeout waiting for device response
-    #[error("Timeout: {operation}")]
-    Timeout { operation: String },
+    #[error("Timeout waiting {timeout_ms}ms for {operation}")]
+    Timeout {
+        /// The operation that timed out
+        operation: String,
+        /// Timeout duration in milliseconds
+        timeout_ms: u64,
+    },
 
     /// Device configuration failed (UBX config not acknowledged)
-    #[error("Device rejected configuration: {message}")]
-    ConfigRejected { message: String },
+    #[error("Device rejected configuration for {config_key}: {reason}")]
+    ConfigRejected {
+        /// The configuration key that was rejected (e.g., "CFG-RATE-MEAS")
+        config_key: String,
+        /// Reason for rejection
+        reason: String,
+    },
 
     /// Device returned unexpected response
     #[error("Unexpected device response: {message}")]
@@ -291,9 +301,18 @@ impl DeviceError {
     }
 
     /// Create a timeout error.
-    pub fn timeout(operation: impl Into<String>) -> Self {
+    pub fn timeout(operation: impl Into<String>, timeout_ms: u64) -> Self {
         Self::Timeout {
             operation: operation.into(),
+            timeout_ms,
+        }
+    }
+
+    /// Create a config rejected error.
+    pub fn config_rejected(config_key: impl Into<String>, reason: impl Into<String>) -> Self {
+        Self::ConfigRejected {
+            config_key: config_key.into(),
+            reason: reason.into(),
         }
     }
 
@@ -357,5 +376,70 @@ mod tests {
         let device_err = DeviceError::disconnected("/dev/ttyACM0");
         let unified: Error = device_err.into();
         assert!(matches!(unified, Error::Device(_)));
+    }
+
+    #[test]
+    fn test_timeout_error_with_context() {
+        let err = DeviceError::timeout("waiting for ACK", 500);
+        let msg = err.to_string();
+        assert!(msg.contains("500"));
+        assert!(msg.contains("waiting for ACK"));
+    }
+
+    #[test]
+    fn test_config_rejected_error_with_context() {
+        let err = DeviceError::config_rejected("CFG-RATE-MEAS", "value out of range");
+        let msg = err.to_string();
+        assert!(msg.contains("CFG-RATE-MEAS"));
+        assert!(msg.contains("value out of range"));
+    }
+
+    #[test]
+    fn test_ntrip_error_constructors() {
+        let err = NtripError::auth_failed("caster.example.com", "testuser");
+        let msg = err.to_string();
+        assert!(msg.contains("caster.example.com"));
+        assert!(msg.contains("testuser"));
+
+        let err = NtripError::mountpoint_not_found("caster.example.com", "TESTMOUNT");
+        let msg = err.to_string();
+        assert!(msg.contains("TESTMOUNT"));
+    }
+
+    #[test]
+    fn test_protocol_error_variants() {
+        let err = ProtocolError::InvalidUbxHeader { got: [0x00, 0x00] };
+        assert!(err.to_string().contains("Invalid UBX header"));
+
+        let err = ProtocolError::UbxMessageTooShort {
+            expected: 100,
+            got: 50,
+        };
+        assert!(err.to_string().contains("100"));
+        assert!(err.to_string().contains("50"));
+
+        let err = ProtocolError::BufferOverflow {
+            size: 10000,
+            max: 8192,
+        };
+        assert!(err.to_string().contains("10000"));
+        assert!(err.to_string().contains("8192"));
+    }
+
+    #[test]
+    fn test_ntrip_error_variants() {
+        let err = NtripError::Timeout { timeout_secs: 30 };
+        assert!(err.to_string().contains("30"));
+
+        let err = NtripError::ReadTimeout { timeout_secs: 60 };
+        assert!(err.to_string().contains("60"));
+
+        let err = NtripError::HttpError {
+            status: 503,
+            message: "Service Unavailable".to_string(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("503"));
+        assert!(msg.contains("Service Unavailable"));
     }
 }

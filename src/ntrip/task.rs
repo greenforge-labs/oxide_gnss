@@ -228,7 +228,18 @@ impl NtripTask {
         }
         self.set_state(NtripState::Streaming).await;
         *last_streaming_start = Some(Instant::now());
-        let _ = self.channels.msg_tx.send(NtripMessage::Connected).await;
+        if self
+            .channels
+            .msg_tx
+            .send(NtripMessage::Connected)
+            .await
+            .is_err()
+        {
+            warn!(
+                target: crate::logging::category::NTRIP,
+                "Failed to send connected message - receiver may be shutting down"
+            );
+        }
 
         // Run the streaming loop
         self.stream_loop(&mut client).await
@@ -259,9 +270,20 @@ impl NtripTask {
                             // Zero bytes, continue
                         }
                         Err(e) => {
-                            let _ = self.channels.msg_tx.send(NtripMessage::Disconnected {
-                                reason: e.to_string(),
-                            }).await;
+                            if self
+                                .channels
+                                .msg_tx
+                                .send(NtripMessage::Disconnected {
+                                    reason: e.to_string(),
+                                })
+                                .await
+                                .is_err()
+                            {
+                                warn!(
+                                    target: crate::logging::category::NTRIP,
+                                    "Failed to send disconnected message - receiver may be shutting down"
+                                );
+                            }
                             return Err(e.into());
                         }
                     }
@@ -443,5 +465,330 @@ mod tests {
         assert!(matches!(handle.state().await, NtripState::Streaming));
         assert_eq!(handle.bytes_received().await, 5000);
         assert!(handle.correction_age_secs().await.is_some());
+    }
+
+    // ========================================================================
+    // Error path and state transition tests
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_handle_state_transitions() {
+        let state = Arc::new(Mutex::new(NtripTaskState::default()));
+        let handle = NtripTaskHandle {
+            state: Arc::clone(&state),
+        };
+
+        // Simulate state progression: Disabled -> Connecting -> Streaming
+        {
+            let mut s = state.lock().await;
+            s.state = NtripState::Connecting;
+        }
+        assert!(matches!(handle.state().await, NtripState::Connecting));
+
+        {
+            let mut s = state.lock().await;
+            s.state = NtripState::Streaming;
+            s.connection_count = 1;
+        }
+        assert!(matches!(handle.state().await, NtripState::Streaming));
+
+        // Verify connection count tracked
+        let snapshot = handle.snapshot().await;
+        assert_eq!(snapshot.connection_count, 1);
+    }
+
+    #[tokio::test]
+    async fn test_handle_backoff_state() {
+        let state = Arc::new(Mutex::new(NtripTaskState::default()));
+        let handle = NtripTaskHandle {
+            state: Arc::clone(&state),
+        };
+
+        // Simulate backoff state
+        {
+            let mut s = state.lock().await;
+            s.state = NtripState::Backoff {
+                attempt: 3,
+                delay_secs: 8,
+                reason: "Connection refused".to_string(),
+            };
+        }
+
+        let current = handle.state().await;
+        match current {
+            NtripState::Backoff {
+                attempt,
+                delay_secs,
+                reason,
+            } => {
+                assert_eq!(attempt, 3);
+                assert_eq!(delay_secs, 8);
+                assert!(reason.contains("Connection"));
+            }
+            _ => panic!("Expected Backoff state"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_correction_age_none_when_no_data() {
+        let state = Arc::new(Mutex::new(NtripTaskState::default()));
+        let handle = NtripTaskHandle {
+            state: Arc::clone(&state),
+        };
+
+        // No data received yet
+        assert!(handle.correction_age_secs().await.is_none());
+
+        // After receiving data
+        {
+            let mut s = state.lock().await;
+            s.last_data_time = Some(Instant::now());
+        }
+
+        // Correction age should be very small (just set)
+        let age = handle.correction_age_secs().await.unwrap();
+        assert!(age < 0.1, "Expected very small age, got {}", age);
+    }
+
+    #[tokio::test]
+    async fn test_handle_snapshot_captures_all_fields() {
+        let state = Arc::new(Mutex::new(NtripTaskState::default()));
+        let handle = NtripTaskHandle {
+            state: Arc::clone(&state),
+        };
+
+        // Set up complex state
+        {
+            let mut s = state.lock().await;
+            s.state = NtripState::Streaming;
+            s.bytes_received = 123456;
+            s.messages_forwarded = 42;
+            s.connection_count = 5;
+            s.last_data_time = Some(Instant::now());
+        }
+
+        let snapshot = handle.snapshot().await;
+        assert!(matches!(snapshot.state, NtripState::Streaming));
+        assert_eq!(snapshot.bytes_received, 123456);
+        assert_eq!(snapshot.messages_forwarded, 42);
+        assert_eq!(snapshot.connection_count, 5);
+        assert!(snapshot.last_data_time.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_rtcm_channel_receiver_dropped() {
+        // Create channels where receiver is dropped
+        let (rtcm_tx, rtcm_rx) = mpsc::channel(32);
+        let (_gga_tx, gga_rx) = watch::channel(None);
+        let (msg_tx, _msg_rx) = mpsc::channel(64);
+        let (_shutdown_tx, shutdown_rx) = watch::channel(false);
+
+        // Drop the receiver before sending
+        drop(rtcm_rx);
+
+        let channels = NtripTaskChannels {
+            rtcm_tx,
+            gga_rx,
+            msg_tx,
+            shutdown_rx,
+        };
+
+        // Sending should fail but not panic
+        let result = channels.rtcm_tx.send(vec![0xD3, 0x00, 0x10]).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_message_channel_receiver_dropped() {
+        // Create channels where message receiver is dropped
+        let (rtcm_tx, _rtcm_rx) = mpsc::channel(32);
+        let (_gga_tx, gga_rx) = watch::channel(None);
+        let (msg_tx, msg_rx) = mpsc::channel(64);
+        let (_shutdown_tx, shutdown_rx) = watch::channel(false);
+
+        // Drop the receiver
+        drop(msg_rx);
+
+        let channels = NtripTaskChannels {
+            rtcm_tx,
+            gga_rx,
+            msg_tx,
+            shutdown_rx,
+        };
+
+        // Sending should fail but not panic
+        let result = channels.msg_tx.send(NtripMessage::Connected).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_gga_channel_gets_latest_value() {
+        let (gga_tx, gga_rx) = watch::channel(None);
+
+        // Send multiple GGA updates
+        gga_tx
+            .send(Some(GgaData {
+                latitude: 47.0,
+                longitude: -122.0,
+                altitude: 100.0,
+                quality: 4,
+                num_satellites: 10,
+            }))
+            .unwrap();
+
+        gga_tx
+            .send(Some(GgaData {
+                latitude: 48.0,
+                longitude: -123.0,
+                altitude: 200.0,
+                quality: 5,
+                num_satellites: 12,
+            }))
+            .unwrap();
+
+        // Receiver should see latest value
+        let latest = gga_rx.borrow().clone();
+        assert!(latest.is_some());
+        let gga = latest.unwrap();
+        assert!((gga.latitude - 48.0).abs() < 0.001);
+        assert!((gga.longitude - (-123.0)).abs() < 0.001);
+        assert_eq!(gga.num_satellites, 12);
+    }
+
+    #[tokio::test]
+    async fn test_shutdown_receiver_initial_value() {
+        let (_shutdown_tx, shutdown_rx) = watch::channel(false);
+
+        // Initial value should be false
+        assert!(!*shutdown_rx.borrow());
+    }
+
+    #[tokio::test]
+    async fn test_shutdown_receiver_detects_signal() {
+        let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
+
+        // Initial value
+        assert!(!*shutdown_rx.borrow());
+
+        // Send shutdown signal
+        shutdown_tx.send(true).unwrap();
+
+        // Receiver should detect change
+        shutdown_rx.changed().await.unwrap();
+        assert!(*shutdown_rx.borrow());
+    }
+
+    #[test]
+    fn test_backoff_calculation() {
+        // Verify backoff calculation (also tested in util.rs, but verifying integration)
+        let initial = 1;
+        let max = 60;
+
+        assert_eq!(crate::util::calculate_backoff(1, initial, max), 1);
+        assert_eq!(crate::util::calculate_backoff(2, initial, max), 2);
+        assert_eq!(crate::util::calculate_backoff(3, initial, max), 4);
+        assert_eq!(crate::util::calculate_backoff(4, initial, max), 8);
+        assert_eq!(crate::util::calculate_backoff(5, initial, max), 16);
+        assert_eq!(crate::util::calculate_backoff(6, initial, max), 32);
+        assert_eq!(crate::util::calculate_backoff(7, initial, max), 60); // Capped
+    }
+
+    #[test]
+    fn test_ntrip_error_display_messages() {
+        use crate::error::NtripError;
+
+        let auth_err = NtripError::auth_failed("caster.example.com", "testuser");
+        let msg = auth_err.to_string();
+        assert!(msg.contains("authentication"));
+        assert!(msg.contains("testuser"));
+        assert!(msg.contains("caster.example.com"));
+
+        let mountpoint_err = NtripError::mountpoint_not_found("caster.example.com", "TESTMOUNT");
+        let msg = mountpoint_err.to_string();
+        assert!(msg.contains("TESTMOUNT"));
+        assert!(msg.contains("not found"));
+
+        let timeout_err = NtripError::Timeout { timeout_secs: 30 };
+        let msg = timeout_err.to_string();
+        assert!(msg.contains("30"));
+        assert!(msg.contains("timed out"));
+
+        let http_err = NtripError::HttpError {
+            status: 503,
+            message: "Service Unavailable".to_string(),
+        };
+        let msg = http_err.to_string();
+        assert!(msg.contains("503"));
+        assert!(msg.contains("Service Unavailable"));
+    }
+
+    #[tokio::test]
+    async fn test_stats_accumulation() {
+        let state = Arc::new(Mutex::new(NtripTaskState::default()));
+        let handle = NtripTaskHandle {
+            state: Arc::clone(&state),
+        };
+
+        // Simulate receiving data in chunks
+        for _ in 0..10 {
+            let mut s = state.lock().await;
+            s.bytes_received += 256;
+            s.messages_forwarded += 1;
+            s.last_data_time = Some(Instant::now());
+        }
+
+        let snapshot = handle.snapshot().await;
+        assert_eq!(snapshot.bytes_received, 2560);
+        assert_eq!(snapshot.messages_forwarded, 10);
+    }
+
+    #[tokio::test]
+    async fn test_multiple_reconnections_tracked() {
+        let state = Arc::new(Mutex::new(NtripTaskState::default()));
+        let handle = NtripTaskHandle {
+            state: Arc::clone(&state),
+        };
+
+        // Simulate multiple reconnection cycles
+        for i in 1..=5 {
+            let mut s = state.lock().await;
+            s.connection_count = i;
+            s.state = NtripState::Streaming;
+        }
+
+        let snapshot = handle.snapshot().await;
+        assert_eq!(snapshot.connection_count, 5);
+    }
+
+    #[test]
+    fn test_ntrip_message_debug_format() {
+        // Verify Debug impl works for all message variants
+        let msgs = vec![
+            NtripMessage::StateChanged(NtripState::Streaming),
+            NtripMessage::RtcmReceived { bytes: 512 },
+            NtripMessage::Connected,
+            NtripMessage::Disconnected {
+                reason: "timeout".to_string(),
+            },
+        ];
+
+        for msg in msgs {
+            let debug_str = format!("{:?}", msg);
+            assert!(!debug_str.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_ntrip_message_clone() {
+        let msg = NtripMessage::Disconnected {
+            reason: "network error".to_string(),
+        };
+        let cloned = msg.clone();
+        match cloned {
+            NtripMessage::Disconnected { reason } => {
+                assert_eq!(reason, "network error");
+            }
+            _ => panic!("Clone changed message variant"),
+        }
     }
 }
