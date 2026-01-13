@@ -747,20 +747,6 @@ pub const MESSAGE_REQUIREMENTS: &[MessageRequirement] = &[
     },
 ];
 
-/// Get all messages at a given requirement level.
-#[allow(dead_code)]
-pub fn messages_at_level(level: MessageLevel) -> impl Iterator<Item = &'static MessageRequirement> {
-    MESSAGE_REQUIREMENTS
-        .iter()
-        .filter(move |m| m.level == level)
-}
-
-/// Get the requirement for a specific message, if known.
-#[allow(dead_code)]
-pub fn get_message_requirement(message: &str) -> Option<&'static MessageRequirement> {
-    MESSAGE_REQUIREMENTS.iter().find(|m| m.message == message)
-}
-
 /// Get all messages required for a specific ROS topic.
 pub fn messages_for_topic(topic: &str) -> Vec<&'static MessageRequirement> {
     MESSAGE_REQUIREMENTS
@@ -1091,12 +1077,5 @@ messages:
     fn test_messages_for_topic() {
         let msgs = messages_for_topic("~/fix");
         assert!(msgs.iter().any(|m| m.message == "NAV_PVT"));
-    }
-
-    #[test]
-    fn test_messages_at_level() {
-        let essential: Vec<_> = messages_at_level(MessageLevel::Essential).collect();
-        assert_eq!(essential.len(), 1);
-        assert_eq!(essential[0].message, "NAV_PVT");
     }
 }

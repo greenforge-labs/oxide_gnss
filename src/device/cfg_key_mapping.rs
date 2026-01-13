@@ -70,46 +70,7 @@ pub fn build_cfg_vals_from_config(config: &UbloxConfig) -> Vec<CfgVal> {
 
     // Dynamic platform model
     if let Some(dynamic_model) = config.nav_spg.dynamic_model {
-        // Convert our DynamicModel enum to ublox NavDynamicModel
-        let ublox_model = match dynamic_model {
-            crate::config::DynamicModel::Portable => NavDynamicModel::Portable,
-            crate::config::DynamicModel::Stationary => NavDynamicModel::Stationary,
-            crate::config::DynamicModel::Pedestrian => NavDynamicModel::Pedestrian,
-            crate::config::DynamicModel::Automotive => NavDynamicModel::Automotive,
-            crate::config::DynamicModel::Sea => NavDynamicModel::Sea,
-            crate::config::DynamicModel::AirborneLight => {
-                NavDynamicModel::AirborneWithLess1gAcceleration
-            }
-            crate::config::DynamicModel::AirborneMedium => {
-                NavDynamicModel::AirborneWithLess2gAcceleration
-            }
-            crate::config::DynamicModel::AirborneHigh => {
-                NavDynamicModel::AirborneWithLess4gAcceleration
-            }
-            // Models not directly supported in ublox crate - use raw value via Portable + warning
-            // The F9P firmware supports these but ublox-rs may not have them yet
-            crate::config::DynamicModel::Wrist => {
-                warn!("Wrist dynamic model may require newer ublox crate; using raw value 9");
-                // Fall back to a supported model that's closest, or we could use unchecked
-                NavDynamicModel::Portable
-            }
-            crate::config::DynamicModel::Bike => {
-                warn!("Bike dynamic model may require newer ublox crate; using raw value 10");
-                NavDynamicModel::Portable
-            }
-            crate::config::DynamicModel::Mower => {
-                warn!("Mower dynamic model (11) not in ublox crate; defaulting to Automotive");
-                NavDynamicModel::Automotive
-            }
-            crate::config::DynamicModel::Escooter => {
-                warn!("E-scooter dynamic model (12) not in ublox crate; defaulting to Automotive");
-                NavDynamicModel::Automotive
-            }
-            crate::config::DynamicModel::Robot => {
-                warn!("Robot dynamic model (13) not in ublox crate; defaulting to Automotive");
-                NavDynamicModel::Automotive
-            }
-        };
+        let ublox_model = convert_dynamic_model(dynamic_model);
         vals.push(CfgVal::NavSpgDynModel(ublox_model));
     }
 
@@ -483,87 +444,152 @@ fn protocol_out_cfg_val(port: &str, protocol: &str, enabled: bool) -> Option<Cfg
     }
 }
 
-/// Parse message output rate setting.
+/// Convert our DynamicModel enum to ublox NavDynamicModel.
+fn convert_dynamic_model(model: crate::config::DynamicModel) -> NavDynamicModel {
+    use crate::config::DynamicModel;
+
+    /// Helper for unsupported models - logs warning and returns fallback.
+    fn unsupported(name: &str, raw: u8, fallback: NavDynamicModel) -> NavDynamicModel {
+        warn!(
+            "{} dynamic model ({}) not in ublox crate; using {:?} fallback",
+            name, raw, fallback
+        );
+        fallback
+    }
+
+    match model {
+        DynamicModel::Portable => NavDynamicModel::Portable,
+        DynamicModel::Stationary => NavDynamicModel::Stationary,
+        DynamicModel::Pedestrian => NavDynamicModel::Pedestrian,
+        DynamicModel::Automotive => NavDynamicModel::Automotive,
+        DynamicModel::Sea => NavDynamicModel::Sea,
+        DynamicModel::AirborneLight => NavDynamicModel::AirborneWithLess1gAcceleration,
+        DynamicModel::AirborneMedium => NavDynamicModel::AirborneWithLess2gAcceleration,
+        DynamicModel::AirborneHigh => NavDynamicModel::AirborneWithLess4gAcceleration,
+        // Models not directly supported in ublox crate
+        DynamicModel::Wrist => unsupported("Wrist", 9, NavDynamicModel::Portable),
+        DynamicModel::Bike => unsupported("Bike", 10, NavDynamicModel::Portable),
+        DynamicModel::Mower => unsupported("Mower", 11, NavDynamicModel::Automotive),
+        DynamicModel::Escooter => unsupported("E-scooter", 12, NavDynamicModel::Automotive),
+        DynamicModel::Robot => unsupported("Robot", 13, NavDynamicModel::Automotive),
+    }
+}
+
+/// Message rate entry: (port, message_name, constructor)
+type MsgRateEntry = (&'static str, &'static str, fn(u8) -> CfgVal);
+
+/// Message rate configuration lookup table.
+/// Maps (port, message) to a constructor function for the appropriate CfgVal variant.
+static MSG_RATE_TABLE: &[MsgRateEntry] = &[
+    // USB messages
+    ("usb", "NAV_PVT", CfgVal::MsgOutUbxNavPvtUsb),
+    ("usb", "NAV_HPPOSLLH", CfgVal::MsgOutUbxNavHpPosLlhUsb),
+    ("usb", "NAV_HPPOSECEF", CfgVal::MsgOutUbxNavHpPosEcefUsb),
+    ("usb", "NAV_SAT", CfgVal::MsgOutUbxNavSatUsb),
+    ("usb", "NAV_SIG", CfgVal::MsgOutUbxNavSigUsb),
+    ("usb", "NAV_STATUS", CfgVal::MsgOutUbxNavStatusUsb),
+    ("usb", "NAV_DOP", CfgVal::MsgOutUbxNavDopUsb),
+    ("usb", "NAV_CLOCK", CfgVal::MsgOutUbxNavClockUsb),
+    ("usb", "NAV_EOE", CfgVal::MsgOutUbxNavEoeUsb),
+    ("usb", "NAV_POSLLH", CfgVal::MsgOutUbxNavPosLlhUsb),
+    ("usb", "NAV_POSECEF", CfgVal::MsgOutUbxNavPosEcefUsb),
+    ("usb", "NAV_ODO", CfgVal::MsgOutUbxNavOdoUsb),
+    ("usb", "NAV_COV", CfgVal::MsgOutUbxNavCovUsb),
+    ("usb", "NAV_RELPOSNED", CfgVal::MsgOutUbxNavRelposNedUsb),
+    ("usb", "NAV_PL", CfgVal::MsgOutUbxNavPlUsb),
+    ("usb", "MON_RF", CfgVal::MsgOutUbxMonRfUsb),
+    ("usb", "MON_COMMS", CfgVal::MsgOutUbxMoncommsUsb),
+    ("usb", "MON_HW", CfgVal::MsgOutUbxMonHwUsb),
+    ("usb", "SEC_SIG", CfgVal::MsgOutUbxSecSigUsb),
+    ("usb", "SEC_SIGLOG", CfgVal::MsgOutUbxSecSiglogUsb),
+    ("usb", "RXM_COR", CfgVal::MsgOutUbxRxmCorUsb),
+    // UART1 messages
+    ("uart1", "NAV_PVT", CfgVal::MsgOutUbxNavPvtUart1),
+    ("uart1", "NAV_HPPOSLLH", CfgVal::MsgOutUbxNavHpPosLlhUart1),
+    ("uart1", "NAV_HPPOSECEF", CfgVal::MsgOutUbxNavHpPosEcefUart1),
+    ("uart1", "NAV_SAT", CfgVal::MsgOutUbxNavSatUart1),
+    ("uart1", "NAV_SIG", CfgVal::MsgOutUbxNavSigUart1),
+    ("uart1", "NAV_STATUS", CfgVal::MsgOutUbxNavStatusUart1),
+    ("uart1", "NAV_DOP", CfgVal::MsgOutUbxNavDopUart1),
+    ("uart1", "NAV_POSLLH", CfgVal::MsgOutUbxNavPosLlhUart1),
+    ("uart1", "NAV_POSECEF", CfgVal::MsgOutUbxNavPosEcefUart1),
+    ("uart1", "NAV_COV", CfgVal::MsgOutUbxNavCovUart1),
+    ("uart1", "NAV_RELPOSNED", CfgVal::MsgOutUbxNavRelposNedUart1),
+    ("uart1", "NAV_PL", CfgVal::MsgOutUbxNavPlUart1),
+    ("uart1", "MON_RF", CfgVal::MsgOutUbxMonRfUart1),
+    ("uart1", "MON_COMMS", CfgVal::MsgOutUbxMoncommsUart1),
+    ("uart1", "MON_HW", CfgVal::MsgOutUbxMonHwUart1),
+    ("uart1", "SEC_SIG", CfgVal::MsgOutUbxSecSigUart1),
+    ("uart1", "SEC_SIGLOG", CfgVal::MsgOutUbxSecSiglogUart1),
+    ("uart1", "RXM_COR", CfgVal::MsgOutUbxRxmCorUart1),
+    // UART2 messages
+    ("uart2", "NAV_PVT", CfgVal::MsgOutUbxNavPvtUart2),
+    ("uart2", "NAV_HPPOSLLH", CfgVal::MsgOutUbxNavHpPosLlhUart2),
+    ("uart2", "NAV_HPPOSECEF", CfgVal::MsgOutUbxNavHpPosEcefUart2),
+    ("uart2", "NAV_SAT", CfgVal::MsgOutUbxNavSatUart2),
+    ("uart2", "NAV_SIG", CfgVal::MsgOutUbxNavSigUart2),
+    ("uart2", "NAV_STATUS", CfgVal::MsgOutUbxNavStatusUart2),
+    ("uart2", "NAV_DOP", CfgVal::MsgOutUbxNavDopUart2),
+    ("uart2", "NAV_POSLLH", CfgVal::MsgOutUbxNavPosLlhUart2),
+    ("uart2", "NAV_POSECEF", CfgVal::MsgOutUbxNavPosEcefUart2),
+    ("uart2", "NAV_COV", CfgVal::MsgOutUbxNavCovUart2),
+    ("uart2", "NAV_RELPOSNED", CfgVal::MsgOutUbxNavRelposNedUart2),
+    ("uart2", "NAV_PL", CfgVal::MsgOutUbxNavPlUart2),
+    ("uart2", "NAV_SVIN", CfgVal::MsgOutUbxNavSvinUart2),
+    ("uart2", "MON_RF", CfgVal::MsgOutUbxMonRfUart2),
+    ("uart2", "MON_COMMS", CfgVal::MsgOutUbxMoncommsUart2),
+    ("uart2", "MON_HW", CfgVal::MsgOutUbxMonHwUart2),
+    ("uart2", "SEC_SIG", CfgVal::MsgOutUbxSecSigUart2),
+    ("uart2", "SEC_SIGLOG", CfgVal::MsgOutUbxSecSiglogUart2),
+    ("uart2", "RXM_COR", CfgVal::MsgOutUbxRxmCorUart2),
+    // RTCM3 output messages (UART2 - for moving base)
+    (
+        "uart2",
+        "RTCM_3X_TYPE4072_0",
+        CfgVal::MsgOutRtcm3Xtype40720Uart2,
+    ),
+    (
+        "uart2",
+        "RTCM_3X_TYPE1005",
+        CfgVal::MsgOutRtcm3Xtype1005Uart2,
+    ),
+    (
+        "uart2",
+        "RTCM_3X_TYPE1074",
+        CfgVal::MsgOutRtcm3Xtype1074Uart2,
+    ),
+    (
+        "uart2",
+        "RTCM_3X_TYPE1084",
+        CfgVal::MsgOutRtcm3Xtype1084Uart2,
+    ),
+    (
+        "uart2",
+        "RTCM_3X_TYPE1094",
+        CfgVal::MsgOutRtcm3Xtype1094Uart2,
+    ),
+    (
+        "uart2",
+        "RTCM_3X_TYPE1124",
+        CfgVal::MsgOutRtcm3Xtype1124Uart2,
+    ),
+    (
+        "uart2",
+        "RTCM_3X_TYPE1230",
+        CfgVal::MsgOutRtcm3Xtype1230Uart2,
+    ),
+];
+
+/// Parse message output rate setting using lookup table.
 fn parse_message_rate(port: &str, msg: &str, rate: u8) -> Option<CfgVal> {
-    match (port, msg) {
-        // ====== USB messages ======
-        ("usb", "NAV_PVT") => Some(CfgVal::MsgOutUbxNavPvtUsb(rate)),
-        ("usb", "NAV_HPPOSLLH") => Some(CfgVal::MsgOutUbxNavHpPosLlhUsb(rate)),
-        ("usb", "NAV_HPPOSECEF") => Some(CfgVal::MsgOutUbxNavHpPosEcefUsb(rate)),
-        ("usb", "NAV_SAT") => Some(CfgVal::MsgOutUbxNavSatUsb(rate)),
-        ("usb", "NAV_SIG") => Some(CfgVal::MsgOutUbxNavSigUsb(rate)),
-        ("usb", "NAV_STATUS") => Some(CfgVal::MsgOutUbxNavStatusUsb(rate)),
-        ("usb", "NAV_DOP") => Some(CfgVal::MsgOutUbxNavDopUsb(rate)),
-        ("usb", "NAV_CLOCK") => Some(CfgVal::MsgOutUbxNavClockUsb(rate)),
-        ("usb", "NAV_EOE") => Some(CfgVal::MsgOutUbxNavEoeUsb(rate)),
-        ("usb", "NAV_POSLLH") => Some(CfgVal::MsgOutUbxNavPosLlhUsb(rate)),
-        ("usb", "NAV_POSECEF") => Some(CfgVal::MsgOutUbxNavPosEcefUsb(rate)),
-        ("usb", "NAV_ODO") => Some(CfgVal::MsgOutUbxNavOdoUsb(rate)),
-        ("usb", "NAV_COV") => Some(CfgVal::MsgOutUbxNavCovUsb(rate)),
-        ("usb", "NAV_RELPOSNED") => Some(CfgVal::MsgOutUbxNavRelposNedUsb(rate)),
-        ("usb", "NAV_PL") => Some(CfgVal::MsgOutUbxNavPlUsb(rate)),
-        ("usb", "MON_RF") => Some(CfgVal::MsgOutUbxMonRfUsb(rate)),
-        ("usb", "MON_COMMS") => Some(CfgVal::MsgOutUbxMoncommsUsb(rate)),
-        ("usb", "MON_HW") => Some(CfgVal::MsgOutUbxMonHwUsb(rate)),
-        ("usb", "SEC_SIG") => Some(CfgVal::MsgOutUbxSecSigUsb(rate)),
-        ("usb", "SEC_SIGLOG") => Some(CfgVal::MsgOutUbxSecSiglogUsb(rate)),
-        ("usb", "RXM_COR") => Some(CfgVal::MsgOutUbxRxmCorUsb(rate)),
-
-        // ====== UART1 messages ======
-        ("uart1", "NAV_PVT") => Some(CfgVal::MsgOutUbxNavPvtUart1(rate)),
-        ("uart1", "NAV_HPPOSLLH") => Some(CfgVal::MsgOutUbxNavHpPosLlhUart1(rate)),
-        ("uart1", "NAV_HPPOSECEF") => Some(CfgVal::MsgOutUbxNavHpPosEcefUart1(rate)),
-        ("uart1", "NAV_SAT") => Some(CfgVal::MsgOutUbxNavSatUart1(rate)),
-        ("uart1", "NAV_SIG") => Some(CfgVal::MsgOutUbxNavSigUart1(rate)),
-        ("uart1", "NAV_STATUS") => Some(CfgVal::MsgOutUbxNavStatusUart1(rate)),
-        ("uart1", "NAV_DOP") => Some(CfgVal::MsgOutUbxNavDopUart1(rate)),
-        ("uart1", "NAV_POSLLH") => Some(CfgVal::MsgOutUbxNavPosLlhUart1(rate)),
-        ("uart1", "NAV_POSECEF") => Some(CfgVal::MsgOutUbxNavPosEcefUart1(rate)),
-        ("uart1", "NAV_COV") => Some(CfgVal::MsgOutUbxNavCovUart1(rate)),
-        ("uart1", "NAV_RELPOSNED") => Some(CfgVal::MsgOutUbxNavRelposNedUart1(rate)),
-        ("uart1", "NAV_PL") => Some(CfgVal::MsgOutUbxNavPlUart1(rate)),
-        ("uart1", "MON_RF") => Some(CfgVal::MsgOutUbxMonRfUart1(rate)),
-        ("uart1", "MON_COMMS") => Some(CfgVal::MsgOutUbxMoncommsUart1(rate)),
-        ("uart1", "MON_HW") => Some(CfgVal::MsgOutUbxMonHwUart1(rate)),
-        ("uart1", "SEC_SIG") => Some(CfgVal::MsgOutUbxSecSigUart1(rate)),
-        ("uart1", "SEC_SIGLOG") => Some(CfgVal::MsgOutUbxSecSiglogUart1(rate)),
-        ("uart1", "RXM_COR") => Some(CfgVal::MsgOutUbxRxmCorUart1(rate)),
-
-        // ====== UART2 messages ======
-        ("uart2", "NAV_PVT") => Some(CfgVal::MsgOutUbxNavPvtUart2(rate)),
-        ("uart2", "NAV_HPPOSLLH") => Some(CfgVal::MsgOutUbxNavHpPosLlhUart2(rate)),
-        ("uart2", "NAV_HPPOSECEF") => Some(CfgVal::MsgOutUbxNavHpPosEcefUart2(rate)),
-        ("uart2", "NAV_SAT") => Some(CfgVal::MsgOutUbxNavSatUart2(rate)),
-        ("uart2", "NAV_SIG") => Some(CfgVal::MsgOutUbxNavSigUart2(rate)),
-        ("uart2", "NAV_STATUS") => Some(CfgVal::MsgOutUbxNavStatusUart2(rate)),
-        ("uart2", "NAV_DOP") => Some(CfgVal::MsgOutUbxNavDopUart2(rate)),
-        ("uart2", "NAV_POSLLH") => Some(CfgVal::MsgOutUbxNavPosLlhUart2(rate)),
-        ("uart2", "NAV_POSECEF") => Some(CfgVal::MsgOutUbxNavPosEcefUart2(rate)),
-        ("uart2", "NAV_COV") => Some(CfgVal::MsgOutUbxNavCovUart2(rate)),
-        ("uart2", "NAV_RELPOSNED") => Some(CfgVal::MsgOutUbxNavRelposNedUart2(rate)),
-        ("uart2", "NAV_PL") => Some(CfgVal::MsgOutUbxNavPlUart2(rate)),
-        ("uart2", "NAV_SVIN") => Some(CfgVal::MsgOutUbxNavSvinUart2(rate)),
-        ("uart2", "MON_RF") => Some(CfgVal::MsgOutUbxMonRfUart2(rate)),
-        ("uart2", "MON_COMMS") => Some(CfgVal::MsgOutUbxMoncommsUart2(rate)),
-        ("uart2", "MON_HW") => Some(CfgVal::MsgOutUbxMonHwUart2(rate)),
-        ("uart2", "SEC_SIG") => Some(CfgVal::MsgOutUbxSecSigUart2(rate)),
-        ("uart2", "SEC_SIGLOG") => Some(CfgVal::MsgOutUbxSecSiglogUart2(rate)),
-        ("uart2", "RXM_COR") => Some(CfgVal::MsgOutUbxRxmCorUart2(rate)),
-
-        // ====== RTCM3 output messages (UART2 - for moving base) ======
-        ("uart2", "RTCM_3X_TYPE4072_0") => Some(CfgVal::MsgOutRtcm3Xtype40720Uart2(rate)),
-        ("uart2", "RTCM_3X_TYPE1005") => Some(CfgVal::MsgOutRtcm3Xtype1005Uart2(rate)),
-        ("uart2", "RTCM_3X_TYPE1074") => Some(CfgVal::MsgOutRtcm3Xtype1074Uart2(rate)),
-        ("uart2", "RTCM_3X_TYPE1084") => Some(CfgVal::MsgOutRtcm3Xtype1084Uart2(rate)),
-        ("uart2", "RTCM_3X_TYPE1094") => Some(CfgVal::MsgOutRtcm3Xtype1094Uart2(rate)),
-        ("uart2", "RTCM_3X_TYPE1124") => Some(CfgVal::MsgOutRtcm3Xtype1124Uart2(rate)),
-        ("uart2", "RTCM_3X_TYPE1230") => Some(CfgVal::MsgOutRtcm3Xtype1230Uart2(rate)),
-
-        _ => {
+    MSG_RATE_TABLE
+        .iter()
+        .find(|(p, m, _)| *p == port && *m == msg)
+        .map(|(_, _, make_cfg)| make_cfg(rate))
+        .or_else(|| {
             warn!("Unknown message '{}' for port '{}'", msg, port);
             None
-        }
-    }
+        })
 }
 
 #[cfg(test)]

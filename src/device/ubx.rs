@@ -1104,44 +1104,27 @@ impl UbxHandler {
         self.stats.other_messages += other_count;
         self.stats.parse_errors += error_count;
 
-        if let Some(ref pvt) = new_pvt {
-            self.last_pvt = Some(pvt.clone());
+        // Store cloned message data for later retrieval
+        macro_rules! store_if_some {
+            ($field:ident, $new_val:ident) => {
+                if let Some(ref val) = $new_val {
+                    self.$field = Some(val.clone());
+                }
+            };
         }
 
-        // Store new safety message data
-        if let Some(ref cov) = new_cov {
-            self.cov = Some(cov.clone());
-        }
-        if let Some(ref ecef) = new_pos_ecef {
-            self.pos_ecef = Some(ecef.clone());
-        }
-        if let Some(ref sig) = new_sec_sig {
-            self.sec_sig = Some(sig.clone());
-        }
-        if let Some(ref siglog) = new_sec_siglog {
-            self.sec_siglog = Some(siglog.clone());
-        }
-        if let Some(ref cor) = new_rxm_cor {
-            self.rxm_cor = Some(cor.clone());
-        }
-        if let Some(ref comms) = new_mon_comms {
-            self.mon_comms = Some(comms.clone());
-        }
-        if let Some(ref hw) = new_mon_hw {
-            self.mon_hw = Some(hw.clone());
-        }
-        if let Some(ref rf) = new_mon_rf {
-            self.mon_rf = Some(rf.clone());
-        }
-        if let Some(ref rel_pos) = new_rel_pos_ned {
-            self.rel_pos_ned = Some(rel_pos.clone());
-        }
-        if let Some(ref pl) = new_nav_pl {
-            self.nav_pl = Some(pl.clone());
-        }
-        if let Some(ref tm2) = new_tim_tm2 {
-            self.tim_tm2 = Some(tm2.clone());
-        }
+        store_if_some!(last_pvt, new_pvt);
+        store_if_some!(cov, new_cov);
+        store_if_some!(pos_ecef, new_pos_ecef);
+        store_if_some!(sec_sig, new_sec_sig);
+        store_if_some!(sec_siglog, new_sec_siglog);
+        store_if_some!(rxm_cor, new_rxm_cor);
+        store_if_some!(mon_comms, new_mon_comms);
+        store_if_some!(mon_hw, new_mon_hw);
+        store_if_some!(mon_rf, new_mon_rf);
+        store_if_some!(rel_pos_ned, new_rel_pos_ned);
+        store_if_some!(nav_pl, new_nav_pl);
+        store_if_some!(tim_tm2, new_tim_tm2);
 
         ProcessResult {
             pvt: new_pvt,

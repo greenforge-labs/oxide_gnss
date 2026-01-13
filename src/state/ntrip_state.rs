@@ -1,7 +1,6 @@
 //! NTRIP client state machine.
 
 use std::fmt;
-use std::time::Instant;
 
 use super::DiagnosticLevel;
 
@@ -103,57 +102,6 @@ impl fmt::Display for NtripState {
     }
 }
 
-/// Statistics for NTRIP connection.
-#[allow(dead_code)] // Will be used when NTRIP client is implemented
-#[derive(Debug, Clone, Default)]
-pub struct NtripStats {
-    /// Total bytes received from NTRIP stream
-    pub bytes_received: u64,
-    /// Number of RTCM messages received
-    pub messages_received: u64,
-    /// Time of last received message
-    pub last_message_time: Option<Instant>,
-    /// Number of successful connections
-    pub connection_count: u32,
-    /// Number of connection failures
-    pub failure_count: u32,
-}
-
-#[allow(dead_code)] // Will be used when NTRIP client is implemented
-impl NtripStats {
-    /// Create new empty stats.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Record bytes received.
-    pub fn record_bytes(&mut self, bytes: u64) {
-        self.bytes_received += bytes;
-        self.last_message_time = Some(Instant::now());
-    }
-
-    /// Record a message received.
-    pub fn record_message(&mut self) {
-        self.messages_received += 1;
-        self.last_message_time = Some(Instant::now());
-    }
-
-    /// Record a successful connection.
-    pub fn record_connection(&mut self) {
-        self.connection_count += 1;
-    }
-
-    /// Record a connection failure.
-    pub fn record_failure(&mut self) {
-        self.failure_count += 1;
-    }
-
-    /// Get age of last message in seconds, if any.
-    pub fn message_age_secs(&self) -> Option<f64> {
-        self.last_message_time.map(|t| t.elapsed().as_secs_f64())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -189,15 +137,5 @@ mod tests {
         let state = NtripState::backoff(2, 30, "connection timeout");
         assert!(state.to_string().contains("attempt 2"));
         assert!(state.to_string().contains("30s"));
-    }
-
-    #[test]
-    fn test_stats() {
-        let mut stats = NtripStats::new();
-        stats.record_bytes(1024);
-        stats.record_message();
-        assert_eq!(stats.bytes_received, 1024);
-        assert_eq!(stats.messages_received, 1);
-        assert!(stats.message_age_secs().is_some());
     }
 }

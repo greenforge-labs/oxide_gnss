@@ -53,6 +53,17 @@ pub enum AntennaStatus {
     Short = 3,
 }
 
+impl From<AntennaStatusData> for AntennaStatus {
+    fn from(status: AntennaStatusData) -> Self {
+        match status {
+            AntennaStatusData::Init | AntennaStatusData::Unknown => AntennaStatus::Unknown,
+            AntennaStatusData::Ok => AntennaStatus::Ok,
+            AntennaStatusData::Short => AntennaStatus::Short,
+            AntennaStatusData::Open => AntennaStatus::Open,
+        }
+    }
+}
+
 /// Configurable thresholds for integrity checks.
 #[derive(Debug, Clone)]
 pub struct IntegrityThresholds {
@@ -417,17 +428,7 @@ impl IntegrityAggregator {
     /// Update with hardware status (MON-HW).
     pub fn update_mon_hw(&mut self, hw: &MonHwData) {
         self.last_mon_hw = Some(hw.clone());
-
-        // Map antenna status
-        self.current.antenna_status = match hw.antenna_status {
-            AntennaStatusData::Init => AntennaStatus::Unknown,
-            AntennaStatusData::Unknown => AntennaStatus::Unknown,
-            AntennaStatusData::Ok => AntennaStatus::Ok,
-            AntennaStatusData::Short => AntennaStatus::Short,
-            AntennaStatusData::Open => AntennaStatus::Open,
-        };
-
-        // Store jamming indicator (0-255 scale)
+        self.current.antenna_status = hw.antenna_status.into();
         self.current.jamming_indicator = hw.jam_ind;
     }
 
@@ -435,21 +436,11 @@ impl IntegrityAggregator {
     /// Note: jammingState in MON-RF is deprecated and always 0 on firmware supporting SEC-SIG.
     /// Use SEC-SIG for jamming/spoofing state instead.
     pub fn update_mon_rf(&mut self, rf: &MonRfData) {
-        // Map antenna status (MON-RF is the authoritative source for this)
-        self.current.antenna_status = match rf.antenna_status {
-            AntennaStatusData::Init => AntennaStatus::Unknown,
-            AntennaStatusData::Unknown => AntennaStatus::Unknown,
-            AntennaStatusData::Ok => AntennaStatus::Ok,
-            AntennaStatusData::Short => AntennaStatus::Short,
-            AntennaStatusData::Open => AntennaStatus::Open,
-        };
-
-        // Store jamming indicator (0-255 CW jamming scale) from MON-RF
-        // Note: This is the only source for the numeric indicator; SEC-SIG only provides enum state
+        // MON-RF is the authoritative source for antenna status
+        self.current.antenna_status = rf.antenna_status.into();
+        // Store jamming indicator (0-255 CW jamming scale) - only source for numeric indicator
         self.current.jamming_indicator = rf.jam_ind;
-
         // Note: Do NOT update jamming_state from MON-RF - it's deprecated and always 0.
-        // Jamming state comes from SEC-SIG instead.
     }
 
     /// Update with PVT (position/velocity/time) data.
@@ -756,56 +747,53 @@ impl IntegrityAggregator {
         // PROTECTION LEVEL CHECKS (ISO 26262/SOTIF compliant bounds)
         // =========================================================================
 
-        // Horizontal PL check
-        let pl_horizontal_ok = if let Some(ref pl) = self.last_nav_pl {
-            if pl.pos_valid {
-                let ok = self.current.horizontal_pl_m <= self.thresholds.max_horizontal_pl_m;
-                if level < IntegrityLevel::Critical && !ok {
-                    level = level.max(IntegrityLevel::Degraded);
-                    issues.push("Horizontal PL exceeds alert limit");
-                }
-                ok
-            } else {
-                true // Not available, don't fail
+        // Helper closure to check PL threshold
+        let check_pl = |valid: bool,
+                        value: f32,
+                        threshold: f32,
+                        level: &mut IntegrityLevel,
+                        issues: &mut Vec<&'static str>,
+                        msg: &'static str|
+         -> bool {
+            if !valid {
+                return true; // Not available, don't fail
             }
-        } else {
-            true // Not available, don't fail
+            let ok = value <= threshold;
+            if *level < IntegrityLevel::Critical && !ok {
+                *level = (*level).max(IntegrityLevel::Degraded);
+                issues.push(msg);
+            }
+            ok
         };
-        self.current.check_pl_horizontal_ok = pl_horizontal_ok;
 
-        // Vertical PL check
-        let pl_vertical_ok = if let Some(ref pl) = self.last_nav_pl {
-            if pl.pos_valid {
-                let ok = self.current.vertical_pl_m <= self.thresholds.max_vertical_pl_m;
-                if level < IntegrityLevel::Critical && !ok {
-                    level = level.max(IntegrityLevel::Degraded);
-                    issues.push("Vertical PL exceeds alert limit");
-                }
-                ok
-            } else {
-                true // Not available, don't fail
-            }
-        } else {
-            true // Not available, don't fail
-        };
-        self.current.check_pl_vertical_ok = pl_vertical_ok;
+        let pl_data = self.last_nav_pl.as_ref();
 
-        // Velocity PL check
-        let pl_velocity_ok = if let Some(ref pl) = self.last_nav_pl {
-            if pl.vel_valid {
-                let ok = self.current.velocity_pl_ms <= self.thresholds.max_velocity_pl_ms;
-                if level < IntegrityLevel::Critical && !ok {
-                    level = level.max(IntegrityLevel::Degraded);
-                    issues.push("Velocity PL exceeds alert limit");
-                }
-                ok
-            } else {
-                true // Not available, don't fail
-            }
-        } else {
-            true // Not available, don't fail
-        };
-        self.current.check_pl_velocity_ok = pl_velocity_ok;
+        self.current.check_pl_horizontal_ok = check_pl(
+            pl_data.is_some_and(|pl| pl.pos_valid),
+            self.current.horizontal_pl_m,
+            self.thresholds.max_horizontal_pl_m,
+            &mut level,
+            &mut issues,
+            "Horizontal PL exceeds alert limit",
+        );
+
+        self.current.check_pl_vertical_ok = check_pl(
+            pl_data.is_some_and(|pl| pl.pos_valid),
+            self.current.vertical_pl_m,
+            self.thresholds.max_vertical_pl_m,
+            &mut level,
+            &mut issues,
+            "Vertical PL exceeds alert limit",
+        );
+
+        self.current.check_pl_velocity_ok = check_pl(
+            pl_data.is_some_and(|pl| pl.vel_valid),
+            self.current.velocity_pl_ms,
+            self.thresholds.max_velocity_pl_ms,
+            &mut level,
+            &mut issues,
+            "Velocity PL exceeds alert limit",
+        );
 
         // TMIR check (included in PL validity conceptually)
         if let Some(ref pl) = self.last_nav_pl {

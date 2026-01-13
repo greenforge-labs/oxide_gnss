@@ -48,12 +48,6 @@ impl RosTaskHandle {
     pub fn state(&self) -> RosTaskState {
         *self.state_rx.borrow()
     }
-
-    /// Wait for the task state to change.
-    pub async fn state_changed(&mut self) -> Result<RosTaskState, watch::error::RecvError> {
-        self.state_rx.changed().await?;
-        Ok(*self.state_rx.borrow())
-    }
 }
 
 /// Channels required by the ROS publisher task.
