@@ -14,8 +14,6 @@ oxide_gnss uses YAML configuration files. Example configs are in `config/`:
 | `moving_base.yaml` | Moving base in MB+R pair |
 | `moving_base_rover.yaml` | Rover in MB+R pair |
 | `static_base.yaml` | Static base station providing RTCM corrections |
-| `advanced_rover.yaml` | Advanced config with custom messages/signals |
-
 ```bash
 ros2 launch oxide_gnss oxide_gnss.launch.py config_file:=/path/to/your/config.yaml
 ```
@@ -596,28 +594,6 @@ def integrity_callback(msg):
     else:  # CRITICAL or FAILED
         max_speed = 0
 ```
-
----
-
-## Advanced: Channel Buffer Sizes
-
-For advanced tuning of internal message channels between tasks:
-
-```yaml
-channels:
-  message_capacity: 64    # Device → ROS publisher (default: 64)
-  rtcm_capacity: 32       # NTRIP → device for corrections (default: 32)
-```
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `message_capacity` | 64 | Buffer size for messages from device to ROS publisher. Increase if you see message drops during high-rate operation. |
-| `rtcm_capacity` | 32 | Buffer size for RTCM corrections from NTRIP to device. Increase if RTCM data is being dropped. |
-
-**In most cases, the defaults are appropriate.** Only adjust these if you observe:
-- Log warnings about failed message sends
-- Inconsistent topic publishing at high update rates
-- RTCM data not reaching the device
 
 ---
 

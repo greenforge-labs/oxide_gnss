@@ -257,38 +257,6 @@ impl Default for Supervisor {
     }
 }
 
-/// Setup shutdown signal handlers for graceful termination.
-#[cfg(unix)]
-#[allow(dead_code)] // Will be used when main.rs integrates supervisor
-pub async fn setup_shutdown_signals(handle: SupervisorHandle) {
-    use tokio::signal::unix::{signal, SignalKind};
-
-    let mut sigint = signal(SignalKind::interrupt()).expect("Failed to setup SIGINT handler");
-    let mut sigterm = signal(SignalKind::terminate()).expect("Failed to setup SIGTERM handler");
-
-    tokio::select! {
-        _ = sigint.recv() => {
-            tracing::info!("Received SIGINT, initiating shutdown");
-        }
-        _ = sigterm.recv() => {
-            tracing::info!("Received SIGTERM, initiating shutdown");
-        }
-    }
-
-    handle.shutdown();
-}
-
-/// Setup shutdown signal handlers for Windows.
-#[cfg(windows)]
-#[allow(dead_code)] // Will be used when main.rs integrates supervisor
-pub async fn setup_shutdown_signals(handle: SupervisorHandle) {
-    use tokio::signal::ctrl_c;
-
-    ctrl_c().await.expect("Failed to setup Ctrl+C handler");
-    tracing::info!("Received Ctrl+C, initiating shutdown");
-    handle.shutdown();
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

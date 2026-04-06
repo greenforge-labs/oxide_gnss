@@ -81,18 +81,6 @@ impl Default for ConfiguratorOptions {
     }
 }
 
-/// Result of a configuration attempt.
-#[derive(Debug)]
-#[allow(dead_code)] // Will be used for detailed configuration reporting
-pub enum ConfigResult {
-    /// Configuration completed successfully
-    Success,
-    /// Configuration failed
-    Failed { step: ConfigStep, reason: String },
-    /// Timed out waiting for response
-    Timeout { step: ConfigStep },
-}
-
 /// Handles device configuration sequence.
 pub struct DeviceConfigurator {
     options: ConfiguratorOptions,

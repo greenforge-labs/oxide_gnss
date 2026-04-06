@@ -146,11 +146,11 @@ cargo watch -x 'test --features ros2'
 # From workspace root (recommended)
 cd ~/ros2_ws
 ros2 launch oxide_gnss oxide_gnss.launch.py \
-    config_file:=src/oxide_gnss/config/default.yaml
+    config_file:=src/oxide_gnss/config/rover_ntrip.yaml
 
 # With absolute path
 ros2 launch oxide_gnss oxide_gnss.launch.py \
-    config_file:=/home/user/ros2_ws/src/oxide_gnss/config/default.yaml
+    config_file:=/home/user/ros2_ws/src/oxide_gnss/config/rover_ntrip.yaml
 ```
 
 ---
@@ -229,7 +229,7 @@ oxide_gnss/                 # Repository root
 │   ├── rover_ntrip.yaml  # RTK rover with NTRIP
 │   ├── standalone.yaml   # Basic GPS
 │   ├── moving_base.yaml  # Moving base station
-│   └── advanced_rover.yaml # Advanced customization
+│   └── static_base.yaml  # Static base station
 ├── launch/
 │   └── oxide_gnss.launch.py
 └── docs/

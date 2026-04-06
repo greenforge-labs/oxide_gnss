@@ -32,8 +32,7 @@ builtin_interfaces = { version = "*", optional = true }
 oxide_gnss_msgs = { version = "0.1", optional = true }
 
 # GNSS Protocols
-# Using forked ublox with NAV-PL support (message parsing + CfgVal config keys)
-ublox = { git = "https://github.com/gsokoll/ublox.git", branch = "feature/nav-pl-support", features = ["alloc", "ubx_proto23", "ubx_proto27"] }
+ublox = { version = "0.10", features = ["alloc", "ubx_proto23", "ubx_proto27"] }
 rtcm-rs = "0.11"
 
 # Communications
@@ -51,6 +50,7 @@ chrono = "0.4"
 thiserror = "2.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
 async-trait = "0.1"
@@ -68,6 +68,3 @@ ros2 = ["dep:rclrs", "dep:sensor_msgs", "dep:geometry_msgs", "dep:std_msgs", "de
 
 [package.metadata.ros]
 install_to_share = ["launch", "config", "udev"]
-
-# [patch.crates-io]
-# Removed: ublox 0.9.0 on crates.io now includes required messages (NAV-COV, SEC-SIG, RXM-COR, MON-COMMS)

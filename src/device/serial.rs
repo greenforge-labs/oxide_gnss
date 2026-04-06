@@ -85,9 +85,6 @@ pub struct SerialPort {
     inner: Option<RawSerialPort>,
     /// Port configuration for reconnection
     config: SerialPortBuilder,
-    /// Read buffer
-    #[allow(dead_code)] // Will be used when read loop is implemented
-    read_buffer: Vec<u8>,
     /// Write queue sender
     write_tx: mpsc::Sender<Vec<u8>>,
     /// Write queue receiver
@@ -111,7 +108,6 @@ impl SerialPort {
 
         Ok(Self {
             inner: Some(port),
-            read_buffer: vec![0u8; config.read_buffer_size],
             config,
             write_tx,
             write_rx,

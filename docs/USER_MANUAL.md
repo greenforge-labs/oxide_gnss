@@ -179,7 +179,7 @@ ros2 launch oxide_gnss oxide_gnss.launch.py \
 
 The launch file exposes these launch arguments:
 
-- `config_file` (default: `config/default.yaml` inside the package)
+- `config_file` (default: `config/rover_ntrip.yaml` inside the package)
 - `namespace` (default: `oxide_gnss`)
 - `log_level` (default: `info`, passed to `RUST_LOG`)
 - `ntrip_username` (default: `$NTRIP_USERNAME`)
@@ -484,9 +484,7 @@ Advanced u-blox configuration lives under:
 
 This is sent via UBX `CFG-VALSET` at startup.
 
-Use the example:
-
-- `config/advanced_rover.yaml`
+See [CONFIGURATION.md](CONFIGURATION.md) for advanced options.
 
 Common advanced knobs:
 

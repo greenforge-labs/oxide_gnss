@@ -11,7 +11,7 @@ def generate_launch_description():
     # Arguments
     config_file_arg = DeclareLaunchArgument(
         'config_file',
-        default_value=PathJoinSubstitution([pkg_share, 'config', 'default.yaml']),
+        default_value=PathJoinSubstitution([pkg_share, 'config', 'rover_ntrip.yaml']),
         description='Path to the configuration YAML file'
     )
     

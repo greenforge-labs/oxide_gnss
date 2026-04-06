@@ -57,49 +57,6 @@ pub struct Config {
     /// Integrity monitoring configuration (optional)
     #[serde(default)]
     pub integrity: IntegrityConfig,
-
-    /// Internal channel buffer sizes (optional, for advanced tuning)
-    #[serde(default)]
-    pub channels: ChannelConfig,
-}
-
-/// Configuration for internal message channel buffer sizes.
-///
-/// These settings control the buffer capacity for async message channels
-/// between tasks. Larger buffers can absorb bursts but use more memory.
-/// In most cases, the defaults are appropriate.
-#[derive(Debug, Clone, Deserialize)]
-pub struct ChannelConfig {
-    /// Message channel capacity (device → ROS publisher).
-    ///
-    /// This channel carries parsed GNSS messages (PVT, satellites, etc.)
-    /// to the ROS publishing task. Default: 64.
-    #[serde(default = "default_message_capacity")]
-    pub message_capacity: usize,
-
-    /// RTCM channel capacity (NTRIP → device).
-    ///
-    /// This channel carries RTCM correction data from the NTRIP client
-    /// to the device for RTK positioning. Default: 32.
-    #[serde(default = "default_rtcm_capacity")]
-    pub rtcm_capacity: usize,
-}
-
-fn default_message_capacity() -> usize {
-    64
-}
-
-fn default_rtcm_capacity() -> usize {
-    32
-}
-
-impl Default for ChannelConfig {
-    fn default() -> Self {
-        Self {
-            message_capacity: default_message_capacity(),
-            rtcm_capacity: default_rtcm_capacity(),
-        }
-    }
 }
 
 /// ROS-related configuration.
@@ -260,51 +217,11 @@ impl Config {
 
         // Build protocol config from mode preset (explicit enable/disable)
         let protocols = ProtocolConfig {
-            usb: PortProtocols {
-                in_ubx: Some(preset.usb.ubx_in),
-                in_nmea: Some(preset.usb.nmea_in),
-                in_rtcm3x: Some(preset.usb.rtcm3x_in),
-                out_ubx: Some(preset.usb.ubx_out),
-                out_nmea: Some(preset.usb.nmea_out),
-                out_rtcm3x: Some(preset.usb.rtcm3x_out),
-                ..Default::default()
-            },
-            uart1: PortProtocols {
-                in_ubx: Some(preset.uart1.ubx_in),
-                in_nmea: Some(preset.uart1.nmea_in),
-                in_rtcm3x: Some(preset.uart1.rtcm3x_in),
-                out_ubx: Some(preset.uart1.ubx_out),
-                out_nmea: Some(preset.uart1.nmea_out),
-                out_rtcm3x: Some(preset.uart1.rtcm3x_out),
-                ..Default::default()
-            },
-            uart2: PortProtocols {
-                in_ubx: Some(preset.uart2.ubx_in),
-                in_nmea: Some(preset.uart2.nmea_in),
-                in_rtcm3x: Some(preset.uart2.rtcm3x_in),
-                out_ubx: Some(preset.uart2.ubx_out),
-                out_nmea: Some(preset.uart2.nmea_out),
-                out_rtcm3x: Some(preset.uart2.rtcm3x_out),
-                ..Default::default()
-            },
-            i2c: PortProtocols {
-                in_ubx: Some(preset.i2c.ubx_in),
-                in_nmea: Some(preset.i2c.nmea_in),
-                in_rtcm3x: Some(preset.i2c.rtcm3x_in),
-                out_ubx: Some(preset.i2c.ubx_out),
-                out_nmea: Some(preset.i2c.nmea_out),
-                out_rtcm3x: Some(preset.i2c.rtcm3x_out),
-                ..Default::default()
-            },
-            spi: PortProtocols {
-                in_ubx: Some(preset.spi.ubx_in),
-                in_nmea: Some(preset.spi.nmea_in),
-                in_rtcm3x: Some(preset.spi.rtcm3x_in),
-                out_ubx: Some(preset.spi.ubx_out),
-                out_nmea: Some(preset.spi.nmea_out),
-                out_rtcm3x: Some(preset.spi.rtcm3x_out),
-                ..Default::default()
-            },
+            usb: (&preset.usb).into(),
+            uart1: (&preset.uart1).into(),
+            uart2: (&preset.uart2).into(),
+            i2c: (&preset.i2c).into(),
+            spi: (&preset.spi).into(),
         };
 
         // Build port settings from mode preset (enable/disable ports)
@@ -580,48 +497,5 @@ ntrip:
         let yaml = "port: ${MISSING_VAR}";
         let substituted = Config::substitute_env_vars(yaml);
         assert_eq!(substituted, "port: ${MISSING_VAR}");
-    }
-
-    #[test]
-    fn test_channel_config_defaults() {
-        let yaml = r#"
-device:
-  port: "/dev/ttyACM0"
-"#;
-        let config: Config = serde_yaml::from_str(yaml).unwrap();
-
-        // Default channel sizes
-        assert_eq!(config.channels.message_capacity, 64);
-        assert_eq!(config.channels.rtcm_capacity, 32);
-    }
-
-    #[test]
-    fn test_channel_config_custom() {
-        let yaml = r#"
-device:
-  port: "/dev/ttyACM0"
-channels:
-  message_capacity: 128
-  rtcm_capacity: 64
-"#;
-        let config: Config = serde_yaml::from_str(yaml).unwrap();
-
-        assert_eq!(config.channels.message_capacity, 128);
-        assert_eq!(config.channels.rtcm_capacity, 64);
-    }
-
-    #[test]
-    fn test_channel_config_partial() {
-        let yaml = r#"
-device:
-  port: "/dev/ttyACM0"
-channels:
-  message_capacity: 256
-"#;
-        let config: Config = serde_yaml::from_str(yaml).unwrap();
-
-        // Custom message capacity, default rtcm capacity
-        assert_eq!(config.channels.message_capacity, 256);
-        assert_eq!(config.channels.rtcm_capacity, 32);
     }
 }

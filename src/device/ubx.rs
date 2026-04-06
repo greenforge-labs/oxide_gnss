@@ -49,7 +49,7 @@ use ublox::{
         NavPlRef, PlInvalidityReason, PlPosFrame, PlPosValid, PlTimeValid, PlVelFrame, PlVelValid,
     },
     nav_pos_ecef::NavPosEcefRef,
-    nav_rel_pos_ned::{common::NavRelPosNedFlags, proto27_31::NavRelPosNedRef},
+    nav_rel_pos_ned::{common::NavRelPosNedFlags, proto27::NavRelPosNedRef},
     nav_sat::NavSatRef,
     packets::cfg_val::{CfgLayerSet, CfgValSetBuilder},
     proto27::Proto27,
@@ -1171,7 +1171,7 @@ impl UbxHandler {
     }
 
     /// Parse a NAV-PVT packet into our PvtData structure.
-    fn parse_nav_pvt(nav_pvt: &ublox::nav_pvt::proto27_31::NavPvtRef) -> PvtData {
+    fn parse_nav_pvt(nav_pvt: &ublox::nav_pvt::proto27::NavPvtRef) -> PvtData {
         // Extract carrier solution from flags (bits 6-7)
         let flags = nav_pvt.flags_raw();
         let carr_soln = match (flags >> 6) & 0x03 {

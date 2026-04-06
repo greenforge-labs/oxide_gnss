@@ -42,6 +42,12 @@ pub struct DeviceConfig {
     /// Uses CFG_* key names matching u-blox documentation.
     #[serde(default)]
     pub ublox: Option<UbloxConfig>,
+
+    /// Serial read watchdog timeout in seconds.
+    /// If no data is received within this period, the device is considered
+    /// disconnected and reconnection logic is triggered.
+    #[serde(default = "default_watchdog_timeout")]
+    pub watchdog_timeout_secs: f64,
 }
 
 /// Navigation update configuration.
@@ -184,6 +190,10 @@ fn default_max_delay() -> u32 {
 
 fn default_backoff_reset_secs() -> u32 {
     300 // 5 minutes of stable operation resets backoff
+}
+
+fn default_watchdog_timeout() -> f64 {
+    5.0
 }
 
 #[cfg(test)]

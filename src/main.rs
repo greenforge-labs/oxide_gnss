@@ -20,8 +20,9 @@ use oxide_gnss::ros::{spawn_ros_task, RosTaskChannels, RosTaskConfig};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize logging (respects RUST_LOG and FERROUS_GNSS_LOG_STYLE env vars)
-    oxide_gnss::logging::init();
+    // Initialize logging (respects RUST_LOG and OXIDE_GNSS_LOG_STYLE env vars)
+    // Guard must be held alive — dropping it flushes buffered file logs
+    let _log_guard = oxide_gnss::logging::init();
 
     info!("oxide_gnss v{}", oxide_gnss::VERSION);
     info!("Starting GNSS driver node...");

@@ -514,6 +514,20 @@ impl PortProtocols {
     }
 }
 
+impl From<&super::modes::PortProtocols> for PortProtocols {
+    fn from(p: &super::modes::PortProtocols) -> Self {
+        Self {
+            in_ubx: Some(p.ubx_in),
+            in_nmea: Some(p.nmea_in),
+            in_rtcm3x: Some(p.rtcm3x_in),
+            out_ubx: Some(p.ubx_out),
+            out_nmea: Some(p.nmea_out),
+            out_rtcm3x: Some(p.rtcm3x_out),
+            ..Default::default()
+        }
+    }
+}
+
 /// UBX message output configuration per port.
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct MessageConfig {

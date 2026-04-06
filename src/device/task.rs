@@ -426,6 +426,7 @@ impl DeviceTask {
         ubx: &mut UbxHandler,
     ) -> Result<(), DeviceError> {
         let mut read_buf = [0u8; 1024];
+        let watchdog = Duration::from_secs_f64(self.config.watchdog_timeout_secs);
 
         loop {
             tokio::select! {
@@ -437,18 +438,28 @@ impl DeviceTask {
                     }
                 }
 
-                // Read from serial port
-                read_result = serial.read(&mut read_buf) => {
+                // Read from serial port with watchdog timeout
+                read_result = tokio::time::timeout(watchdog, serial.read(&mut read_buf)) => {
                     match read_result {
-                        Ok(n) if n > 0 => {
+                        Ok(Ok(n)) if n > 0 => {
                             self.process_serial_data(&read_buf[..n], ubx).await;
                         }
-                        Ok(_) => {
+                        Ok(Ok(_)) => {
                             // Zero bytes read, continue
                         }
-                        Err(e) => {
+                        Ok(Err(e)) => {
                             error!(error = %e, "Serial read error");
                             return Err(e);
+                        }
+                        Err(_) => {
+                            warn!(
+                                timeout_secs = self.config.watchdog_timeout_secs,
+                                "Serial read watchdog timeout — device may be disconnected"
+                            );
+                            return Err(DeviceError::Timeout {
+                                operation: "serial read watchdog".to_string(),
+                                timeout_ms: (self.config.watchdog_timeout_secs * 1000.0) as u64,
+                            });
                         }
                     }
                 }
