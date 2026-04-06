@@ -42,7 +42,7 @@ url = "2.5"
 tokio = { version = "1", features = ["full"] }
 
 # NTRIP client
-ntrip-core = "0.1"
+ntrip-core = "0.2"
 
 # Utilities
 nalgebra = "0.33"

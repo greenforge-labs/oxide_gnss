@@ -47,7 +47,7 @@ cd ~/ros2_ws/src
 git clone https://github.com/gsokoll/oxide_gnss.git
 
 # Clone ros2-rust
-git clone https://github.com/ros2-rust/ros2_rust.git
+git clone --branch v0.7.0 https://github.com/ros2-rust/ros2_rust.git
 
 # Import ros2-rust dependencies
 vcs import . < ros2_rust/ros2_rust_jazzy.repos

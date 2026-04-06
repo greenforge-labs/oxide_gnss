@@ -877,9 +877,9 @@ dependencies = [
 
 [[package]]
 name = "ntrip-core"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f0c99baa912e61cbdfd49e0b977759776efb5ef65c14675adf13abc5798490c"
+checksum = "75fe95626a0172e14e0b2a84f863f798e62348bf99f4b51363708726d7411fd5"
 dependencies = [
  "base64",
  "chrono",

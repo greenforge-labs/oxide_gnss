@@ -108,7 +108,7 @@ cargo install cargo-ament-build 2>/dev/null || true
 echo "=== Cloning and building ros2-rust ==="
 mkdir -p /tmp/ros2_ws/src
 cd /tmp/ros2_ws/src
-git clone --depth 1 https://github.com/ros2-rust/ros2_rust.git
+git clone --branch v0.7.0 --depth 1 https://github.com/ros2-rust/ros2_rust.git
 vcs import . < ros2_rust/ros2_rust_${DISTRO}.repos 2>/dev/null || \
     vcs import . < ros2_rust/ros2_rust.repos 2>/dev/null || true
 
