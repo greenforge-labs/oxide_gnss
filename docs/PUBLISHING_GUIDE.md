@@ -27,9 +27,9 @@ oxide_gnss cannot be published to crates.io as a complete package because:
 - `oxide_gnss_msgs` and standard ROS2 message crates are not on crates.io
 - The package requires a colcon workspace with ros2-rust bindings
 
-**Medium-term opportunity:** The UBX parser and NTRIP client modules have no ROS2
-dependency and could be extracted as standalone crates. These would be independently
-useful to the broader Rust embedded/GNSS community.
+**Medium-term opportunity:** The UBX parser module has no ROS2 dependency and could be
+extracted as a standalone crate. The NTRIP client is already published separately as
+[ntrip-core](https://crates.io/crates/ntrip-core).
 
 ### Source Distribution (Current Standard)
 
@@ -105,16 +105,14 @@ to community drivers but useful as a quality reference.
 
 ### Standalone Crate Extraction
 
-The following modules could be published to crates.io independently:
+The NTRIP client is already published as a standalone crate
+([ntrip-core](https://crates.io/crates/ntrip-core) v0.2), consumed by oxide_gnss as
+an external dependency.
 
-1. **UBX parser** (`device/ubx.rs`) — UBX protocol parsing for u-blox receivers.
-   No ROS2 dependency. Useful for any Rust project working with u-blox hardware.
-
-2. **NTRIP client** (`ntrip/`) — Async NTRIP v2 client with GGA feedback.
-   No ROS2 dependency. Useful for any RTK positioning application.
-
-These extractions would increase the project's reach and provide building blocks for
-other ROS2 (or non-ROS2) GNSS projects.
+The **UBX parser** (`device/ubx.rs`) could be extracted as a standalone crate — UBX
+protocol parsing for u-blox receivers with no ROS2 dependency. This would be useful for
+any Rust project working with u-blox hardware and would increase the project's reach
+beyond the ROS2 ecosystem.
 
 ### Bloom Release
 
