@@ -65,7 +65,9 @@ RUN cargo install cargo-ament-build
 WORKDIR /opt/ros2_ws/src
 RUN git clone --branch v0.7.0 --depth 1 https://github.com/ros2-rust/ros2_rust.git && \
     (vcs import . < ros2_rust/ros2_rust_${ROS_DISTRO}.repos 2>/dev/null || \
-     vcs import . < ros2_rust/ros2_rust.repos)
+     vcs import . < ros2_rust/ros2_rust.repos) && \
+    cd ros2-rust/rosidl_runtime_rs && git fetch --tags && git checkout v0.6.0 && \
+    cd ../rosidl_rust && git fetch --tags && git checkout 0.4.11
 
 # Build ros2-rust dependencies (this takes a while but is cached in the image)
 WORKDIR /opt/ros2_ws

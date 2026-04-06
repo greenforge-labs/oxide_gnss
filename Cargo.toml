@@ -23,7 +23,7 @@ required-features = ["ros2"]
 # ROS2 dependencies - resolved via colcon patches in .cargo/config.toml
 # Version "*" allows workspace patches to override with distro-specific versions
 # Build with: source /opt/ros/$ROS_DISTRO/setup.bash && source install/setup.bash && cargo build --features ros2
-rclrs = { version = "0.6", optional = true }
+rclrs = { version = "0.7", optional = true }
 sensor_msgs = { version = "*", optional = true }
 geometry_msgs = { version = "*", optional = true }
 std_msgs = { version = "*", optional = true }

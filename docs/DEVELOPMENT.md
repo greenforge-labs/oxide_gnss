@@ -52,6 +52,10 @@ git clone --branch v0.7.0 https://github.com/ros2-rust/ros2_rust.git
 # Import ros2-rust dependencies
 vcs import . < ros2_rust/ros2_rust_jazzy.repos
 
+# Pin rosidl packages to versions compatible with rclrs 0.7
+cd ros2-rust/rosidl_runtime_rs && git fetch --tags && git checkout v0.6.0 && cd ../..
+cd ros2-rust/rosidl_rust && git fetch --tags && git checkout 0.4.11 && cd ../..
+
 # Create symlink for message package (required for colcon to discover it)
 ln -s oxide_gnss/oxide_gnss_msgs oxide_gnss_msgs
 ```
