@@ -26,7 +26,7 @@ Initial public release.
   - `moving_base` - Moving base station
   - `moving_base_rover` - Rover in moving base + rover pair
   - `static_base` - Static base station
-- **Feature flags** for optional functionality: `high_precision`, `integrity`, `satellites`, `heading`, `dead_reckoning`
+- **Feature flags** for optional functionality: `high_precision`, `integrity`, `satellites`, `heading`
 - **Automatic port/protocol optimization** - Modes automatically disable unused ports (UART1, SPI) and protocols (NMEA) to reduce CPU load
 - **Configurable namespace** in launch file for running multiple nodes (e.g., gnss_base, gnss_rover)
 - Config files for all modes with example YAML configurations

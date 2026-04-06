@@ -138,7 +138,7 @@ Protection levels provide statistically-bounded error estimates with a specified
 | `tmir` | `> max_tmir_per_epoch` (default: 1e-5) | → **DEGRADED** ("TMIR exceeds threshold") |
 | `pos_valid` | `false` AND `require_valid_pl: true` | → **CRITICAL** ("Protection level invalid") |
 
-**Note:** When NAV-PL is unavailable (older firmware), the system falls back to hAcc/vAcc threshold checks. See [NAV_PL_INTEGRATION.md](NAV_PL_INTEGRATION.md) for details.
+**Note:** When NAV-PL is unavailable (older firmware), the system falls back to hAcc/vAcc threshold checks.
 
 ---
 
