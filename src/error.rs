@@ -1,11 +1,11 @@
 //! Error types for oxide_gnss.
 //!
 //! This module defines a hierarchy of error types for different subsystems:
-//! - [`DeviceError`] - Serial port and device communication errors
-//! - [`ProtocolError`] - UBX and RTCM protocol parsing errors
-//! - [`NtripError`] - NTRIP client connection and streaming errors
+//! - [`DeviceError`](crate::error::DeviceError) - Serial port and device communication errors
+//! - [`ProtocolError`](crate::error::ProtocolError) - UBX and RTCM protocol parsing errors
+//! - [`NtripError`](crate::error::NtripError) - NTRIP client connection and streaming errors
 //!
-//! The [`Error`] enum provides a unified error type for the library.
+//! The [`Error`](crate::error::Error) enum provides a unified error type for the library.
 
 use thiserror::Error;
 
@@ -42,46 +42,59 @@ pub enum DeviceError {
     /// Serial port not found or inaccessible
     #[error("Serial port '{port}' not found or inaccessible: {source}")]
     PortNotFound {
+        /// Serial port path (e.g., "/dev/ttyACM0")
         port: String,
         #[source]
+        /// Underlying I/O error
         source: std::io::Error,
     },
 
     /// Failed to open serial port
     #[error("Failed to open serial port '{port}': {source}")]
     OpenFailed {
+        /// Serial port path
         port: String,
         #[source]
+        /// Underlying I/O error
         source: std::io::Error,
     },
 
     /// Failed to configure serial port settings (baud rate, etc.)
     #[error("Failed to configure serial port '{port}': {source}")]
     SerialConfigFailed {
+        /// Serial port path
         port: String,
         #[source]
+        /// Underlying I/O error
         source: std::io::Error,
     },
 
     /// Serial port read error
     #[error("Read error on '{port}': {source}")]
     ReadError {
+        /// Serial port path
         port: String,
         #[source]
+        /// Underlying I/O error
         source: std::io::Error,
     },
 
     /// Serial port write error
     #[error("Write error on '{port}': {source}")]
     WriteError {
+        /// Serial port path
         port: String,
         #[source]
+        /// Underlying I/O error
         source: std::io::Error,
     },
 
     /// Device disconnected unexpectedly
     #[error("Device disconnected: {port}")]
-    Disconnected { port: String },
+    Disconnected {
+        /// Serial port path
+        port: String,
+    },
 
     /// Timeout waiting for device response
     #[error("Timeout waiting {timeout_ms}ms for {operation}")]
@@ -103,11 +116,17 @@ pub enum DeviceError {
 
     /// Device returned unexpected response
     #[error("Unexpected device response: {message}")]
-    UnexpectedResponse { message: String },
+    UnexpectedResponse {
+        /// Description of the unexpected response
+        message: String,
+    },
 
     /// Configuration step failed after retries
     #[error("Configuration failed at step '{step}' after retries")]
-    ConfigurationFailed { step: String },
+    ConfigurationFailed {
+        /// Name of the configuration step that failed
+        step: String,
+    },
 }
 
 // ============================================================================
@@ -119,58 +138,102 @@ pub enum DeviceError {
 pub enum ProtocolError {
     /// Invalid UBX message header
     #[error("Invalid UBX header: expected 0xB5 0x62, got {got:02X?}")]
-    InvalidUbxHeader { got: [u8; 2] },
+    InvalidUbxHeader {
+        /// The two bytes received instead of the expected header
+        got: [u8; 2],
+    },
 
     /// UBX checksum mismatch
     #[error(
         "UBX checksum mismatch for {class:#04X}/{id:#04X}: expected {expected:04X}, got {got:04X}"
     )]
     UbxChecksumMismatch {
+        /// UBX message class byte
         class: u8,
+        /// UBX message ID byte
         id: u8,
+        /// Expected checksum value
         expected: u16,
+        /// Actual checksum value received
         got: u16,
     },
 
     /// UBX message too short
     #[error("UBX message too short: expected {expected} bytes, got {got}")]
-    UbxMessageTooShort { expected: usize, got: usize },
+    UbxMessageTooShort {
+        /// Minimum expected payload length in bytes
+        expected: usize,
+        /// Actual payload length received
+        got: usize,
+    },
 
     /// Unknown UBX message class/id
     #[error("Unknown UBX message: class={class:#04X}, id={id:#04X}")]
-    UnknownUbxMessage { class: u8, id: u8 },
+    UnknownUbxMessage {
+        /// UBX message class byte
+        class: u8,
+        /// UBX message ID byte
+        id: u8,
+    },
 
     /// Failed to parse UBX message payload
     #[error("Failed to parse UBX {class:#04X}/{id:#04X} payload: {message}")]
-    UbxPayloadError { class: u8, id: u8, message: String },
+    UbxPayloadError {
+        /// UBX message class byte
+        class: u8,
+        /// UBX message ID byte
+        id: u8,
+        /// Description of the parse failure
+        message: String,
+    },
 
     /// Invalid RTCM frame
     #[error("Invalid RTCM frame: {message}")]
-    InvalidRtcmFrame { message: String },
+    InvalidRtcmFrame {
+        /// Description of the framing error
+        message: String,
+    },
 
     /// RTCM CRC mismatch
     #[error("RTCM CRC mismatch for message {msg_type}: expected {expected:06X}, got {got:06X}")]
     RtcmCrcMismatch {
+        /// RTCM message type number
         msg_type: u16,
+        /// Expected CRC value
         expected: u32,
+        /// Actual CRC value received
         got: u32,
     },
 
     /// Unknown RTCM message type
     #[error("Unknown RTCM message type: {msg_type}")]
-    UnknownRtcmMessage { msg_type: u16 },
+    UnknownRtcmMessage {
+        /// RTCM message type number
+        msg_type: u16,
+    },
 
     /// Invalid NMEA sentence
     #[error("Invalid NMEA sentence: {message}")]
-    InvalidNmea { message: String },
+    InvalidNmea {
+        /// Description of the NMEA parse error
+        message: String,
+    },
 
     /// Buffer overflow (message too large)
     #[error("Protocol buffer overflow: message size {size} exceeds maximum {max}")]
-    BufferOverflow { size: usize, max: usize },
+    BufferOverflow {
+        /// Actual message size in bytes
+        size: usize,
+        /// Maximum allowed size in bytes
+        max: usize,
+    },
 
     /// Incomplete message in buffer
     #[error("Incomplete message: need {needed} more bytes")]
-    IncompleteMessage { needed: usize },
+    IncompleteMessage {
+        /// Number of additional bytes required
+        needed: usize,
+    },
 }
 
 // ============================================================================
@@ -183,65 +246,106 @@ pub enum NtripError {
     /// Failed to connect to NTRIP caster
     #[error("Failed to connect to NTRIP caster at {host}:{port}: {source}")]
     ConnectionFailed {
+        /// NTRIP caster hostname
         host: String,
+        /// NTRIP caster port number
         port: u16,
         #[source]
+        /// Underlying I/O error
         source: std::io::Error,
     },
 
     /// Authentication failed
     #[error("NTRIP authentication failed for user '{username}' at {host}")]
-    AuthenticationFailed { host: String, username: String },
+    AuthenticationFailed {
+        /// NTRIP caster hostname
+        host: String,
+        /// Username used for authentication
+        username: String,
+    },
 
     /// Mountpoint not found
     #[error("Mountpoint '{mountpoint}' not found on caster {host}")]
-    MountpointNotFound { host: String, mountpoint: String },
+    MountpointNotFound {
+        /// NTRIP caster hostname
+        host: String,
+        /// Requested mountpoint name
+        mountpoint: String,
+    },
 
     /// HTTP error response from caster
     #[error("NTRIP caster returned HTTP {status}: {message}")]
-    HttpError { status: u16, message: String },
+    HttpError {
+        /// HTTP status code
+        status: u16,
+        /// HTTP error message or reason phrase
+        message: String,
+    },
 
     /// Connection timed out
     #[error("NTRIP connection timed out after {timeout_secs} seconds")]
-    Timeout { timeout_secs: u32 },
+    Timeout {
+        /// Timeout duration in seconds
+        timeout_secs: u32,
+    },
 
     /// Read timed out - no data received within configured period
     #[error("NTRIP read timed out after {timeout_secs} seconds - no data received")]
-    ReadTimeout { timeout_secs: u32 },
+    ReadTimeout {
+        /// Timeout duration in seconds
+        timeout_secs: u32,
+    },
 
     /// Stream disconnected
     #[error("NTRIP stream disconnected: {reason}")]
-    StreamDisconnected { reason: String },
+    StreamDisconnected {
+        /// Reason for disconnection
+        reason: String,
+    },
 
     /// Failed to send GGA position
     #[error("Failed to send GGA position to caster: {source}")]
     GgaSendFailed {
         #[source]
+        /// Underlying I/O error
         source: std::io::Error,
     },
 
     /// Invalid sourcetable response
     #[error("Invalid NTRIP sourcetable: {message}")]
-    InvalidSourcetable { message: String },
+    InvalidSourcetable {
+        /// Description of the sourcetable parse error
+        message: String,
+    },
 
     /// URL parsing error
     #[error("Invalid NTRIP URL: {url}")]
-    InvalidUrl { url: String },
+    InvalidUrl {
+        /// The invalid URL string
+        url: String,
+    },
 
     /// Network I/O error
     #[error("NTRIP network error: {source}")]
     NetworkError {
         #[source]
+        /// Underlying I/O error
         source: std::io::Error,
     },
 
     /// TLS/HTTPS error
     #[error("NTRIP TLS error: {message}")]
-    TlsError { message: String },
+    TlsError {
+        /// Description of the TLS error
+        message: String,
+    },
 
     /// Invalid configuration
     #[error("NTRIP configuration error: {message}")]
-    InvalidConfig { message: String },
+    InvalidConfig {
+        /// Description of the configuration error
+        message: String,
+    },
 }
 
 impl From<ntrip_core::Error> for NtripError {

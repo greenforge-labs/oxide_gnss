@@ -46,10 +46,14 @@ impl std::fmt::Display for IntegrityLevel {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(u8)]
 pub enum AntennaStatus {
+    /// Status not yet determined.
     #[default]
     Unknown = 0,
+    /// Antenna operating normally.
     Ok = 1,
+    /// Open circuit detected (antenna disconnected).
     Open = 2,
+    /// Short circuit detected.
     Short = 3,
 }
 

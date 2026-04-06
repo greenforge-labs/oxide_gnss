@@ -221,14 +221,22 @@ pub struct SignalQuality {
     pub min_cno: u8,
 }
 
+/// Parsed per-satellite status from NAV-SAT.
 #[derive(Debug, Clone)]
 pub struct SatStatus {
+    /// GNSS identifier (0=GPS, 1=SBAS, 2=Galileo, 3=BeiDou, 5=IMES, 6=GLONASS)
     pub gnss_id: u8,
+    /// Satellite vehicle number within the GNSS
     pub sv_id: u8,
+    /// Carrier-to-noise ratio (dB-Hz)
     pub cno: u8,
+    /// Elevation angle (degrees, -90..+90)
     pub elev: i8,
+    /// Azimuth angle (degrees, 0..360)
     pub azim: i16,
+    /// Pseudorange residual (scaled by 0.1 m)
     pub pr_res: i16,
+    /// Raw satellite flags bitfield from NAV-SAT
     pub flags: u32,
     /// Satellite is used in the navigation solution
     pub sv_used: bool,
@@ -472,9 +480,12 @@ pub struct TimTm2Data {
 /// Time base for TIM-TM2 measurement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TimTm2TimeBaseData {
+    /// Receiver local time base
     #[default]
     Receiver,
+    /// GNSS time base
     Gnss,
+    /// UTC time base
     Utc,
 }
 
@@ -511,10 +522,14 @@ pub struct SecSigData {
 /// Jamming detection state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum JammingStateData {
+    /// Jamming state unknown or not available
     #[default]
     Unknown,
+    /// No significant jamming detected
     Ok,
+    /// Jamming indicators above warning threshold
     Warning,
+    /// Jamming indicators above critical threshold
     Critical,
 }
 
@@ -533,10 +548,14 @@ impl From<JammingState> for JammingStateData {
 /// Spoofing detection state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SpoofingStateData {
+    /// Spoofing state unknown or not available
     #[default]
     Unknown,
+    /// No spoofing detected
     Ok,
+    /// Spoofing indicated by a single source
     Indicated,
+    /// Spoofing indicated by multiple sources
     Multiple,
 }
 
@@ -662,19 +681,27 @@ pub struct MonRfData {
 /// Antenna supervisor status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AntennaStatusData {
+    /// Antenna supervisor initializing
     #[default]
     Init,
+    /// Antenna status unknown
     Unknown,
+    /// Antenna OK
     Ok,
+    /// Antenna short circuit detected
     Short,
+    /// Antenna open circuit detected
     Open,
 }
 
 /// Antenna power status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AntennaPowerData {
+    /// Antenna power is off
     Off,
+    /// Antenna power is on
     On,
+    /// Antenna power state unknown
     #[default]
     Unknown,
 }
@@ -763,9 +790,12 @@ pub struct PvtData {
 /// Carrier phase range solution status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CarrierSolution {
+    /// No carrier phase range solution
     #[default]
     None,
+    /// Carrier phase float solution (ambiguities not resolved)
     Float,
+    /// Carrier phase fixed solution (ambiguities resolved)
     Fixed,
 }
 
@@ -1796,51 +1826,73 @@ fn ubx_checksum(data: &[u8]) -> (u8, u8) {
 /// These are the configuration keys for enabling UBX message output on various ports.
 /// Key format: 0x2091XXYY (size=1 byte, group=0x91, item varies)
 pub mod cfg_keys {
-    // NAV-COV (0x01 0x36) - Position/velocity covariance
+    /// NAV-COV output rate on I2C port.
     pub const NAV_COV_I2C: u32 = 0x20910083;
+    /// NAV-COV output rate on UART1 port.
     pub const NAV_COV_UART1: u32 = 0x20910084;
+    /// NAV-COV output rate on UART2 port.
     pub const NAV_COV_UART2: u32 = 0x20910085;
+    /// NAV-COV output rate on USB port.
     pub const NAV_COV_USB: u32 = 0x20910086;
+    /// NAV-COV output rate on SPI port.
     pub const NAV_COV_SPI: u32 = 0x20910087;
 
-    // NAV-POSECEF (0x01 0x01) - ECEF position
-    // Already in ublox crate as MsgOutUbxNavPosEcef*
+    /// NAV-POSECEF output rate on I2C port.
     pub const NAV_POSECEF_I2C: u32 = 0x20910024;
+    /// NAV-POSECEF output rate on UART1 port.
     pub const NAV_POSECEF_UART1: u32 = 0x20910025;
+    /// NAV-POSECEF output rate on UART2 port.
     pub const NAV_POSECEF_UART2: u32 = 0x20910026;
+    /// NAV-POSECEF output rate on USB port.
     pub const NAV_POSECEF_USB: u32 = 0x20910027;
+    /// NAV-POSECEF output rate on SPI port.
     pub const NAV_POSECEF_SPI: u32 = 0x20910028;
 
-    // SEC-SIG (0x27 0x09) - Jamming/spoofing detection
+    /// SEC-SIG output rate on I2C port.
     pub const SEC_SIG_I2C: u32 = 0x20910634;
+    /// SEC-SIG output rate on UART1 port.
     pub const SEC_SIG_UART1: u32 = 0x20910635;
+    /// SEC-SIG output rate on UART2 port.
     pub const SEC_SIG_UART2: u32 = 0x20910636;
+    /// SEC-SIG output rate on USB port.
     pub const SEC_SIG_USB: u32 = 0x20910637;
+    /// SEC-SIG output rate on SPI port.
     pub const SEC_SIG_SPI: u32 = 0x20910638;
 
-    // SEC-SIGLOG (0x27 0x10) - Security event log
+    /// SEC-SIGLOG output rate on I2C port.
     pub const SEC_SIGLOG_I2C: u32 = 0x20910689;
+    /// SEC-SIGLOG output rate on UART1 port.
     pub const SEC_SIGLOG_UART1: u32 = 0x2091068A;
+    /// SEC-SIGLOG output rate on UART2 port.
     pub const SEC_SIGLOG_UART2: u32 = 0x2091068B;
+    /// SEC-SIGLOG output rate on USB port.
     pub const SEC_SIGLOG_USB: u32 = 0x2091068C;
+    /// SEC-SIGLOG output rate on SPI port.
     pub const SEC_SIGLOG_SPI: u32 = 0x2091068D;
 
-    // RXM-COR (0x02 0x34) - Differential correction status
+    /// RXM-COR output rate on I2C port.
     pub const RXM_COR_I2C: u32 = 0x209106B6;
+    /// RXM-COR output rate on UART1 port.
     pub const RXM_COR_UART1: u32 = 0x209106B7;
+    /// RXM-COR output rate on UART2 port.
     pub const RXM_COR_UART2: u32 = 0x209106B8;
+    /// RXM-COR output rate on USB port.
     pub const RXM_COR_USB: u32 = 0x209106B9;
+    /// RXM-COR output rate on SPI port.
     pub const RXM_COR_SPI: u32 = 0x209106BA;
 
-    // MON-COMMS (0x0A 0x36) - Communication port status
-    // Already in ublox crate as MsgOutUbxMoncomms*
+    /// MON-COMMS output rate on I2C port.
     pub const MON_COMMS_I2C: u32 = 0x2091034F;
+    /// MON-COMMS output rate on UART1 port.
     pub const MON_COMMS_UART1: u32 = 0x20910350;
+    /// MON-COMMS output rate on UART2 port.
     pub const MON_COMMS_UART2: u32 = 0x20910351;
+    /// MON-COMMS output rate on USB port.
     pub const MON_COMMS_USB: u32 = 0x20910352;
+    /// MON-COMMS output rate on SPI port.
     pub const MON_COMMS_SPI: u32 = 0x20910353;
 
-    // Grouped arrays for convenience
+    /// All safety message keys for I2C port.
     pub const SAFETY_MSG_I2C: [u32; 6] = [
         NAV_COV_I2C,
         NAV_POSECEF_I2C,
@@ -1850,6 +1902,7 @@ pub mod cfg_keys {
         MON_COMMS_I2C,
     ];
 
+    /// All safety message keys for UART1 port.
     pub const SAFETY_MSG_UART1: [u32; 6] = [
         NAV_COV_UART1,
         NAV_POSECEF_UART1,
@@ -1859,6 +1912,7 @@ pub mod cfg_keys {
         MON_COMMS_UART1,
     ];
 
+    /// All safety message keys for UART2 port.
     pub const SAFETY_MSG_UART2: [u32; 6] = [
         NAV_COV_UART2,
         NAV_POSECEF_UART2,
@@ -1868,6 +1922,7 @@ pub mod cfg_keys {
         MON_COMMS_UART2,
     ];
 
+    /// All safety message keys for USB port.
     pub const SAFETY_MSG_USB: [u32; 6] = [
         NAV_COV_USB,
         NAV_POSECEF_USB,
@@ -1877,6 +1932,7 @@ pub mod cfg_keys {
         MON_COMMS_USB,
     ];
 
+    /// All safety message keys for SPI port.
     pub const SAFETY_MSG_SPI: [u32; 6] = [
         NAV_COV_SPI,
         NAV_POSECEF_SPI,
@@ -1889,30 +1945,41 @@ pub mod cfg_keys {
 
 /// UBX message class/ID constants.
 pub mod msg_ids {
-    // NAV class (0x01)
+    /// NAV-PVT: Navigation position/velocity/time.
     pub const NAV_PVT: (u8, u8) = (0x01, 0x07);
+    /// NAV-STATUS: Receiver navigation status.
     pub const NAV_STATUS: (u8, u8) = (0x01, 0x03);
+    /// NAV-DOP: Dilution of precision.
     pub const NAV_DOP: (u8, u8) = (0x01, 0x04);
+    /// NAV-SAT: Satellite information.
     pub const NAV_SAT: (u8, u8) = (0x01, 0x35);
+    /// NAV-POSLLH: Geodetic position (lat/lon/height).
     pub const NAV_POSLLH: (u8, u8) = (0x01, 0x02);
+    /// NAV-VELNED: Velocity in NED frame.
     pub const NAV_VELNED: (u8, u8) = (0x01, 0x12);
+    /// NAV-COV: Position/velocity covariance.
     pub const NAV_COV: (u8, u8) = (0x01, 0x36);
+    /// NAV-POSECEF: Position in ECEF frame.
     pub const NAV_POSECEF: (u8, u8) = (0x01, 0x01);
 
-    // RXM class (0x02)
+    /// RXM-COR: Differential correction status.
     pub const RXM_COR: (u8, u8) = (0x02, 0x34);
 
-    // MON class (0x0A)
+    /// MON-RF: RF information (jamming/CW detection).
     pub const MON_RF: (u8, u8) = (0x0A, 0x38);
+    /// MON-HW: Hardware status (antenna, noise, AGC).
     pub const MON_HW: (u8, u8) = (0x0A, 0x09);
+    /// MON-COMMS: Communication port status.
     pub const MON_COMMS: (u8, u8) = (0x0A, 0x36);
 
-    // SEC class (0x27)
+    /// SEC-SIG: Signal security (jamming/spoofing detection).
     pub const SEC_SIG: (u8, u8) = (0x27, 0x09);
+    /// SEC-SIGLOG: Security event log.
     pub const SEC_SIGLOG: (u8, u8) = (0x27, 0x10);
 
-    // CFG class (0x06)
+    /// CFG-MSG: Message output configuration.
     pub const CFG_MSG: (u8, u8) = (0x06, 0x01);
+    /// CFG-RATE: Navigation/measurement rate settings.
     pub const CFG_RATE: (u8, u8) = (0x06, 0x08);
 }
 

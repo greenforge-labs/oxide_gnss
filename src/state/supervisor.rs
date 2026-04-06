@@ -28,8 +28,11 @@ pub enum GnssMessage {
     DeviceStateChanged(DeviceState),
     /// NTRIP state changed
     NtripStateChanged(NtripState),
-    /// RTCM data received (bytes count)
-    RtcmReceived { bytes: usize },
+    /// RTCM data received.
+    RtcmReceived {
+        /// Number of bytes in this RTCM payload.
+        bytes: usize,
+    },
     /// Shutdown requested
     Shutdown,
 }

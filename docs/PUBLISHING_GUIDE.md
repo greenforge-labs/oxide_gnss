@@ -51,20 +51,21 @@ REP-2004 defines five quality levels. Current status and targets:
 | Static analysis | — | Required | clippy -D warnings |
 | Code formatting | — | Recommended | cargo fmt --check |
 | Change control (PRs) | — | Required | GitHub PRs |
-| Platform statement | — | Required | Needed |
-| Version policy | — | Required | SemVer (0.1.0) |
+| Platform statement | — | Required | README + QUALITY_DECLARATION.md |
+| Version policy | — | Required | docs/VERSION_POLICY.md |
 | Feature documentation | — | — | README + docs/ |
-| QUALITY_DECLARATION.md | Recommended | Required | Needed |
+| QUALITY_DECLARATION.md | Recommended | Required | Present (Level 3) |
+| Public API docs | — | Recommended | `#![warn(missing_docs)]` enforced |
+| Code coverage | — | Recommended | cargo-llvm-cov + Codecov |
 
-**Current level: 4** (all requirements met).
-**Target: Level 3** — requires adding a platform support statement and QUALITY_DECLARATION.md.
+**Current level: 3** (all requirements met).
 
 ### REP-2000: Target Platforms
 
 Tier 1 platforms for Jazzy and Kilted:
 
 - Ubuntu 24.04 (Noble) — amd64 and arm64
-- CI currently covers Humble, Jazzy, and Kilted on amd64
+- CI covers Humble, Jazzy, and Kilted on both amd64 and arm64
 
 ### REP-2005: Common Packages
 

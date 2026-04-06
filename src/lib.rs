@@ -1,3 +1,5 @@
+#![warn(missing_docs)]
+
 //! # oxide_gnss
 //!
 //! A Rust-based ROS2 GNSS driver for u-blox ZED-F9P receivers with integrated NTRIP client.
@@ -44,16 +46,16 @@
 //!
 //! ## Configuration
 //!
-//! See the [configuration documentation](https://github.com/gsokoll/oxide_gnss/blob/master/docs/CONFIGURATION.md)
+//! See the [configuration documentation](https://github.com/greenforge-labs/oxide_gnss/blob/master/docs/CONFIGURATION.md)
 //! for full details on YAML configuration options.
 //!
 //! ## ROS2 Topics
 //!
 //! Core topics (always published):
-//! - `~/fix` ([`sensor_msgs/NavSatFix`]) - Position with covariance
-//! - `~/velocity` ([`geometry_msgs/TwistWithCovarianceStamped`]) - 3D velocity
-//! - `~/time_reference` ([`sensor_msgs/TimeReference`]) - GPS timestamp
-//! - `/diagnostics` ([`diagnostic_msgs/DiagnosticArray`]) - System health
+//! - `~/fix` (`sensor_msgs/NavSatFix`) - Position with covariance
+//! - `~/velocity` (`geometry_msgs/TwistWithCovarianceStamped`) - 3D velocity
+//! - `~/time_reference` (`sensor_msgs/TimeReference`) - GPS timestamp
+//! - `/diagnostics` (`diagnostic_msgs/DiagnosticArray`) - System health
 //!
 //! Optional topics (based on mode/features):
 //! - `~/integrity` - Safety integrity status

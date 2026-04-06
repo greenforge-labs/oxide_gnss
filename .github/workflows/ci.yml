@@ -21,14 +21,15 @@ jobs:
           components: rustfmt
       - run: cargo fmt --all -- --check
 
-  # Multi-distro build with ROS2 (uses pre-built Docker images)
+  # Multi-distro, multi-arch build with ROS2 (uses pre-built Docker images)
   build:
-    name: Build & Test (${{ matrix.distro }})
-    runs-on: ubuntu-latest
+    name: Build & Test (${{ matrix.distro }}/${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         distro: [humble, jazzy, kilted]
+        arch: [amd64, arm64]
         include:
           - distro: humble
             ros_distro: humble
@@ -36,8 +37,12 @@ jobs:
             ros_distro: jazzy
           - distro: kilted
             ros_distro: kilted
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
     container:
-      image: ghcr.io/gsokoll/oxide_gnss-ci:${{ matrix.distro }}
+      image: ghcr.io/greenforge-labs/oxide_gnss-ci:${{ matrix.distro }}-${{ matrix.arch }}
       options: --user root
 
     steps:
@@ -52,15 +57,15 @@ jobs:
           # Source ROS2 and ros2-rust workspace
           source /opt/ros/${{ matrix.ros_distro }}/setup.bash
           source /opt/ros2_ws/install/setup.bash
-          
+
           # Copy the .cargo/config.toml from ros2-rust workspace to use the patches
           mkdir -p .cargo
           cp /opt/ros2_ws/.cargo/config.toml .cargo/ 2>/dev/null || true
-          
+
           # Reorganize for colcon: driver in oxide_gnss/, messages in oxide_gnss_msgs/
           mv src/oxide_gnss_repo src/oxide_gnss
           mv src/oxide_gnss/oxide_gnss_msgs src/
-          
+
           # Build messages first, then the driver
           colcon build --packages-select oxide_gnss_msgs oxide_gnss
 
@@ -82,43 +87,52 @@ jobs:
           cd src/oxide_gnss
           cargo test --features ros2
 
-  # Code coverage disabled - tarpaulin has linker issues with ros2-rust test_msgs vendor code
-  # Re-enable when ros2-rust/tarpaulin compatibility improves
+  # Code coverage with cargo-llvm-cov (jazzy/amd64 only)
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    container:
+      image: ghcr.io/greenforge-labs/oxide_gnss-ci:jazzy-amd64
+      options: --user root
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: src/oxide_gnss_repo
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Build workspace
+        shell: bash
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source /opt/ros2_ws/install/setup.bash
+          mkdir -p .cargo
+          cp /opt/ros2_ws/.cargo/config.toml .cargo/ 2>/dev/null || true
+          mv src/oxide_gnss_repo src/oxide_gnss
+          mv src/oxide_gnss/oxide_gnss_msgs src/
+          colcon build --packages-select oxide_gnss_msgs oxide_gnss
+
+      - name: Generate coverage
+        shell: bash
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source /opt/ros2_ws/install/setup.bash
+          source install/setup.bash
+          cd src/oxide_gnss
+          cargo llvm-cov --features ros2 --lcov --output-path lcov.info
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: src/oxide_gnss/lcov.info
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   # Rolling CI disabled - ros2-rust API not yet stable on rolling
   # Re-enable when rclrs matures and rosidl_runtime_rs stabilizes
   # See: https://github.com/ros2-rust/ros2_rust/issues
-  #
-  # build-rolling:
-  #   name: Build & Test (rolling)
-  #   runs-on: ubuntu-latest
-  #   continue-on-error: true
-  #   container:
-  #     image: ghcr.io/gsokoll/oxide_gnss-ci:rolling
-  #     options: --user root
-  #
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v4
-  #       with:
-  #         path: src/oxide_gnss_repo
-  #
-  #     - name: Build with colcon
-  #       shell: bash
-  #       run: |
-  #         source /opt/ros/rolling/setup.bash
-  #         source /opt/ros2_ws/install/setup.bash
-  #         mkdir -p .cargo
-  #         cp /opt/ros2_ws/.cargo/config.toml .cargo/ 2>/dev/null || true
-  #         mv src/oxide_gnss_repo src/oxide_gnss
-  #         mv src/oxide_gnss/oxide_gnss_msgs src/
-  #         colcon build --packages-select oxide_gnss_msgs oxide_gnss
-  #
-  #     - name: Run tests
-  #       shell: bash
-  #       run: |
-  #         source /opt/ros/rolling/setup.bash
-  #         source /opt/ros2_ws/install/setup.bash
-  #         source install/setup.bash
-  #         cd src/oxide_gnss
-  #         cargo test --features ros2 || true

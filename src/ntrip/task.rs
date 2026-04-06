@@ -37,12 +37,18 @@ pub struct NtripTaskChannels {
 pub enum NtripMessage {
     /// NTRIP state changed
     StateChanged(NtripState),
-    /// RTCM data received (bytes count)
-    RtcmReceived { bytes: usize },
-    /// Connection established
+    /// RTCM data received.
+    RtcmReceived {
+        /// Number of bytes in this RTCM payload.
+        bytes: usize,
+    },
+    /// Connection established.
     Connected,
-    /// Connection lost
-    Disconnected { reason: String },
+    /// Connection lost.
+    Disconnected {
+        /// Human-readable disconnection reason.
+        reason: String,
+    },
 }
 
 /// Shared NTRIP task state for external monitoring.

@@ -4,8 +4,8 @@ Thank you for your interest in contributing to oxide_gnss!
 
 ## Communication
 
-- **Bug Reports & Feature Requests**: [GitHub Issues](https://github.com/gsokoll/oxide_gnss/issues)
-- **Questions & Discussions**: [GitHub Discussions](https://github.com/gsokoll/oxide_gnss/discussions)
+- **Bug Reports & Feature Requests**: [GitHub Issues](https://github.com/greenforge-labs/oxide_gnss/issues)
+- **Questions & Discussions**: [GitHub Discussions](https://github.com/greenforge-labs/oxide_gnss/discussions)
 
 ## Areas Where Contributions Are Welcome
 

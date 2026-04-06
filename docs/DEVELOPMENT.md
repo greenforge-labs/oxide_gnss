@@ -44,7 +44,7 @@ mkdir -p ~/ros2_ws/src
 cd ~/ros2_ws/src
 
 # Clone oxide_gnss
-git clone https://github.com/gsokoll/oxide_gnss.git
+git clone https://github.com/greenforge-labs/oxide_gnss.git
 
 # Clone ros2-rust
 git clone --branch v0.7.0 https://github.com/ros2-rust/ros2_rust.git

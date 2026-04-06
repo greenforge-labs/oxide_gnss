@@ -423,20 +423,29 @@ impl Config {
 /// Configuration errors.
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
+    /// Failed to read the configuration file from disk.
     #[error("Failed to read config file '{path}': {source}")]
     Io {
+        /// Path to the config file.
         path: std::path::PathBuf,
+        /// Underlying I/O error.
         source: std::io::Error,
     },
 
+    /// Failed to parse YAML configuration.
     #[error("Failed to parse config: {source}")]
     Parse {
+        /// Underlying YAML parse error.
         #[from]
         source: serde_yaml::Error,
     },
 
+    /// Configuration validation failed.
     #[error("Invalid configuration: {message}")]
-    Validation { message: String },
+    Validation {
+        /// Description of the validation failure.
+        message: String,
+    },
 }
 
 #[cfg(test)]

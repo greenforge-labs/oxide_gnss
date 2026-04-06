@@ -10,8 +10,11 @@ use crate::config::CoordinateFrame;
 /// A 3D velocity vector.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Velocity3D {
+    /// X component (East in ENU, North in NED).
     pub x: f64,
+    /// Y component (North in ENU, East in NED).
     pub y: f64,
+    /// Z component (Up in ENU, Down in NED).
     pub z: f64,
 }
 
