@@ -76,11 +76,11 @@ to community drivers but useful as a quality reference.
 ### Pre-Release
 
 - [ ] Hardware test all configuration modes (rover_ntrip, moving_base, etc.)
-- [ ] Ensure CHANGELOG.md is current for v0.1.0
-- [ ] Standardise maintainer email across package.xml files
-- [ ] Add a `QUALITY_DECLARATION.md` claiming Level 4, roadmap to Level 3
-- [ ] Add platform support statement (Ubuntu 24.04, amd64/arm64, Jazzy/Kilted)
-- [ ] Review and update README.md for first-time users
+- [x] Ensure CHANGELOG.md is current for v0.1.0
+- [x] Standardise maintainer email across package.xml files
+- [x] Add a `QUALITY_DECLARATION.md` claiming Level 4, roadmap to Level 3
+- [x] Add platform support statement (Ubuntu 24.04, amd64/arm64, Jazzy/Kilted)
+- [x] Review and update README.md for first-time users (CI badge, platform table)
 - [ ] Verify all docs/ files are current
 
 ### GitHub Release
