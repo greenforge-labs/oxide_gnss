@@ -1,5 +1,7 @@
 # oxide_gnss
 
+[![CI](https://github.com/gsokoll/oxide_gnss/actions/workflows/ci.yml/badge.svg)](https://github.com/gsokoll/oxide_gnss/actions/workflows/ci.yml)
+
 A Rust-based ROS 2 GNSS driver for u-blox receivers (ZED-F9P focus) with an integrated NTRIP client and optional integrity monitoring.
 
 This repository contains:
@@ -32,7 +34,15 @@ Under active development; configuration and interfaces may change.
 
 ## Supported ROS 2
 
-Humble and newer.
+Humble and newer (tested on Humble, Jazzy, and Kilted).
+
+### Platform support
+
+| Platform | Architecture | Status |
+|---|---|---|
+| Ubuntu 24.04 (Noble) | amd64 | CI-tested |
+| Ubuntu 24.04 (Noble) | arm64 | Expected to work (not yet CI-tested) |
+| Ubuntu 22.04 (Jammy) | amd64 | CI-tested (Humble) |
 
 ## Supported hardware
 

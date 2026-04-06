@@ -29,8 +29,14 @@ pub use ublox::{
     TimeMarkConfig, TimepulseConfig, TimepulsePolarity, UartPortConfig, UbloxConfig,
 };
 
+use regex::Regex;
 use serde::Deserialize;
 use std::path::Path;
+use std::sync::LazyLock;
+
+/// Regex for matching `${VAR}` environment variable placeholders.
+static ENV_VAR_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}").expect("static regex"));
 
 /// Root configuration structure containing all settings.
 #[derive(Debug, Clone, Deserialize)]
@@ -124,17 +130,15 @@ impl Config {
 
     /// Substitute environment variables in the format `${VAR}`.
     fn substitute_env_vars(input: &str) -> String {
-        use regex::Regex;
-
-        let re = Regex::new(r"\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}").unwrap();
-        re.replace_all(input, |caps: &regex::Captures| {
-            let var_name = &caps[1];
-            std::env::var(var_name).unwrap_or_else(|_| {
-                // Keep original if var not found
-                format!("${{{}}}", var_name)
+        ENV_VAR_RE
+            .replace_all(input, |caps: &regex::Captures| {
+                let var_name = &caps[1];
+                std::env::var(var_name).unwrap_or_else(|_| {
+                    // Keep original if var not found
+                    format!("${{{}}}", var_name)
+                })
             })
-        })
-        .to_string()
+            .to_string()
     }
 
     /// Check if this config uses mode-based configuration.

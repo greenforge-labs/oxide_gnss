@@ -2,10 +2,12 @@
 name = "oxide_gnss"
 version = "0.1.0"
 edition = "2021"
-authors = ["gsokoll"]
+authors = ["Geoff Sokoll <geoff.s@greenforgelabs.com.au>"]
 description = "A Rust-based ROS2 GNSS driver with integrated NTRIP client"
 license = "MIT"
 repository = "https://github.com/gsokoll/oxide_gnss"
+homepage = "https://github.com/gsokoll/oxide_gnss"
+rust-version = "1.80"
 readme = "README.md"
 keywords = ["ros2", "gnss", "gps", "ntrip", "ublox"]
 categories = ["science::geo", "embedded", "hardware-support"]
