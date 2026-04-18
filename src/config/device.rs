@@ -57,16 +57,6 @@ pub struct DeviceConfig {
     /// message output, or USB-CDC EOF from a newer kernel).
     #[serde(default = "default_packet_watchdog_secs")]
     pub packet_watchdog_secs: f64,
-
-    /// If set, the F9P's USB serial string will be probed at startup. When
-    /// it is blank (e.g. after a factory-reset), it is persisted to FLASH
-    /// so udev symlinks like `/dev/gnss_f9p_rover` can be recovered without
-    /// manual `ubxtool` intervention. Change takes effect on the next USB
-    /// re-enumeration (unplug/replug).
-    ///
-    /// Constraint: ASCII, 1..=32 bytes.
-    #[serde(default)]
-    pub usb_serial: Option<String>,
 }
 
 /// Navigation update configuration.
@@ -182,15 +172,6 @@ impl DeviceConfig {
             });
         }
 
-        if let Some(ref s) = self.usb_serial {
-            if s.is_empty() || s.len() > 32 || !s.is_ascii() {
-                return Err(ConfigError::Validation {
-                    message:
-                        "usb_serial must be 1..=32 ASCII bytes (u-blox stores it in four u64 keys)"
-                            .to_string(),
-                });
-            }
-        }
 
         Ok(())
     }

@@ -16,8 +16,8 @@ use crate::error::DeviceError;
 
 use super::serial::SerialPort;
 use super::ubx::{
-    build_cfg_rst_gnss_restart, build_cfg_valget, build_cfg_valset, build_cfg_valset_all_layers,
-    AckResult, CfgValGetResponse, UbxHandler, CFG_VALSET_MAX_KEYS_PER_PACKET,
+    build_cfg_rst_gnss_restart, build_cfg_valget, build_cfg_valset, AckResult, CfgValGetResponse,
+    UbxHandler, CFG_VALSET_MAX_KEYS_PER_PACKET,
 };
 
 /// Configuration step for tracking progress.
@@ -362,9 +362,7 @@ pub fn assemble_usb_serial_string(resp: &CfgValGetResponse) -> Option<String> {
 /// Split an ASCII serial string into four `UsbSerialNoStr{0..3}` CfgVal
 /// entries, each a little-endian `u64`. Trailing bytes are zero-padded.
 ///
-/// Returns `None` if the string is longer than 32 bytes or non-ASCII —
-/// both are rejected by `DeviceConfig::validate`, so this is a belt-and-
-/// braces check.
+/// Returns `None` if the string is longer than 32 bytes or non-ASCII.
 pub fn chunk_usb_serial_to_cfg_vals(serial_str: &str) -> Option<Vec<ublox::cfg_val::CfgVal>> {
     if !serial_str.is_ascii() || serial_str.len() > 32 {
         return None;
@@ -386,95 +384,6 @@ pub fn chunk_usb_serial_to_cfg_vals(serial_str: &str) -> Option<Vec<ublox::cfg_v
         ublox::cfg_val::CfgVal::UsbSerialNoStr2(chunks[2]),
         ublox::cfg_val::CfgVal::UsbSerialNoStr3(chunks[3]),
     ])
-}
-
-/// Probe the F9P's USB serial string and restore it to `desired` (persisted
-/// to RAM + BBR + FLASH) if the current value is blank.
-///
-/// This recovers udev symlinks like `/dev/gnss_f9p_rover` after a factory
-/// reset without requiring manual `ubxtool` intervention. The change only
-/// takes effect on the next USB re-enumeration — the driver continues to
-/// talk to the F9P on its current ttyACM until then.
-///
-/// Best-effort: a failed probe or NAK is logged and then ignored. We never
-/// fail startup on this path.
-pub async fn maybe_restore_usb_serial(
-    serial: &mut SerialPort,
-    ubx: &mut UbxHandler,
-    desired: &str,
-) {
-    let current = match query_cfg_valget(
-        serial,
-        ubx,
-        &USB_SERIAL_KEY_IDS,
-        /*layer = RAM*/ 0,
-        Duration::from_millis(500),
-    )
-    .await
-    {
-        Ok(resp) => assemble_usb_serial_string(&resp),
-        Err(e) => {
-            warn!(error = %e, "CFG-VALGET for USB serial failed — skipping restore (not fatal)");
-            return;
-        }
-    };
-
-    match current.as_deref() {
-        Some("") | None => {
-            warn!(
-                desired = desired,
-                "F9P USB serial is blank — restoring. Unplug/replug for USB re-enumeration to take effect."
-            );
-
-            let Some(cfg_vals) = chunk_usb_serial_to_cfg_vals(desired) else {
-                warn!("usb_serial is not ASCII or >32 bytes — refusing to restore");
-                return;
-            };
-
-            let packet = build_cfg_valset_all_layers(&cfg_vals);
-            ubx.clear_pending_ack();
-            ubx.expect_ack(0x06, 0x8A);
-            if let Err(e) = serial.write(&packet).await {
-                warn!(error = %e, "failed to send CFG-VALSET for USB serial restore");
-                return;
-            }
-
-            let mut buf = [0u8; 256];
-            let ack = timeout(Duration::from_millis(500), async {
-                loop {
-                    let n = serial.read(&mut buf).await?;
-                    if n > 0 {
-                        let result = ubx.process(&buf[..n]);
-                        if let Some(ack) = result.ack {
-                            return Ok::<AckResult, DeviceError>(ack);
-                        }
-                    }
-                }
-            })
-            .await;
-
-            match ack {
-                Ok(Ok(AckResult::Ack)) => {
-                    info!(
-                        serial = desired,
-                        "USB serial string restored (RAM+BBR+FLASH)"
-                    );
-                }
-                Ok(Ok(AckResult::Nak)) => {
-                    warn!("F9P NAK'd CFG-VALSET for USB serial restore");
-                }
-                Ok(Err(e)) => {
-                    warn!(error = %e, "read error while awaiting USB serial restore ACK");
-                }
-                Err(_) => {
-                    warn!("timeout waiting for USB serial restore ACK");
-                }
-            }
-        }
-        Some(s) => {
-            debug!(current = s, "F9P USB serial present — no restore needed");
-        }
-    }
 }
 
 #[cfg(test)]

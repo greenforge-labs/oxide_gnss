@@ -21,6 +21,14 @@ name = "oxide_gnss_node"
 path = "src/main.rs"
 required-features = ["ros2"]
 
+# Admin-only CLI tool. Assigns a USB serial string on a u-blox ZED-F9P
+# (e.g. after a factory reset has left it blank). Not part of normal
+# driver startup — run once during bring-up so udev rules can pick the
+# device up by name.
+[[bin]]
+name = "oxide_gnss_assign_serial"
+path = "src/bin/oxide_gnss_assign_serial.rs"
+
 [dependencies]
 # ROS2 dependencies - resolved via colcon patches in .cargo/config.toml
 # Version "*" allows workspace patches to override with distro-specific versions
