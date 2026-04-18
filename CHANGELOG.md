@@ -74,3 +74,5 @@ Initial public release.
 - `device.navigation.rate_hz` now derives `CFG-RATE-MEAS` when `device.ublox.rate.measurement_ms` is unset (was previously validation-only; the Hz knob didn't reach the receiver)
 - Non-base modes now force `CFG-TMODE-MODE = Disabled` unless the user sets `device.ublox.base_position`, preventing a prior `static_base` session from leaving the receiver in SurveyIn/Fixed mode (observed on-bench as `fixType = 5` "Time Only" with no RTCM output)
 - `heading` feature is now authoritative for `moving_base_rover`: it gates both the `~/baseline_pose` topic and the `NAV_RELPOSNED` UBX message (previously `NAV_RELPOSNED` was always on and `~/baseline_pose` followed the mode rather than the feature flag)
+- USB-CDC disconnects on newer kernels where `read()` returns `Ok(0)` (EOF) instead of a hard error are now detected and trigger reconnect
+- Added a packet-level watchdog (`device.packet_watchdog_secs`, default 3.0 s) that fires when reads keep returning zero bytes while the device is `Active` — catches stuck firmware, silenced MSGOUT output, and USB-CDC EOF cases that the existing `device.watchdog_timeout_secs` (read-never-returns) does not cover

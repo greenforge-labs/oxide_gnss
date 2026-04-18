@@ -110,6 +110,8 @@ device:
 
 ```yaml
 device:
+  watchdog_timeout_secs: 5.0    # read-never-returns timeout
+  packet_watchdog_secs: 3.0     # reads-succeed-but-zero-bytes timeout
   reconnect:
     enabled: true
     initial_delay_secs: 1
@@ -118,6 +120,17 @@ device:
 ```
 
 Reconnection uses exponential backoff. For safety-critical applications, use `max_attempts: 0` to continuously retry.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `watchdog_timeout_secs` | `5.0` | Fires if the serial `read` call never returns within this window (classic "device is gone" timeout). |
+| `packet_watchdog_secs` | `3.0` | Fires if `read` keeps returning `Ok(0)` / zero bytes while the device is in `Active` — catches stuck firmware, silenced message output, and USB-CDC EOF on newer kernels where the serial handle stays open after a physical unplug. |
+| `reconnect.enabled` | `true` | Master switch for reconnect logic. Disable for one-shot tooling. |
+| `reconnect.initial_delay_secs` | `1` | First backoff delay. |
+| `reconnect.max_delay_secs` | `30` | Backoff ceiling. |
+| `reconnect.max_attempts` | `0` | `0` = retry forever (recommended); any positive value caps retries. |
+
+Both watchdogs must be `> 0`; the driver rejects non-positive values at startup.
 
 ---
 
