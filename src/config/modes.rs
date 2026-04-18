@@ -602,4 +602,64 @@ satellites: false
         assert!(features.integrity);
         assert!(!features.satellites);
     }
+
+    #[test]
+    fn test_all_modes_disable_nmea_out() {
+        use crate::config::{ProtocolConfig, UbloxConfig};
+        use crate::device::{build_cfg_vals_from_config, CfgVal};
+
+        let modes = [
+            OperatingMode::Standalone,
+            OperatingMode::RoverNtrip,
+            OperatingMode::RoverRadio,
+            OperatingMode::MovingBase,
+            OperatingMode::MovingBaseRover,
+            OperatingMode::StaticBase,
+        ];
+
+        #[allow(clippy::type_complexity)]
+        let nmea_out_matchers: &[(&str, fn(&CfgVal) -> bool)] = &[
+            ("UsbOutProtNmea", |v| {
+                matches!(v, CfgVal::UsbOutProtNmea(false))
+            }),
+            ("Uart1OutProtNmea", |v| {
+                matches!(v, CfgVal::Uart1OutProtNmea(false))
+            }),
+            ("Uart2OutProtNmea", |v| {
+                matches!(v, CfgVal::Uart2OutProtNmea(false))
+            }),
+            ("I2cOutProtNmea", |v| {
+                matches!(v, CfgVal::I2cOutProtNmea(false))
+            }),
+            ("SpiOutProtNmea", |v| {
+                matches!(v, CfgVal::SpiOutProtNmea(false))
+            }),
+        ];
+
+        for mode in modes {
+            let preset = mode.preset();
+            let protocols = ProtocolConfig {
+                usb: (&preset.usb).into(),
+                uart1: (&preset.uart1).into(),
+                uart2: (&preset.uart2).into(),
+                i2c: (&preset.i2c).into(),
+                spi: (&preset.spi).into(),
+            };
+            let config = UbloxConfig {
+                protocols,
+                ..UbloxConfig::default()
+            };
+            let vals = build_cfg_vals_from_config(&config);
+
+            for (key_name, matcher) in nmea_out_matchers {
+                assert!(
+                    vals.iter().any(|v| matcher(v)),
+                    "mode {:?}: expected CfgVal::{}(false) to be emitted but it was absent; \
+                     NMEA output must be disabled on every port for every shipping mode",
+                    mode,
+                    key_name,
+                );
+            }
+        }
+    }
 }
