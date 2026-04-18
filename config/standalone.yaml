@@ -9,7 +9,7 @@ features:
   satellites: false        # Enable satellite info
 
 device:
-  port: "/dev/ttyACM0"
+  port: "/dev/gnss_f9p_rover"
   baud_rate: 460800
   frame: ENU
 
