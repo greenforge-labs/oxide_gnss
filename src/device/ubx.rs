@@ -2101,7 +2101,10 @@ mod tests {
         let packet = build_cfg_rst_gnss_restart();
         // Expected: B5 62 06 04 04 00 FF FF 02 00 CK_A CK_B
         assert_eq!(packet.len(), 12);
-        assert_eq!(&packet[0..10], &[0xB5, 0x62, 0x06, 0x04, 0x04, 0x00, 0xFF, 0xFF, 0x02, 0x00]);
+        assert_eq!(
+            &packet[0..10],
+            &[0xB5, 0x62, 0x06, 0x04, 0x04, 0x00, 0xFF, 0xFF, 0x02, 0x00]
+        );
         // Verify the Fletcher checksum matches a freshly-computed one.
         let (ck_a, ck_b) = ubx_fletcher8(&packet[2..10]);
         assert_eq!(packet[10], ck_a);
