@@ -16,7 +16,7 @@ pub fn build_cfg_vals_from_config(config: &UbloxConfig) -> Vec<CfgVal> {
     let mut vals = Vec::new();
 
     // Rate settings
-    vals.push(CfgVal::RateMeas(config.rate.measurement_ms));
+    vals.push(CfgVal::RateMeas(config.rate.effective_measurement_ms()));
     vals.push(CfgVal::RateNav(config.rate.nav_ratio));
 
     // Protocol settings - USB

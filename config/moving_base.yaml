@@ -41,13 +41,6 @@ device:
     nav_spg:
       dynamic_model: automotive   # Vehicle-mounted base
 
-    # Force CFG-TMODE3 = Disabled so the F9P runs as a regular roving receiver
-    # and produces moving-base observations. Without this, a moving_base run on
-    # an F9P that previously ran static_base (TMODE3 = SurveyIn) sits in
-    # "Time Only" fix_type=5 forever and never emits useful RTCM 4072.0.
-    base_position:
-      mode: disabled
-
     # UART2 baudrate: 460800 per u-blox Moving Base AppNote (UBX-19009093 R3
     # §2.2.3): at \u22655 Hz with default constellations, 115200 is too slow for
     # a full RTCM epoch to arrive before the rover discards it. 460800 gives
