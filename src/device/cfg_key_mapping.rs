@@ -121,6 +121,45 @@ pub fn build_cfg_vals_from_config(config: &UbloxConfig) -> Vec<CfgVal> {
         }
     }
 
+    // Enumerate-and-zero: for every (port, msg) in our managed MSGOUT table not
+    // explicitly requested above, push rate=0. Makes oxide self-cleaning —
+    // stale config left by a previous driver (e.g. ferrous) gets turned off on
+    // startup rather than silently loading the receiver and throttling the nav
+    // rate.
+    if config.clear_unmanaged {
+        use std::collections::HashSet;
+        let user_keys: HashSet<(&str, &str)> = config
+            .messages
+            .usb
+            .keys()
+            .map(|m| ("usb", m.as_str()))
+            .chain(
+                config
+                    .messages
+                    .uart1
+                    .keys()
+                    .map(|m| ("uart1", m.as_str())),
+            )
+            .chain(
+                config
+                    .messages
+                    .uart2
+                    .keys()
+                    .map(|m| ("uart2", m.as_str())),
+            )
+            .collect();
+        for (port, msg, make_cfg) in MSG_RATE_TABLE {
+            if !user_keys.contains(&(*port, *msg)) {
+                vals.push(make_cfg(0));
+            }
+        }
+        // TIM-TM2 on USB isn't in MSG_RATE_TABLE; zero it unless time_mark is on.
+        let tm_enabled = matches!(&config.time_mark, Some(tm) if tm.enabled == Some(true));
+        if !tm_enabled {
+            vals.push(CfgVal::MsgOutUbxTimTm2Usb(0));
+        }
+    }
+
     vals
 }
 
@@ -600,8 +639,79 @@ mod tests {
     fn test_build_cfg_vals_from_config() {
         let config = UbloxConfig::default();
         let vals = build_cfg_vals_from_config(&config);
-        // Should have rate settings at minimum
+        // Default config enables clear_unmanaged, so every MSG_RATE_TABLE entry
+        // plus TIM-TM2 gets pushed as rate=0, in addition to rate/protocol/etc.
         assert!(vals.len() >= 2);
+        // And should be way more than 2 thanks to enumerate-and-zero
+        assert!(vals.len() > MSG_RATE_TABLE.len());
+    }
+
+    #[test]
+    fn test_enumerate_and_zero_defaults_on() {
+        // With clear_unmanaged (the default) and no user-requested messages,
+        // every managed MSGOUT key should get pushed with rate=0.
+        let config = UbloxConfig::default();
+        assert!(config.clear_unmanaged, "clear_unmanaged defaults to true");
+        let vals = build_cfg_vals_from_config(&config);
+
+        // NAV_SAT on USB is in MSG_RATE_TABLE but not requested → must be zeroed
+        let nav_sat_zeroed = vals
+            .iter()
+            .any(|v| matches!(v, CfgVal::MsgOutUbxNavSatUsb(0)));
+        assert!(nav_sat_zeroed, "NAV-SAT USB should be zeroed when unmanaged");
+
+        // TIM-TM2 USB isn't in MSG_RATE_TABLE; separate code path should zero it
+        let tim_tm2_zeroed = vals
+            .iter()
+            .any(|v| matches!(v, CfgVal::MsgOutUbxTimTm2Usb(0)));
+        assert!(tim_tm2_zeroed, "TIM-TM2 USB should be zeroed by default");
+    }
+
+    #[test]
+    fn test_enumerate_and_zero_respects_user_requested() {
+        // When the user requests NAV_PVT on USB, enumerate-and-zero must NOT
+        // overwrite it with rate=0 — user's value wins.
+        let mut config = UbloxConfig::default();
+        config.messages.usb.insert("NAV_PVT".to_string(), 1);
+        let vals = build_cfg_vals_from_config(&config);
+
+        let nav_pvt_one = vals
+            .iter()
+            .any(|v| matches!(v, CfgVal::MsgOutUbxNavPvtUsb(1)));
+        let nav_pvt_zero = vals
+            .iter()
+            .any(|v| matches!(v, CfgVal::MsgOutUbxNavPvtUsb(0)));
+        assert!(nav_pvt_one, "NAV-PVT USB rate=1 must be present");
+        assert!(
+            !nav_pvt_zero,
+            "NAV-PVT USB rate=0 must NOT be added when user requests rate=1"
+        );
+    }
+
+    #[test]
+    fn test_clear_unmanaged_opt_out() {
+        // When clear_unmanaged=false, NO extra zero entries should be added.
+        let config = UbloxConfig {
+            clear_unmanaged: false,
+            ..UbloxConfig::default()
+        };
+        let vals = build_cfg_vals_from_config(&config);
+
+        let any_nav_sat_zero = vals
+            .iter()
+            .any(|v| matches!(v, CfgVal::MsgOutUbxNavSatUsb(0)));
+        assert!(
+            !any_nav_sat_zero,
+            "NAV-SAT USB must not be forcibly zeroed when clear_unmanaged=false"
+        );
+
+        let any_tim_tm2_zero = vals
+            .iter()
+            .any(|v| matches!(v, CfgVal::MsgOutUbxTimTm2Usb(0)));
+        assert!(
+            !any_tim_tm2_zero,
+            "TIM-TM2 USB must not be zeroed when clear_unmanaged=false"
+        );
     }
 
     #[test]

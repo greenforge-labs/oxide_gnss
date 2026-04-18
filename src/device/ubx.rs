@@ -1697,6 +1697,66 @@ pub fn build_cfg_valset(cfg_data: &[CfgVal], persist: bool) -> Vec<u8> {
     .into_packet_vec()
 }
 
+/// Maximum number of key-value pairs in a single CFG-VALSET packet.
+///
+/// Documented limit on F9P per the Interface Description. Exceeding this
+/// causes the receiver to NAK the packet.
+pub const CFG_VALSET_MAX_KEYS_PER_PACKET: usize = 64;
+
+/// Split `cfg_data` into ≤64-key chunks and build one CFG-VALSET packet per chunk.
+///
+/// Respects the F9P's per-packet key limit (see `CFG_VALSET_MAX_KEYS_PER_PACKET`).
+/// The caller should send the packets in order and await ACK for each.
+pub fn build_cfg_valset_chunked(cfg_data: &[CfgVal], persist: bool) -> Vec<Vec<u8>> {
+    cfg_data
+        .chunks(CFG_VALSET_MAX_KEYS_PER_PACKET)
+        .map(|chunk| build_cfg_valset(chunk, persist))
+        .collect()
+}
+
+/// Build a UBX-CFG-RST packet that performs a GNSS-only software reset.
+///
+/// Needed after CFG-VALSET writes that change constellation/signal selection
+/// (`CFG-SIGNAL-*`). Without this, the F9P keeps tracking satellites from
+/// constellations we've just disabled, its CPU stays loaded, and configured
+/// nav rates collapse (~7 Hz instead of 10). This matches u-blox's guidance:
+/// signal-config changes take effect on the next GNSS engine restart.
+///
+/// Uses `resetMode = 0x02 (ControlledSoftwareResetGpsOnly)` — restarts the
+/// GNSS engine only, preserving the CFG-VALSET settings we just wrote in RAM.
+/// `navBbrMask = 0xFFFF (cold start)` clears ephemeris/almanac/position so
+/// the receiver reacquires with the new configuration.
+///
+/// CFG-RST is fire-and-forget: the F9P does **not** ACK this message.
+pub fn build_cfg_rst_gnss_restart() -> Vec<u8> {
+    // Hand-rolled packet (matches ublox-rs CfgRstBuilder but avoids a heavy import):
+    //   B5 62 | 06 04 | 04 00 | FF FF 02 00 | CK_A CK_B
+    let mut packet = Vec::with_capacity(12);
+    packet.extend_from_slice(&[0xB5, 0x62]); // sync
+    let body: [u8; 8] = [
+        0x06, 0x04, // class, id
+        0x04, 0x00, // payload length (LE)
+        0xFF, 0xFF, // navBbrMask = cold start
+        0x02, // resetMode = GPS-only software reset
+        0x00, // reserved
+    ];
+    packet.extend_from_slice(&body);
+    let (ck_a, ck_b) = ubx_fletcher8(&body);
+    packet.push(ck_a);
+    packet.push(ck_b);
+    packet
+}
+
+fn ubx_fletcher8(data: &[u8]) -> (u8, u8) {
+    let mut a: u8 = 0;
+    let mut b: u8 = 0;
+    for &byte in data {
+        a = a.wrapping_add(byte);
+        b = b.wrapping_add(a);
+    }
+    (a, b)
+}
+
 /// Build a CFG-VALSET command to set navigation rate.
 ///
 /// # Arguments
@@ -2009,6 +2069,43 @@ mod tests {
         let result = handler.process(&[0xB5, 0x62, 0x01]);
         assert!(result.pvt.is_none());
         assert_eq!(result.messages_processed, 0);
+    }
+
+    #[test]
+    fn test_cfg_valset_chunked_respects_key_limit() {
+        // Build 150 CfgVal entries and verify they split into 3 packets
+        // (64 + 64 + 22) so each respects the F9P's 64-key-per-packet cap.
+        let vals: Vec<CfgVal> = (0..150)
+            .map(|i| CfgVal::MsgOutUbxNavPvtUsb(i as u8))
+            .collect();
+        let chunks = build_cfg_valset_chunked(&vals, false);
+        assert_eq!(chunks.len(), 3, "150 keys should produce 3 packets");
+        for chunk in &chunks {
+            // Each packet starts with the UBX sync and CFG-VALSET class/id
+            assert_eq!(&chunk[0..4], &[0xB5, 0x62, 0x06, 0x8A]);
+        }
+    }
+
+    #[test]
+    fn test_cfg_valset_chunked_single_packet() {
+        // Small key sets should produce exactly one packet.
+        let vals: Vec<CfgVal> = (0..10)
+            .map(|i| CfgVal::MsgOutUbxNavPvtUsb(i as u8))
+            .collect();
+        let chunks = build_cfg_valset_chunked(&vals, false);
+        assert_eq!(chunks.len(), 1);
+    }
+
+    #[test]
+    fn test_cfg_rst_gnss_restart_packet() {
+        let packet = build_cfg_rst_gnss_restart();
+        // Expected: B5 62 06 04 04 00 FF FF 02 00 CK_A CK_B
+        assert_eq!(packet.len(), 12);
+        assert_eq!(&packet[0..10], &[0xB5, 0x62, 0x06, 0x04, 0x04, 0x00, 0xFF, 0xFF, 0x02, 0x00]);
+        // Verify the Fletcher checksum matches a freshly-computed one.
+        let (ck_a, ck_b) = ubx_fletcher8(&packet[2..10]);
+        assert_eq!(packet[10], ck_a);
+        assert_eq!(packet[11], ck_b);
     }
 
     #[test]

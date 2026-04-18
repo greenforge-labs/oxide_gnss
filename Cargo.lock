@@ -2519,21 +2519,81 @@ name = "action_msgs"
 version = "2.0.3"
 
 [[patch.unused]]
+name = "actionlib_msgs"
+version = "5.3.6"
+
+[[patch.unused]]
+name = "composition_interfaces"
+version = "2.0.3"
+
+[[patch.unused]]
 name = "example_interfaces"
 version = "0.12.0"
+
+[[patch.unused]]
+name = "ferrous_gnss"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "ferrous_gnss_msgs"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "lifecycle_msgs"
+version = "2.0.3"
+
+[[patch.unused]]
+name = "nav_msgs"
+version = "5.3.6"
+
+[[patch.unused]]
+name = "oxide_gnss"
+version = "0.1.0"
 
 [[patch.unused]]
 name = "rcl_interfaces"
 version = "2.0.3"
 
 [[patch.unused]]
+name = "rclrs_example_msgs"
+version = "0.5.0"
+
+[[patch.unused]]
 name = "rosgraph_msgs"
 version = "2.0.3"
+
+[[patch.unused]]
+name = "shape_msgs"
+version = "5.3.6"
+
+[[patch.unused]]
+name = "statistics_msgs"
+version = "2.0.3"
+
+[[patch.unused]]
+name = "std_srvs"
+version = "5.3.6"
+
+[[patch.unused]]
+name = "stereo_msgs"
+version = "5.3.6"
 
 [[patch.unused]]
 name = "test_msgs"
 version = "2.0.3"
 
 [[patch.unused]]
+name = "trajectory_msgs"
+version = "5.3.6"
+
+[[patch.unused]]
+name = "type_description_interfaces"
+version = "2.0.3"
+
+[[patch.unused]]
 name = "unique_identifier_msgs"
 version = "2.5.0"
+
+[[patch.unused]]
+name = "visualization_msgs"
+version = "5.3.6"

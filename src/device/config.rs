@@ -15,7 +15,10 @@ use crate::config::UbloxConfig;
 use crate::error::DeviceError;
 
 use super::serial::SerialPort;
-use super::ubx::{build_cfg_valset, AckResult, UbxHandler};
+use super::ubx::{
+    build_cfg_rst_gnss_restart, build_cfg_valset, AckResult, UbxHandler,
+    CFG_VALSET_MAX_KEYS_PER_PACKET,
+};
 
 /// Configuration step for tracking progress.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -148,14 +151,45 @@ impl DeviceConfigurator {
             cfg_vals.len()
         );
 
-        // Send all config values in one step
-        self.configure_step(serial, ubx, ConfigStep::EnableNavPvt, &cfg_vals)
-            .await?;
+        // F9P's CFG-VALSET limit is 64 keys per packet; send in chunks and
+        // await ACK for each. Most modes fit in one packet; enumerate-and-zero
+        // runs can push us over.
+        let chunks: Vec<&[ublox::cfg_val::CfgVal]> =
+            cfg_vals.chunks(CFG_VALSET_MAX_KEYS_PER_PACKET).collect();
+        let n_chunks = chunks.len();
+        if n_chunks > 1 {
+            debug!(chunks = n_chunks, "CFG-VALSET split into multiple packets");
+        }
+        for (i, chunk) in chunks.iter().enumerate() {
+            debug!(
+                chunk = i + 1,
+                of = n_chunks,
+                keys = chunk.len(),
+                "Sending CFG-VALSET chunk"
+            );
+            self.configure_step(serial, ubx, ConfigStep::EnableNavPvt, chunk)
+                .await?;
+        }
 
         info!(
-            "Device configuration complete ({} values set)",
-            cfg_vals.len()
+            "Device configuration complete ({} values set in {} packet{})",
+            cfg_vals.len(),
+            n_chunks,
+            if n_chunks == 1 { "" } else { "s" }
         );
+
+        // Signal/constellation changes in CFG-SIGNAL-* don't take effect on the
+        // F9P until the GNSS engine restarts. Without this, the receiver keeps
+        // tracking sats from constellations we just disabled and can't hit the
+        // configured nav rate. CFG-RST is fire-and-forget (no ACK from F9P),
+        // then the receiver needs a few seconds to reacquire before we mark it
+        // Active.
+        let rst_packet = build_cfg_rst_gnss_restart();
+        debug!(packet_len = rst_packet.len(), "Sending CFG-RST (GNSS-only software reset)");
+        serial.write(&rst_packet).await?;
+        info!("Issued UBX-CFG-RST (GNSS-only); waiting 3s for receiver to reacquire");
+        tokio::time::sleep(Duration::from_secs(3)).await;
+
         Ok(())
     }
 

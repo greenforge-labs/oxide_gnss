@@ -27,7 +27,7 @@ use tracing::warn;
 ///       NAV_PVT: 1
 ///       NAV_HPPOSLLH: 1
 /// ```
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct UbloxConfig {
     /// Device family (F9P, F9R, F9H) - used for validation warnings
     #[serde(default)]
@@ -72,6 +72,37 @@ pub struct UbloxConfig {
     /// Enable TIM-TM2 message output for external event timestamping.
     #[serde(default)]
     pub time_mark: Option<TimeMarkConfig>,
+
+    /// Zero out every managed CFG-MSGOUT-* key that isn't explicitly requested.
+    ///
+    /// With `true` (default), oxide is self-cleaning: if a previous driver left
+    /// unwanted messages enabled on the receiver, they get turned off at startup.
+    /// Set to `false` if you're layering oxide on top of an externally-managed
+    /// F9P and want to preserve messages you've configured outside of oxide.
+    #[serde(default = "default_clear_unmanaged")]
+    pub clear_unmanaged: bool,
+}
+
+fn default_clear_unmanaged() -> bool {
+    true
+}
+
+impl Default for UbloxConfig {
+    fn default() -> Self {
+        Self {
+            family: None,
+            rate: Default::default(),
+            protocols: Default::default(),
+            messages: Default::default(),
+            ports: Default::default(),
+            signals: Default::default(),
+            nav_spg: Default::default(),
+            timepulse: None,
+            base_position: None,
+            time_mark: None,
+            clear_unmanaged: default_clear_unmanaged(),
+        }
+    }
 }
 
 /// Dynamic platform model for the navigation engine.

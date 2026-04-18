@@ -320,6 +320,15 @@ impl Config {
             .and_then(|u| u.base_position.clone());
         let time_mark = self.device.ublox.as_ref().and_then(|u| u.time_mark.clone());
 
+        // Honor a user-supplied `ublox.clear_unmanaged` if present; otherwise
+        // default to true (self-cleaning).
+        let clear_unmanaged = self
+            .device
+            .ublox
+            .as_ref()
+            .map(|u| u.clear_unmanaged)
+            .unwrap_or(true);
+
         UbloxConfig {
             family: self.device.ublox.as_ref().and_then(|u| u.family.clone()),
             rate,
@@ -331,6 +340,7 @@ impl Config {
             timepulse,
             base_position,
             time_mark,
+            clear_unmanaged,
         }
     }
 
