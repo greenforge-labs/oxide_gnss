@@ -53,6 +53,7 @@ features:
 | `high_precision` | HP data enhances ~/fix accuracy | NAV_HPPOSLLH | (enhances ~/fix) |
 | `integrity` | Jamming/spoofing detection | SEC_SIG, MON_RF, MON_COMMS | ~/integrity, ~/operational |
 | `satellites` | Per-satellite visibility info | NAV_SAT | ~/satellites |
+| `heading` | Moving-base relative heading (only allowed in `moving_base_rover`) | NAV_RELPOSNED | ~/baseline_pose |
 
 ### How Mode + Features Work
 
@@ -145,6 +146,12 @@ device:
 ```
 
 `measurement_ms` is the low-level override written directly to `CFG-RATE-MEAS`. If you omit it, the mode-based config derives the effective rate from `device.navigation.rate_hz` (1000 ÷ rate_hz ms). Setting `measurement_ms` explicitly always wins, which is useful for advanced users who need non-integer-divisor rates.
+
+### Base Position (TMODE3) Defensive Disable
+
+For any non-base mode (`standalone`, `rover_ntrip`, `rover_radio`, `moving_base`, `moving_base_rover`) the driver forces `CFG-TMODE-MODE = Disabled` at startup unless the user has explicitly set `device.ublox.base_position`. This prevents a previous `static_base` session from leaving the receiver in `SurveyIn` or `Fixed` mode when you relaunch into a rover/moving-base mode — a ghost TMODE3 would otherwise produce `fixType = 5` ("Time Only") and no RTCM output on the next run.
+
+Only `static_base` passes through a user-supplied `base_position` verbatim. To opt out of the defensive disable on another mode, set `device.ublox.base_position` explicitly in YAML.
 
 ### Navigation rate vs constellations — picking your trade-off
 
@@ -311,7 +318,7 @@ The driver validates message configuration at startup. Messages are categorized 
 | `MON_RF` | RequiredForFeature | Antenna status, jamming indicator | `~/integrity` |
 | `MON_COMMS` | RequiredForFeature | Communication port health | `~/integrity` |
 | `SEC_SIG` | RequiredForFeature | Jamming/spoofing detection | `~/integrity` |
-| `NAV_RELPOSNED` | RequiredForFeature | Moving base relative position | `~/baseline_pose` |
+| `NAV_RELPOSNED` | RequiredForFeature | Moving base relative position (enabled by `heading: true`) | `~/baseline_pose` |
 | `NAV_SAT` | Optional | Per-satellite info | `~/satellites` |
 | `NAV_COV` | Optional | Covariance matrix (F9R/F9H only) | — |
 | `SEC_SIGLOG` | Optional | Security event log | — |
@@ -495,7 +502,7 @@ Topics are created based on your mode and feature configuration. Only enabled to
 | `~/integrity` | `oxide_gnss_msgs/OxideIntegrity` | `integrity: true` | Safety integrity status |
 | `~/operational` | `std_msgs/Bool` | `integrity: true` | Go/no-go signal |
 | `~/satellites` | `oxide_gnss_msgs/OxideSatellites` | `satellites: true` | Per-satellite status |
-| `~/baseline_pose` | `geometry_msgs/PoseWithCovarianceStamped` | `mode: moving_base_rover` | Baseline to moving base |
+| `~/baseline_pose` | `geometry_msgs/PoseWithCovarianceStamped` | `heading: true` (moving_base_rover only) | Baseline to moving base |
 
 ---
 
