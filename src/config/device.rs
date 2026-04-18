@@ -48,6 +48,15 @@ pub struct DeviceConfig {
     /// disconnected and reconnection logic is triggered.
     #[serde(default = "default_watchdog_timeout")]
     pub watchdog_timeout_secs: f64,
+
+    /// Packet-level watchdog in seconds.
+    /// If no non-empty serial read completes within this period while in Active,
+    /// mark the device disconnected and trigger reconnect. Complements
+    /// watchdog_timeout_secs, which only catches "read never returns" — this one
+    /// catches "read keeps returning zero bytes" (stuck firmware, silenced
+    /// message output, or USB-CDC EOF from a newer kernel).
+    #[serde(default = "default_packet_watchdog_secs")]
+    pub packet_watchdog_secs: f64,
 }
 
 /// Navigation update configuration.
@@ -151,6 +160,18 @@ impl DeviceConfig {
             });
         }
 
+        if self.watchdog_timeout_secs <= 0.0 {
+            return Err(ConfigError::Validation {
+                message: "watchdog_timeout_secs must be greater than 0".to_string(),
+            });
+        }
+
+        if self.packet_watchdog_secs <= 0.0 {
+            return Err(ConfigError::Validation {
+                message: "packet_watchdog_secs must be greater than 0".to_string(),
+            });
+        }
+
         Ok(())
     }
 }
@@ -196,6 +217,10 @@ fn default_watchdog_timeout() -> f64 {
     5.0
 }
 
+fn default_packet_watchdog_secs() -> f64 {
+    3.0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -209,6 +234,8 @@ mod tests {
         assert_eq!(config.baud_rate, 460800);
         assert_eq!(config.frame, CoordinateFrame::ENU);
         assert_eq!(config.navigation.rate_hz, 10);
+        assert_eq!(config.watchdog_timeout_secs, 5.0);
+        assert_eq!(config.packet_watchdog_secs, 3.0);
     }
 
     #[test]
@@ -227,5 +254,26 @@ navigation:
 "#;
         let config: DeviceConfig = serde_yaml::from_str(yaml).unwrap();
         assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_validation_rejects_non_positive_packet_watchdog() {
+        let yaml = r#"
+port: "/dev/ttyACM0"
+packet_watchdog_secs: 0.0
+"#;
+        let config: DeviceConfig = serde_yaml::from_str(yaml).unwrap();
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_packet_watchdog_override() {
+        let yaml = r#"
+port: "/dev/ttyACM0"
+packet_watchdog_secs: 1.5
+"#;
+        let config: DeviceConfig = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(config.packet_watchdog_secs, 1.5);
+        assert!(config.validate().is_ok());
     }
 }
