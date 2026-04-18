@@ -397,6 +397,14 @@ impl DeviceTask {
             return Err(e);
         }
 
+        // Phase 2b: If the operator configured a usb_serial value, probe the
+        // F9P's current USB serial string and restore it (RAM+BBR+FLASH) when
+        // blank. Recovers udev symlinks like /dev/gnss_f9p_rover after a
+        // factory reset. Best-effort: failures here don't abort startup.
+        if let Some(ref desired) = self.config.usb_serial {
+            super::config::maybe_restore_usb_serial(&mut serial, &mut ubx, desired).await;
+        }
+
         // Phase 3: Active - main read loop
         self.set_state(DeviceState::Active).await;
         *last_active_start = Some(Instant::now());
