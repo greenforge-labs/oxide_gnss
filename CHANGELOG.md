@@ -43,6 +43,7 @@ Initial public release.
 
 #### UBX Protocol Support
 - NAV-PVT, NAV-HPPOSLLH, NAV-SAT, NAV-COV, NAV-POSECEF, NAV-RELPOSNED
+- NAV-SVIN (survey-in status; surfaced as a `{node}: SurveyIn` substatus on `/diagnostics` with `active`, `valid`, `mean_acc_mm`, `duration_s`, `observations` — only when the receiver is running survey-in)
 - NAV-PL (protection levels for integrity monitoring)
 - SEC-SIG, SEC-SIGLOG (jamming/spoofing detection)
 - RXM-COR (correction status)

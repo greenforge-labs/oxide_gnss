@@ -44,6 +44,26 @@ Diagnostic information about device and NTRIP status.
 
 - **Rate:** Configurable via `ros.rates.diagnostics_hz` (default: 1.0 Hz)
 
+The array always includes device/NTRIP/fix substatuses. In addition, when the receiver has emitted at least one `NAV-SVIN` packet (i.e. `static_base` mode running survey-in) the array includes a `{node}: SurveyIn` substatus so operators can monitor survey-in progress without a separate topic:
+
+| Level | Condition |
+|-------|-----------|
+| `OK` | `valid = true` — survey-in complete |
+| `WARN` | `active = true, valid = false` — survey-in in progress |
+| `STALE` | `active = false, valid = false` — idle (last survey-in seen was not running) |
+
+Key/value fields on the SurveyIn substatus:
+
+| Key | Description |
+|-----|-------------|
+| `active` | Whether the receiver is currently running survey-in |
+| `valid` | Whether the survey-in solution has met the configured convergence criteria |
+| `mean_acc_mm` | Mean 3-D accuracy of the accumulated position (mm, 1 decimal) |
+| `duration_s` | Elapsed survey-in time in seconds |
+| `observations` | Number of position observations accumulated |
+
+The SurveyIn substatus is omitted entirely in modes that do not run survey-in, so it never appears as a filler entry for rover/moving-base configs.
+
 ---
 
 ## Optional Topics

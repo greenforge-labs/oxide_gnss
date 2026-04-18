@@ -406,6 +406,8 @@ This config enables base station timing mode via u-blox configuration (`device.u
 
 If you want a base station *without* configuring survey-in/fixed position from Oxide, you can omit `device.ublox.base_position` and configure the receiver separately (e.g. u-center). Oxide will still be able to output RTCM messages if the mode config enables them.
 
+**Monitoring survey-in progress:** while survey-in is running, Oxide publishes a `{node}: SurveyIn` substatus on `/diagnostics` with `active`, `valid`, `mean_acc_mm`, `duration_s` and `observations` fields. Watch it with `ros2 topic echo /diagnostics`; the substatus transitions from `WARN` (active) to `OK` (valid) when convergence is reached, and is omitted for modes that don't run survey-in. See [TOPICS.md](TOPICS.md) for the full field list.
+
 ---
 
 # 6. Advanced Configuration
