@@ -208,6 +208,7 @@ ros2 launch oxide_gnss oxide_gnss.launch.py \
 | 3.3 | ~/fix publishes | `ros2 topic hz /gnss_base/gnss_node/fix` | ~1 Hz (configured rate) |
 | 3.4 | Position stabilizes | `ros2 topic echo /gnss_base/gnss_node/fix` | Position converges over survey-in period |
 | 3.5 | Survey-in completes | Observe logs/diagnostics | Survey-in valid after min_duration_s (60s) and accuracy < 2.0m |
+| 3.5a | SurveyIn diagnostic substatus | `ros2 topic echo /diagnostics` while survey-in runs | `{node}: SurveyIn` row appears, transitions level `WARN` → `OK`, and shows `active=true→false`, `valid=false→true`, plus `mean_acc_mm` / `duration_s` / `observations` counting up |
 | 3.6 | ~/satellites publishes | `ros2 topic echo /gnss_base/gnss_node/satellites --once` | Satellite data present |
 | 3.7 | /diagnostics healthy | `ros2 topic echo /diagnostics` | Fix type = "3D" or "Time" |
 | 3.8 | RTCM on UART2 (optional) | Connect FT232H RX to BASE UART2 TX, monitor with `picocom -b 115200 /dev/ttyUSB0` | Binary RTCM data visible (non-printable bytes flowing) |
