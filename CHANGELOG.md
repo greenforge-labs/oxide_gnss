@@ -52,6 +52,9 @@ Initial public release.
 #### Configuration Options
 - **Configurable channel buffer sizes** (`channels.message_capacity`, `channels.rtcm_capacity`) for tuning memory usage and backpressure behavior
 
+#### Tooling
+- **`oxide_gnss_assign_serial` CLI** — one-shot admin binary that probes a ZED-F9P's USB serial via `CFG-VALGET` and, if it's blank (or `--force`), writes the chosen value to RAM + BBR + FLASH so udev symlinks line up after a factory reset. Refuses to collide with serials already in use by other tty devices on the host. See [USER_MANUAL.md §8.7](docs/USER_MANUAL.md#87-recovering-a-factory-reset-f9p-blank-usb-serial--no-devgnss_f9p_serial) for usage.
+
 #### Error Handling
 - **Structured error context** with timeout duration and config key details for easier debugging
 - **Warn-level logging** for stale data detection with configurable grace period

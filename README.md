@@ -27,6 +27,7 @@ This repository contains:
 - **Integrated NTRIP client** — receive RTK corrections from NTRIP casters
 - **Integrity monitoring (optional)** — publishes `~/integrity` and `~/operational`
 - **ROS diagnostics** — publishes `/diagnostics` for status visibility
+- **`oxide_gnss_assign_serial` CLI** — one-shot admin tool that restores a USB serial string to a factory-reset F9P so udev symlinks line up again (see [USER_MANUAL.md](docs/USER_MANUAL.md))
 
 ## Status
 

@@ -657,6 +657,32 @@ If the receiver NAKs a UBX `CFG-VALSET` command, Oxide treats it as a hard failu
 
 Try reducing your `device.ublox.*` overrides to isolate which setting is rejected.
 
+## 8.7 Recovering a factory-reset F9P (blank USB serial → no `/dev/gnss_f9p_<serial>`)
+
+A factory-reset (or freshly-flashed) ZED-F9P ships with a **blank USB serial string**. The kernel still enumerates the device as `/dev/ttyACM*`, but udev has nothing to key its `ID_SERIAL_SHORT`-based rules on, so the `/dev/gnss_f9p_<serial>` symlinks never appear.
+
+Restore the serial with the bundled `oxide_gnss_assign_serial` CLI. It probes the current value via `CFG-VALGET`, refuses to overwrite a non-blank serial or collide with another device on the host (unless `--force` is set), and writes the new string to RAM + BBR + FLASH so it survives power cycles.
+
+```bash
+# Dry-run: print what would be written, don't touch the device.
+oxide_gnss_assign_serial --port /dev/ttyACM0 --serial F9P-ROVER-01 --dry-run
+
+# For real:
+oxide_gnss_assign_serial --port /dev/ttyACM0 --serial F9P-ROVER-01
+```
+
+After the tool exits successfully, unplug and replug the F9P so USB re-enumerates; the `/dev/gnss_f9p_F9P-ROVER-01` symlink should then appear (assuming the udev rules from §3.2 are installed).
+
+Options:
+
+| Option | Purpose |
+|--------|---------|
+| `--port` | Serial port (e.g. `/dev/ttyACM0`). Required. |
+| `--serial` | ASCII serial string, 1..=32 bytes. Required. |
+| `--baud` | Baud rate (default `460800`). |
+| `--force` | Overwrite a non-blank serial, or accept a collision with another device on the host. |
+| `--dry-run` | Probe and report only; no writes. |
+
 ---
 
 # 9. Definitive Configuration Reference

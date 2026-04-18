@@ -48,7 +48,19 @@ Plug in both F9Ps via USB-C. Run `ls /dev/ttyACM*`. Note which port maps to whic
 udevadm info -a /dev/ttyACM0 | grep serial
 udevadm info -a /dev/ttyACM1 | grep serial
 ```
-Create `/etc/udev/rules.d/99-gnss.rules`:
+
+If `ATTRS{serial}` is blank (common after a factory reset of the F9P), the kernel has nothing to key udev rules against — assign a serial first using the bundled CLI before proceeding:
+
+```bash
+# Assign a serial to the board currently on /dev/ttyACM0
+oxide_gnss_assign_serial --port /dev/ttyACM0 --serial F9P-BASE-01
+# Unplug/replug the USB-C cable so USB re-enumerates, then re-check:
+udevadm info -a /dev/ttyACM0 | grep serial
+```
+
+The tool writes to RAM + BBR + FLASH so the assignment survives power cycles, and refuses to collide with a serial already used by another device on the host. See §8.7 in USER_MANUAL.md for the full option set.
+
+Once both boards report a non-blank `ATTRS{serial}`, create `/etc/udev/rules.d/99-gnss.rules`:
 ```
 SUBSYSTEM=="tty", ATTRS{idVendor}=="1546", ATTRS{idProduct}=="01a9", ATTRS{serial}=="<BASE_SERIAL>", SYMLINK+="gnss_f9p_base"
 SUBSYSTEM=="tty", ATTRS{idVendor}=="1546", ATTRS{idProduct}=="01a9", ATTRS{serial}=="<ROVER_SERIAL>", SYMLINK+="gnss_f9p_rover"

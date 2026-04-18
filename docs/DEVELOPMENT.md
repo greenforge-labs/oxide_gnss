@@ -203,6 +203,8 @@ oxide_gnss/                 # Repository root
 ├── src/
 │   ├── main.rs           # Entry point (ROS2 node)
 │   ├── lib.rs            # Library root
+│   ├── bin/
+│   │   └── oxide_gnss_assign_serial.rs  # Admin CLI: write USB serial to a factory-reset F9P
 │   ├── config/           # Configuration parsing
 │   │   ├── mod.rs        # Config loading, mode resolution
 │   │   ├── modes.rs      # Operating modes and features
