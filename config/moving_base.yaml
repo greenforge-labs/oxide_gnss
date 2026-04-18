@@ -33,14 +33,25 @@ device:
     family: "F9P"
 
     rate:
-      measurement_ms: 200   # 5 Hz (matches navigation rate_hz)
+      measurement_ms: 200   # 5 Hz (AppNote UBX-19009093 §2.2.3: at 5 Hz with
+                            # full constellations, pair with UART2 @ 460800)
       nav_ratio: 1
 
     # Navigation engine configuration
     nav_spg:
       dynamic_model: automotive   # Vehicle-mounted base
 
-    # UART2 baudrate for RTCM output to rover
+    # Force CFG-TMODE3 = Disabled so the F9P runs as a regular roving receiver
+    # and produces moving-base observations. Without this, a moving_base run on
+    # an F9P that previously ran static_base (TMODE3 = SurveyIn) sits in
+    # "Time Only" fix_type=5 forever and never emits useful RTCM 4072.0.
+    base_position:
+      mode: disabled
+
+    # UART2 baudrate: 460800 per u-blox Moving Base AppNote (UBX-19009093 R3
+    # §2.2.3): at \u22655 Hz with default constellations, 115200 is too slow for
+    # a full RTCM epoch to arrive before the rover discards it. 460800 gives
+    # ample headroom even if we later bump rate back up to 5 Hz.
     ports:
       uart2:
         baudrate: 460800
@@ -93,13 +104,11 @@ integrity:
     max_pvt_age_s: 2.0
     operational_threshold: 1
 
-# Optional: NTRIP for absolute position (comment out if not needed)
+# Optional: NTRIP for absolute position
 ntrip:
   host: "ntrip.data.gnss.ga.gov.au"
   port: 2101
   use_https: false
-  # tls_skip_verify: false
-  # ntrip_version: auto
   mountpoint: "SFLD00AUS0"
   username: "${NTRIP_USERNAME}"
   password: "${NTRIP_PASSWORD}"

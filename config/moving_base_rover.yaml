@@ -34,14 +34,20 @@ device:
     family: "F9P"
 
     rate:
-      measurement_ms: 200   # 5 Hz (matches navigation rate_hz)
+      measurement_ms: 200   # 5 Hz (must match moving_base.yaml)
       nav_ratio: 1
 
     # Navigation engine configuration
     nav_spg:
       dynamic_model: automotive   # Vehicle-mounted rover
 
-    # UART2 baudrate for RTCM input from moving base
+    # Force CFG-TMODE3 = Disabled for symmetry with moving_base.yaml (a rover
+    # F9P that previously played static_base would be stuck in Time Only
+    # otherwise).
+    base_position:
+      mode: disabled
+
+    # UART2 baudrate: must match moving_base.yaml (460800, per AppNote).
     ports:
       uart2:
         baudrate: 460800
