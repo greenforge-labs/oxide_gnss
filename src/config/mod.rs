@@ -279,13 +279,20 @@ impl Config {
             uart2: uart2_messages,
         };
 
-        // Use rate config from device if specified, otherwise defaults
-        let rate = self
+        // Use rate config from device if specified, otherwise defaults.
+        // If the user did not explicitly set `ublox.rate.measurement_ms`,
+        // derive it from `device.navigation.rate_hz` so that the
+        // user-facing Hz knob is actually wired through to CFG-RATE-MEAS.
+        let mut rate = self
             .device
             .ublox
             .as_ref()
             .map(|u| u.rate.clone())
             .unwrap_or_default();
+        if rate.measurement_ms.is_none() {
+            let hz = self.device.navigation.rate_hz.max(1) as u16;
+            rate.measurement_ms = Some(1000 / hz);
+        }
 
         // Use signal config from device if specified
         let signals = self
@@ -313,11 +320,22 @@ impl Config {
 
         // Pass through optional configs from user
         let timepulse = self.device.ublox.as_ref().and_then(|u| u.timepulse.clone());
-        let base_position = self
+        // For non-base modes, force TMODE3=Disabled unless the user has
+        // explicitly set `device.ublox.base_position`. This prevents a
+        // previous static_base session from leaving the receiver in
+        // SurveyIn/Fixed mode when relaunched into a rover/moving-base mode
+        // (observed during Test 5 on the bench rig — TMODE3 ghost caused
+        // fixType=5 "Time Only" and no RTCM output on a moving_base F9P).
+        let user_base_position = self
             .device
             .ublox
             .as_ref()
             .and_then(|u| u.base_position.clone());
+        let base_position = if mode == OperatingMode::StaticBase {
+            user_base_position
+        } else {
+            user_base_position.or_else(|| Some(BasePositionConfig::default()))
+        };
         let time_mark = self.device.ublox.as_ref().and_then(|u| u.time_mark.clone());
 
         // Honor a user-supplied `ublox.clear_unmanaged` if present; otherwise
@@ -348,13 +366,12 @@ impl Config {
     pub fn enabled_topics(&self) -> Vec<&'static str> {
         let mut topics = vec!["~/fix", "~/velocity", "~/time_reference"];
 
-        if let Some(mode) = self.mode {
-            // Add topics based on mode
-            if mode == OperatingMode::MovingBaseRover {
-                topics.push("~/baseline_pose");
-            }
-
-            // Add topics based on features
+        if self.mode.is_some() {
+            // Add topics based on features. `~/baseline_pose` is gated on
+            // the `heading` feature (only allowed in MovingBaseRover mode),
+            // so the flag is now authoritative: `heading: false` in that
+            // mode disables both the ROS topic and the NAV_RELPOSNED UBX
+            // message that feeds it.
             for feature in self.features.enabled_features() {
                 match feature {
                     Feature::HighPrecision => {
@@ -367,7 +384,9 @@ impl Config {
                     Feature::Satellites => {
                         topics.push("~/satellites");
                     }
-                    _ => {}
+                    Feature::Heading => {
+                        topics.push("~/baseline_pose");
+                    }
                 }
             }
         } else {
@@ -520,5 +539,146 @@ ntrip:
         let yaml = "port: ${MISSING_VAR}";
         let substituted = Config::substitute_env_vars(yaml);
         assert_eq!(substituted, "port: ${MISSING_VAR}");
+    }
+
+    // Issue #2: rate_hz must derive measurement_ms when the user didn't set it.
+    #[test]
+    fn test_rate_hz_derives_measurement_ms() {
+        let yaml = r#"
+mode: rover_ntrip
+device:
+  port: "/dev/ttyACM0"
+  navigation:
+    rate_hz: 5
+"#;
+        let config: Config = serde_yaml::from_str(yaml).unwrap();
+        let ublox = config.resolve_ublox_config();
+        assert_eq!(ublox.rate.measurement_ms, Some(200));
+        assert_eq!(ublox.rate.effective_measurement_ms(), 200);
+    }
+
+    #[test]
+    fn test_explicit_measurement_ms_overrides_rate_hz() {
+        let yaml = r#"
+mode: rover_ntrip
+device:
+  port: "/dev/ttyACM0"
+  navigation:
+    rate_hz: 5
+  ublox:
+    rate:
+      measurement_ms: 50
+"#;
+        let config: Config = serde_yaml::from_str(yaml).unwrap();
+        let ublox = config.resolve_ublox_config();
+        assert_eq!(ublox.rate.measurement_ms, Some(50));
+    }
+
+    // Issue #5: non-base modes must force TMODE3=Disabled.
+    #[test]
+    fn test_non_base_mode_forces_tmode3_disabled() {
+        for mode in [
+            "standalone",
+            "rover_ntrip",
+            "moving_base",
+            "moving_base_rover",
+        ] {
+            let yaml = format!(
+                r#"
+mode: {}
+device:
+  port: "/dev/ttyACM0"
+"#,
+                mode
+            );
+            let config: Config = serde_yaml::from_str(&yaml).unwrap();
+            let ublox = config.resolve_ublox_config();
+            let bp = ublox
+                .base_position
+                .expect("non-base modes must inject a BasePositionConfig");
+            assert_eq!(
+                bp.mode,
+                BasePositionMode::Disabled,
+                "mode {} should force TMODE3=Disabled",
+                mode
+            );
+        }
+    }
+
+    #[test]
+    fn test_static_base_passes_through_user_base_position() {
+        let yaml = r#"
+mode: static_base
+device:
+  port: "/dev/ttyACM0"
+  ublox:
+    base_position:
+      mode: survey_in
+"#;
+        let config: Config = serde_yaml::from_str(yaml).unwrap();
+        let ublox = config.resolve_ublox_config();
+        let bp = ublox.base_position.expect("user base_position");
+        assert_eq!(bp.mode, BasePositionMode::SurveyIn);
+    }
+
+    // Issue #6: `~/baseline_pose` is gated on Feature::Heading.
+    #[test]
+    fn test_baseline_pose_requires_heading_feature() {
+        let yaml_without = r#"
+mode: moving_base_rover
+device:
+  port: "/dev/ttyACM0"
+"#;
+        let config: Config = serde_yaml::from_str(yaml_without).unwrap();
+        let topics = config.enabled_topics();
+        assert!(
+            !topics.contains(&"~/baseline_pose"),
+            "MovingBaseRover without heading:true must not publish ~/baseline_pose; got {:?}",
+            topics
+        );
+
+        let yaml_with = r#"
+mode: moving_base_rover
+features:
+  heading: true
+device:
+  port: "/dev/ttyACM0"
+"#;
+        let config: Config = serde_yaml::from_str(yaml_with).unwrap();
+        let topics = config.enabled_topics();
+        assert!(
+            topics.contains(&"~/baseline_pose"),
+            "MovingBaseRover with heading:true must publish ~/baseline_pose; got {:?}",
+            topics
+        );
+    }
+
+    #[test]
+    fn test_nav_relposned_requires_heading_feature() {
+        let yaml_without = r#"
+mode: moving_base_rover
+device:
+  port: "/dev/ttyACM0"
+"#;
+        let config: Config = serde_yaml::from_str(yaml_without).unwrap();
+        let ublox = config.resolve_ublox_config();
+        assert!(
+            !ublox.messages.usb.contains_key("NAV_RELPOSNED"),
+            "NAV_RELPOSNED must not be enabled without heading feature"
+        );
+
+        let yaml_with = r#"
+mode: moving_base_rover
+features:
+  heading: true
+device:
+  port: "/dev/ttyACM0"
+"#;
+        let config: Config = serde_yaml::from_str(yaml_with).unwrap();
+        let ublox = config.resolve_ublox_config();
+        assert!(
+            ublox.messages.usb.contains_key("NAV_RELPOSNED"),
+            "NAV_RELPOSNED must be enabled when heading feature is on"
+        );
     }
 }

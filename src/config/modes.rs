@@ -468,12 +468,14 @@ pub mod presets {
             },
             i2c: PortProtocols::default(),
             spi: PortProtocols::default(),
+            // NAV_RELPOSNED is added by Feature::Heading (the heading flag
+            // is authoritative — see Config::enabled_topics and
+            // Feature::required_messages).
             base_messages: vec![
                 ("NAV_PVT", 1),
                 ("NAV_HPPOSLLH", 1),
                 ("NAV_COV", 1),
                 ("NAV_STATUS", 1),
-                ("NAV_RELPOSNED", 1), // Relative position to base
             ],
             rtcm_output_uart2: vec![],
             allowed_features: vec![

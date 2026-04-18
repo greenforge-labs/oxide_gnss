@@ -432,18 +432,20 @@ pub struct TimeMarkConfig {
 /// Measurement and navigation rate configuration.
 #[derive(Debug, Clone, Deserialize)]
 pub struct RateConfig {
-    /// Measurement rate in milliseconds (e.g., 100 = 10 Hz)
-    #[serde(default = "default_measurement_ms")]
-    pub measurement_ms: u16,
+    /// Measurement rate in milliseconds (e.g., 100 = 10 Hz).
+    ///
+    /// If omitted, the effective rate is derived from
+    /// `device.navigation.rate_hz` by `generate_ublox_config_from_mode`.
+    /// Setting this explicitly overrides `rate_hz` for advanced users
+    /// who need non-integer-divisor rates.
+    #[serde(default)]
+    pub measurement_ms: Option<u16>,
 
     /// Navigation solutions per measurement (typically 1)
     #[serde(default = "default_nav_ratio")]
     pub nav_ratio: u16,
 }
 
-fn default_measurement_ms() -> u16 {
-    100
-}
 fn default_nav_ratio() -> u16 {
     1
 }
@@ -451,9 +453,19 @@ fn default_nav_ratio() -> u16 {
 impl Default for RateConfig {
     fn default() -> Self {
         Self {
-            measurement_ms: 100,
+            measurement_ms: None,
             nav_ratio: 1,
         }
+    }
+}
+
+impl RateConfig {
+    /// Effective measurement period in milliseconds.
+    ///
+    /// Falls back to 100 ms (10 Hz) if neither `measurement_ms` nor an
+    /// upstream derivation from `rate_hz` has populated the field.
+    pub fn effective_measurement_ms(&self) -> u16 {
+        self.measurement_ms.unwrap_or(100)
     }
 }
 
@@ -1002,7 +1014,7 @@ messages:
 "#;
         let config: UbloxConfig = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(config.family, Some("F9P".to_string()));
-        assert_eq!(config.rate.measurement_ms, 100);
+        assert_eq!(config.rate.measurement_ms, Some(100));
         assert_eq!(config.rate.nav_ratio, 1);
         assert_eq!(config.protocols.usb.in_ubx, Some(true));
         assert_eq!(config.protocols.usb.in_rtcm3x, Some(true));
@@ -1020,7 +1032,8 @@ messages:
     #[test]
     fn test_default_rates() {
         let config = RateConfig::default();
-        assert_eq!(config.measurement_ms, 100);
+        assert_eq!(config.measurement_ms, None);
+        assert_eq!(config.effective_measurement_ms(), 100);
         assert_eq!(config.nav_ratio, 1);
     }
 

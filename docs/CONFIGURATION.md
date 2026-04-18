@@ -97,13 +97,13 @@ device:
 ```yaml
 device:
   navigation:
-    rate_hz: 10           # Update rate (1-25 Hz for ZED-F9P) -- see note below
+    rate_hz: 10           # Update rate (1-25 Hz for ZED-F9P)
     min_satellites: 4     # Minimum satellites for valid fix
     max_hdop: 5.0         # HDOP warning threshold
     max_pdop: 10.0        # PDOP warning threshold
 ```
 
-To actually change the rate, set `device.ublox.rate.measurement_ms` (see below). `rate_hz` is currently validation-only. See **Navigation rate vs constellations** further down for the realistic rates each mode can sustain and how to tune the trade-off.
+`rate_hz` is wired to `CFG-RATE-MEAS` by the mode-based config path: if you don't set `ublox.rate.measurement_ms`, the effective measurement period is derived as `1000 / rate_hz`. Set `ublox.rate.measurement_ms` explicitly only if you need a non-integer-divisor rate. See **Navigation rate vs constellations** further down for the realistic rates each mode can sustain and how to tune the trade-off.
 
 ### Reconnection Behavior
 
@@ -144,7 +144,7 @@ device:
       nav_ratio: 1          # Nav solutions per measurement
 ```
 
-`measurement_ms` is the authoritative rate setting written to `CFG-RATE-MEAS`. (Note: `device.navigation.rate_hz` currently exists for validation only and is not yet wired to the receiver — use `ublox.rate.measurement_ms` to actually change the rate.)
+`measurement_ms` is the low-level override written directly to `CFG-RATE-MEAS`. If you omit it, the mode-based config derives the effective rate from `device.navigation.rate_hz` (1000 ÷ rate_hz ms). Setting `measurement_ms` explicitly always wins, which is useful for advanced users who need non-integer-divisor rates.
 
 ### Navigation rate vs constellations — picking your trade-off
 
