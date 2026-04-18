@@ -8,18 +8,19 @@ oxide_gnss is a Rust-based ROS2 GNSS driver for u-blox ZED-F9P receivers with in
 
 ## Build Commands
 
+This workstation uses ROS2 Jazzy via **pixi/RoboStack** (`~/ros2_ws/pixi.toml`), not `/opt/ros/`. `pixi shell` activates Jazzy and auto-sources `install/setup.bash` via the manifest's `[activation.scripts]`.
+
 **Initial workspace setup** (run once from `~/ros2_ws`):
 ```bash
-source /opt/ros/jazzy/setup.bash
-colcon build --packages-up-to oxide_gnss_msgs oxide_gnss \
-    --allow-overriding builtin_interfaces std_msgs geometry_msgs sensor_msgs diagnostic_msgs action_msgs
-source install/setup.bash
+cd ~/ros2_ws
+pixi shell
+colcon build --packages-up-to oxide_gnss_msgs oxide_gnss
 ```
+(`--allow-overriding` is not needed under pixi — the env has its own isolated message packages and no underlay conflict.)
 
 **Rebuild driver only** (fast iteration):
 ```bash
-source /opt/ros/jazzy/setup.bash
-source ~/ros2_ws/install/setup.bash
+cd ~/ros2_ws && pixi shell
 cd ~/ros2_ws/src/oxide_gnss
 cargo build --features ros2
 ```

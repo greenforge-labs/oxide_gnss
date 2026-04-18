@@ -109,7 +109,7 @@ colcon-build:
     #!/usr/bin/env bash
     set -euo pipefail
     if [ -z "${ROS_DISTRO:-}" ]; then
-        echo "❌ ROS2 not sourced. Run: source /opt/ros/jazzy/setup.bash"
+        echo "❌ ROS2 not sourced. Run: cd ~/ros2_ws && pixi shell"
         exit 1
     fi
     cd "$(git rev-parse --show-toplevel)/.."
@@ -121,7 +121,7 @@ colcon-msgs:
     #!/usr/bin/env bash
     set -euo pipefail
     if [ -z "${ROS_DISTRO:-}" ]; then
-        echo "❌ ROS2 not sourced. Run: source /opt/ros/jazzy/setup.bash"
+        echo "❌ ROS2 not sourced. Run: cd ~/ros2_ws && pixi shell"
         exit 1
     fi
     cd "$(git rev-parse --show-toplevel)/.."
