@@ -133,20 +133,8 @@ pub fn build_cfg_vals_from_config(config: &UbloxConfig) -> Vec<CfgVal> {
             .usb
             .keys()
             .map(|m| ("usb", m.as_str()))
-            .chain(
-                config
-                    .messages
-                    .uart1
-                    .keys()
-                    .map(|m| ("uart1", m.as_str())),
-            )
-            .chain(
-                config
-                    .messages
-                    .uart2
-                    .keys()
-                    .map(|m| ("uart2", m.as_str())),
-            )
+            .chain(config.messages.uart1.keys().map(|m| ("uart1", m.as_str())))
+            .chain(config.messages.uart2.keys().map(|m| ("uart2", m.as_str())))
             .collect();
         for (port, msg, make_cfg) in MSG_RATE_TABLE {
             if !user_keys.contains(&(*port, *msg)) {
@@ -660,7 +648,10 @@ mod tests {
         let nav_sat_zeroed = vals
             .iter()
             .any(|v| matches!(v, CfgVal::MsgOutUbxNavSatUsb(0)));
-        assert!(nav_sat_zeroed, "NAV-SAT USB should be zeroed when unmanaged");
+        assert!(
+            nav_sat_zeroed,
+            "NAV-SAT USB should be zeroed when unmanaged"
+        );
 
         // TIM-TM2 USB isn't in MSG_RATE_TABLE; separate code path should zero it
         let tim_tm2_zeroed = vals

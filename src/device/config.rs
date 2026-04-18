@@ -185,7 +185,10 @@ impl DeviceConfigurator {
         // then the receiver needs a few seconds to reacquire before we mark it
         // Active.
         let rst_packet = build_cfg_rst_gnss_restart();
-        debug!(packet_len = rst_packet.len(), "Sending CFG-RST (GNSS-only software reset)");
+        debug!(
+            packet_len = rst_packet.len(),
+            "Sending CFG-RST (GNSS-only software reset)"
+        );
         serial.write(&rst_packet).await?;
         info!("Issued UBX-CFG-RST (GNSS-only); waiting 3s for receiver to reacquire");
         tokio::time::sleep(Duration::from_secs(3)).await;
