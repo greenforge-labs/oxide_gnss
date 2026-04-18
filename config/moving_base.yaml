@@ -96,11 +96,11 @@ integrity:
 # Optional: NTRIP for absolute position (comment out if not needed)
 ntrip:
   host: "ntrip.data.gnss.ga.gov.au"
-  port: 443
-  use_https: true
+  port: 2101
+  use_https: false
   # tls_skip_verify: false
   # ntrip_version: auto
-  mountpoint: "SWTC00AUS0"
+  mountpoint: "SFLD00AUS0"
   username: "${NTRIP_USERNAME}"
   password: "${NTRIP_PASSWORD}"
   send_gga: true

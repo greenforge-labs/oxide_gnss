@@ -6,7 +6,7 @@
 mode: standalone
 
 features:
-  satellites: true        # Enable satellite info
+  satellites: false        # Enable satellite info
 
 device:
   port: "/dev/ttyACM0"

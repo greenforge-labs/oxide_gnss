@@ -28,7 +28,7 @@ ntrip:
   host: "ntrip.data.gnss.ga.gov.au"
   port: 2101
   use_https: false
-  mountpoint: "ALIC00AUS0"
+  mountpoint: "SFLD00AUS0"
   username: "${NTRIP_USERNAME}"
   password: "${NTRIP_PASSWORD}"
   send_gga: true
