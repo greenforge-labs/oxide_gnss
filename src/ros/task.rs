@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, watch};
 use tracing::{debug, info, warn};
 
-use crate::device::ubx::HpPosData;
+use crate::device::ubx::{HpPosData, SurveyInData};
 use crate::state::{DeviceState, FixType, GnssMessage, NtripState, PvtData};
 
 use super::publishers::GnssPublishers;
@@ -96,6 +96,8 @@ pub struct RosTask {
     last_correction_received: Option<Instant>,
     /// Latest integrity data for rate-limited publishing
     last_integrity: Option<crate::state::GnssIntegrity>,
+    /// Latest survey-in status for `/diagnostics`
+    last_survey_in: Option<SurveyInData>,
 }
 
 impl RosTask {
@@ -120,6 +122,7 @@ impl RosTask {
             last_hp_pos: None,
             last_correction_received: None,
             last_integrity: None,
+            last_survey_in: None,
         };
 
         (task, handle)
@@ -219,6 +222,10 @@ impl RosTask {
             GnssMessage::RelPosNed(rel_pos) => {
                 self.publishers.publish_baseline_pose(&rel_pos);
             }
+            GnssMessage::SurveyIn(svin) => {
+                // Latched for /diagnostics; emitted at the diagnostics publish rate.
+                self.last_survey_in = Some(svin);
+            }
             GnssMessage::Shutdown => {
                 info!("Received shutdown message");
             }
@@ -246,6 +253,7 @@ impl RosTask {
             self.last_pvt.as_ref().map(|p| p.num_sv),
             self.last_pvt.as_ref().map(|p| p.p_dop / 100.0),
             correction_age,
+            self.last_survey_in.as_ref(),
         );
     }
 }

@@ -130,6 +130,8 @@ pub struct UbxHandler {
     pub nav_pl: Option<NavPlData>,
     /// Last received time mark data (TIM-TM2)
     pub tim_tm2: Option<TimTm2Data>,
+    /// Last received survey-in status (NAV-SVIN)
+    pub last_svin: Option<SurveyInData>,
 }
 
 /// Parsed High Precision Position (NAV-HPPOSLLH).
@@ -787,6 +789,36 @@ pub struct PvtData {
     pub received_at: Instant,
 }
 
+/// Parsed survey-in status (NAV-SVIN, class 0x01, id 0x3B).
+///
+/// Reports the progress of time mode 3 survey-in on a base station. Used
+/// by the `static_base` mode's `/diagnostics` surface so operators can see
+/// survey-in move from `active` to `valid`.
+///
+/// The ublox 0.10 crate does not expose a `NavSvin` variant in `PacketRef`,
+/// so this is decoded manually from `PacketRef::Unknown` where
+/// `class == 0x01 && msg_id == 0x3B`. See
+/// [`UbxHandler::parse_nav_svin`].
+#[derive(Debug, Clone)]
+pub struct SurveyInData {
+    /// GPS time of week in milliseconds
+    pub itow_ms: u32,
+    /// Elapsed survey-in duration in seconds
+    pub duration_s: u32,
+    /// Current mean 3D position accuracy estimate in millimetres.
+    /// (UBX encodes this as 0.1 mm units; we rescale to mm here.)
+    pub mean_acc_mm: f64,
+    /// Number of observations used by the survey-in filter
+    pub observations: u32,
+    /// `true` once the survey-in accuracy threshold has been met and the
+    /// receiver has switched to fixed-position mode.
+    pub valid: bool,
+    /// `true` while the survey-in is still running.
+    pub active: bool,
+    /// Timestamp when received
+    pub received_at: Instant,
+}
+
 /// Carrier phase range solution status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CarrierSolution {
@@ -877,6 +909,8 @@ pub struct ProcessResult {
     pub nav_pl: Option<NavPlData>,
     /// Time mark data (TIM-TM2) for external event timestamping
     pub tim_tm2: Option<TimTm2Data>,
+    /// Survey-in status (NAV-SVIN) for static_base diagnostics
+    pub svin: Option<SurveyInData>,
 }
 
 impl UbxHandler {
@@ -902,6 +936,7 @@ impl UbxHandler {
             rel_pos_ned: None,
             nav_pl: None,
             tim_tm2: None,
+            last_svin: None,
         }
     }
 
@@ -942,6 +977,7 @@ impl UbxHandler {
         let mut new_rel_pos_ned = None;
         let mut new_nav_pl = None;
         let mut new_tim_tm2 = None;
+        let mut new_svin = None;
         let mut ack_result = None;
         let mut nav_pvt_count = 0u64;
         let mut other_count = 0u64;
@@ -1107,6 +1143,27 @@ impl UbxHandler {
                             );
                             new_tim_tm2 = Some(tm2);
                         }
+                        // NAV-SVIN (class 0x01, id 0x3B) is not in ublox 0.10's
+                        // PacketRef variants, so it surfaces here in the Unknown
+                        // catch-all. Decode manually — see SurveyInData and
+                        // parse_nav_svin.
+                        ublox::proto27::PacketRef::Unknown(pkt)
+                            if pkt.class == 0x01 && pkt.msg_id == 0x3B =>
+                        {
+                            if let Some(svin) = Self::parse_nav_svin(pkt.payload) {
+                                debug!(
+                                    active = svin.active,
+                                    valid = svin.valid,
+                                    dur_s = svin.duration_s,
+                                    mean_acc_mm = svin.mean_acc_mm,
+                                    obs = svin.observations,
+                                    "NAV-SVIN received"
+                                );
+                                new_svin = Some(svin);
+                            } else {
+                                other_count += 1;
+                            }
+                        }
                         _ => {
                             other_count += 1;
                         }
@@ -1155,6 +1212,7 @@ impl UbxHandler {
         store_if_some!(rel_pos_ned, new_rel_pos_ned);
         store_if_some!(nav_pl, new_nav_pl);
         store_if_some!(tim_tm2, new_tim_tm2);
+        store_if_some!(last_svin, new_svin);
 
         ProcessResult {
             pvt: new_pvt,
@@ -1173,7 +1231,60 @@ impl UbxHandler {
             rel_pos_ned: new_rel_pos_ned,
             nav_pl: new_nav_pl,
             tim_tm2: new_tim_tm2,
+            svin: new_svin,
         }
+    }
+
+    /// Parse a NAV-SVIN payload into [`SurveyInData`].
+    ///
+    /// NAV-SVIN (class 0x01, id 0x3B) is a 40-byte little-endian payload:
+    ///
+    /// | offset | size | field        | notes                                |
+    /// |--------|------|--------------|--------------------------------------|
+    /// |     0  |  u8  | version      | expect 0                             |
+    /// |   1..3 |   —  | reserved     |                                      |
+    /// |     4  | u32  | iTOW (ms)    |                                      |
+    /// |     8  | u32  | dur (s)      | elapsed survey-in duration           |
+    /// |    12  | i32  | meanX (cm)   | not used here                        |
+    /// |    16  | i32  | meanY        |                                      |
+    /// |    20  | i32  | meanZ        |                                      |
+    /// |    24  |  i8  | meanXHP      | 0.1 mm                               |
+    /// |    25  |  i8  | meanYHP      |                                      |
+    /// |    26  |  i8  | meanZHP      |                                      |
+    /// |    27  |   —  | reserved     |                                      |
+    /// |    28  | u32  | meanAcc      | 0.1 mm — we rescale to mm            |
+    /// |    32  | u32  | obs          | observation count                    |
+    /// |    36  |  u8  | valid        | 1 = survey completed                 |
+    /// |    37  |  u8  | active       | 1 = survey in progress               |
+    /// | 38..39 |   —  | reserved     |                                      |
+    ///
+    /// Returns `None` (and does not panic) when the payload is shorter than
+    /// 40 bytes.
+    fn parse_nav_svin(payload: &[u8]) -> Option<SurveyInData> {
+        if payload.len() < 40 {
+            warn!(
+                len = payload.len(),
+                "NAV-SVIN payload shorter than 40 bytes — dropping"
+            );
+            return None;
+        }
+
+        let itow_ms = u32::from_le_bytes(payload[4..8].try_into().ok()?);
+        let duration_s = u32::from_le_bytes(payload[8..12].try_into().ok()?);
+        let mean_acc_raw = u32::from_le_bytes(payload[28..32].try_into().ok()?);
+        let observations = u32::from_le_bytes(payload[32..36].try_into().ok()?);
+        let valid = payload[36] != 0;
+        let active = payload[37] != 0;
+
+        Some(SurveyInData {
+            itow_ms,
+            duration_s,
+            mean_acc_mm: mean_acc_raw as f64 * 0.1,
+            observations,
+            valid,
+            active,
+            received_at: Instant::now(),
+        })
     }
 
     /// Parse a TIM-TM2 packet into our TimTm2Data structure.
@@ -2069,6 +2180,73 @@ mod tests {
         let result = handler.process(&[0xB5, 0x62, 0x01]);
         assert!(result.pvt.is_none());
         assert_eq!(result.messages_processed, 0);
+    }
+
+    /// Build a complete NAV-SVIN UBX frame for tests.
+    fn build_nav_svin_frame(
+        duration_s: u32,
+        mean_acc_tenths: u32,
+        obs: u32,
+        valid: u8,
+        active: u8,
+    ) -> Vec<u8> {
+        let mut payload = vec![0u8; 40];
+        // offset 0: version = 0; 1..3 reserved zero
+        payload[4..8].copy_from_slice(&0x1234_5678u32.to_le_bytes()); // iTOW
+        payload[8..12].copy_from_slice(&duration_s.to_le_bytes());
+        // meanX/Y/Z / HP bytes stay zero
+        payload[28..32].copy_from_slice(&mean_acc_tenths.to_le_bytes());
+        payload[32..36].copy_from_slice(&obs.to_le_bytes());
+        payload[36] = valid;
+        payload[37] = active;
+
+        let mut frame = Vec::with_capacity(8 + 40 + 2);
+        frame.extend_from_slice(&[0xB5, 0x62, 0x01, 0x3B]);
+        frame.extend_from_slice(&(payload.len() as u16).to_le_bytes());
+        frame.extend_from_slice(&payload);
+        let (ck_a, ck_b) = ubx_checksum(&frame[2..]);
+        frame.push(ck_a);
+        frame.push(ck_b);
+        frame
+    }
+
+    #[test]
+    fn test_parse_nav_svin_payload_fields() {
+        // 120 s elapsed, 45 × 0.1 mm = 4.5 mm, 30 observations, active only.
+        let frame = build_nav_svin_frame(120, 45, 30, 0, 1);
+        // strip UBX header/checksum down to payload bytes
+        let payload = &frame[6..6 + 40];
+        let svin = UbxHandler::parse_nav_svin(payload).expect("40-byte payload should parse");
+        assert_eq!(svin.itow_ms, 0x1234_5678);
+        assert_eq!(svin.duration_s, 120);
+        assert!((svin.mean_acc_mm - 4.5).abs() < 1e-9);
+        assert_eq!(svin.observations, 30);
+        assert!(svin.active);
+        assert!(!svin.valid);
+    }
+
+    #[test]
+    fn test_parse_nav_svin_short_payload_returns_none() {
+        let short = vec![0u8; 20];
+        assert!(UbxHandler::parse_nav_svin(&short).is_none());
+    }
+
+    #[test]
+    fn test_process_captures_nav_svin_frame() {
+        // End-to-end: feed a complete NAV-SVIN frame through `process()` and
+        // assert it surfaces via ProcessResult.svin (the Unknown catch-all
+        // interception wiring).
+        let mut handler = UbxHandler::new();
+        let frame = build_nav_svin_frame(60, 100, 15, 1, 0); // 10 mm, valid
+        let result = handler.process(&frame);
+        let svin = result
+            .svin
+            .expect("frame should produce Some(SurveyInData)");
+        assert_eq!(svin.duration_s, 60);
+        assert!(svin.valid);
+        assert!(!svin.active);
+        assert!((svin.mean_acc_mm - 10.0).abs() < 1e-9);
+        assert_eq!(svin.observations, 15);
     }
 
     #[test]
