@@ -22,7 +22,7 @@ use super::config::{ConfigStep, ConfiguratorOptions, DeviceConfigurator};
 use super::serial::SerialPortBuilder;
 use super::ubx::{
     CovData, HpPosData, MonCommsData, MonHwData, MonRfData, PosEcefData, PvtData, RelPosNedData,
-    RxmCorData, SatInfo, SecSigData, SecSiglogData, UbxHandler,
+    RxmCorData, SatInfo, SecSigData, SecSiglogData, SurveyInData, UbxHandler,
 };
 
 /// Channels required by the device task.
@@ -106,6 +106,8 @@ pub enum DeviceMessage {
     MonRf(MonRfData),
     /// Relative position for moving base/rover
     RelPosNed(RelPosNedData),
+    /// Survey-in status (NAV-SVIN) — static_base progress for /diagnostics
+    SurveyIn(SurveyInData),
 }
 
 impl DeviceMessage {
@@ -124,6 +126,7 @@ impl DeviceMessage {
             DeviceMessage::SecSig(sig) => Some(GnssMessage::SecSig(sig)),
             DeviceMessage::Integrity(integrity) => Some(GnssMessage::Integrity(integrity)),
             DeviceMessage::RelPosNed(rel_pos) => Some(GnssMessage::RelPosNed(rel_pos)),
+            DeviceMessage::SurveyIn(svin) => Some(GnssMessage::SurveyIn(svin)),
             // Internal messages processed by IntegrityAggregator - not forwarded
             DeviceMessage::FixTypeChanged(_)
             | DeviceMessage::Covariance(_)
@@ -631,6 +634,15 @@ impl DeviceTask {
                 .channels
                 .msg_tx
                 .send(DeviceMessage::RelPosNed(rel_pos.clone()))
+                .await;
+        }
+
+        // Handle NAV-SVIN (survey-in progress on a static base)
+        if let Some(ref svin) = result.svin {
+            let _ = self
+                .channels
+                .msg_tx
+                .send(DeviceMessage::SurveyIn(svin.clone()))
                 .await;
         }
 

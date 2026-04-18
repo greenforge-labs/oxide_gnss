@@ -22,6 +22,8 @@ pub enum GnssMessage {
     SecSig(crate::device::ubx::SecSigData),
     /// Relative position for moving base/rover (NAV-RELPOSNED)
     RelPosNed(crate::device::ubx::RelPosNedData),
+    /// Survey-in status (NAV-SVIN) for `/diagnostics`
+    SurveyIn(crate::device::ubx::SurveyInData),
     /// Integrity status
     Integrity(crate::state::GnssIntegrity),
     /// Device state changed

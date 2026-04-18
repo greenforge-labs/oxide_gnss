@@ -4,7 +4,7 @@ use rclrs::{IntoPrimitiveOptions, Node, Publisher, QoSProfile};
 use tracing::{debug, error};
 
 use crate::config::CoordinateFrame;
-use crate::device::ubx::{HpPosData, PvtData, RelPosNedData, SatInfo};
+use crate::device::ubx::{HpPosData, PvtData, RelPosNedData, SatInfo, SurveyInData};
 use crate::state::{DeviceState, FixType, GnssIntegrity, IntegrityLevel, NtripState};
 
 use super::conversions::{now_timestamp, pvt_to_twist, ToRosMessage};
@@ -291,6 +291,7 @@ impl GnssPublishers {
     }
 
     /// Publish diagnostics.
+    #[allow(clippy::too_many_arguments)]
     pub fn publish_diagnostics(
         &self,
         device_state: &DeviceState,
@@ -299,6 +300,7 @@ impl GnssPublishers {
         num_satellites: Option<u8>,
         hdop: Option<f32>,
         correction_age_secs: Option<f64>,
+        survey_in: Option<&SurveyInData>,
     ) {
         let mut diag = diagnostic_msgs::msg::DiagnosticArray::default();
         diag.header.stamp = now_timestamp();
@@ -370,6 +372,57 @@ impl GnssPublishers {
         diag.status.push(device_status);
         diag.status.push(ntrip_status);
         diag.status.push(fix_status);
+
+        // Survey-in status (only when a NAV-SVIN has been seen — no filler
+        // entry for modes that don't run survey-in).
+        if let Some(svin) = survey_in {
+            let (level, message) = if svin.valid {
+                (
+                    diagnostic_msgs::msg::DiagnosticStatus::OK,
+                    "Survey-in complete".to_string(),
+                )
+            } else if svin.active {
+                (
+                    diagnostic_msgs::msg::DiagnosticStatus::WARN,
+                    "Survey-in active".to_string(),
+                )
+            } else {
+                (
+                    diagnostic_msgs::msg::DiagnosticStatus::STALE,
+                    "Survey-in idle".to_string(),
+                )
+            };
+
+            let svin_status = diagnostic_msgs::msg::DiagnosticStatus {
+                name: format!("{}: SurveyIn", self.node_name),
+                hardware_id: "gnss_receiver".to_string(),
+                level,
+                message,
+                values: vec![
+                    diagnostic_msgs::msg::KeyValue {
+                        key: "active".to_string(),
+                        value: svin.active.to_string(),
+                    },
+                    diagnostic_msgs::msg::KeyValue {
+                        key: "valid".to_string(),
+                        value: svin.valid.to_string(),
+                    },
+                    diagnostic_msgs::msg::KeyValue {
+                        key: "mean_acc_mm".to_string(),
+                        value: format!("{:.1}", svin.mean_acc_mm),
+                    },
+                    diagnostic_msgs::msg::KeyValue {
+                        key: "duration_s".to_string(),
+                        value: svin.duration_s.to_string(),
+                    },
+                    diagnostic_msgs::msg::KeyValue {
+                        key: "observations".to_string(),
+                        value: svin.observations.to_string(),
+                    },
+                ],
+            };
+            diag.status.push(svin_status);
+        }
 
         if let Err(e) = self.diagnostics_pub.publish(diag) {
             error!(error = %e, "Failed to publish diagnostics");
