@@ -39,6 +39,7 @@ impl Default for GnssNodeConfig {
                 reconnect: Default::default(),
                 ublox: None,
                 watchdog_timeout_secs: 5.0,
+                packet_watchdog_secs: 3.0,
             },
             ntrip: None,
             diagnostics_rate_hz: 1.0,

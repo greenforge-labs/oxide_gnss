@@ -427,6 +427,8 @@ impl DeviceTask {
     ) -> Result<(), DeviceError> {
         let mut read_buf = [0u8; 1024];
         let watchdog = Duration::from_secs_f64(self.config.watchdog_timeout_secs);
+        let packet_watchdog = Duration::from_secs_f64(self.config.packet_watchdog_secs);
+        let mut last_progress = tokio::time::Instant::now();
 
         loop {
             tokio::select! {
@@ -442,10 +444,20 @@ impl DeviceTask {
                 read_result = tokio::time::timeout(watchdog, serial.read(&mut read_buf)) => {
                     match read_result {
                         Ok(Ok(n)) if n > 0 => {
+                            last_progress = tokio::time::Instant::now();
                             self.process_serial_data(&read_buf[..n], ubx).await;
                         }
                         Ok(Ok(_)) => {
-                            // Zero bytes read, continue
+                            // POSIX EOF on a character device — the tty was removed.
+                            // A healthy USB-CDC port will block until bytes arrive or the
+                            // watchdog timeout expires; it does not return 0 bytes.
+                            warn!(
+                                port = %self.config.port,
+                                "serial EOF (Ok(0)) — device removed?"
+                            );
+                            return Err(DeviceError::Disconnected {
+                                port: self.config.port.clone(),
+                            });
                         }
                         Ok(Err(e)) => {
                             error!(error = %e, "Serial read error");
@@ -462,6 +474,22 @@ impl DeviceTask {
                             });
                         }
                     }
+                }
+
+                // Packet-level progress watchdog. Catches the case where the port
+                // stays open and reads keep succeeding with zero bytes (silenced
+                // firmware, antenna loss, bad MSGOUT config) — the outer timeout
+                // above only catches "read never returns at all".
+                _ = tokio::time::sleep_until(last_progress + packet_watchdog) => {
+                    warn!(
+                        port = %self.config.port,
+                        secs = self.config.packet_watchdog_secs,
+                        "packet watchdog: no bytes received — treating device as disconnected"
+                    );
+                    return Err(DeviceError::Timeout {
+                        operation: "packet watchdog (no bytes received)".to_string(),
+                        timeout_ms: (self.config.packet_watchdog_secs * 1000.0) as u64,
+                    });
                 }
 
                 // Receive RTCM data to inject
