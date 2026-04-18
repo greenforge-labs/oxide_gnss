@@ -165,14 +165,14 @@ ros2 launch oxide_gnss oxide_gnss.launch.py \
 | # | Check | Command | Pass Criteria |
 |---|-------|---------|---------------|
 | 2.1 | Node starts, NTRIP connects | Observe terminal | "NTRIP connected" log message, no auth errors |
-| 2.2 | ~/fix publishes at rate | `ros2 topic hz /gnss_rover/gnss_node/fix` | ~10 Hz |
+| 2.2 | ~/fix publishes at rate | `ros2 topic hz /gnss_rover/gnss_node/fix` | ~5 Hz (F9P ceiling with all constellations + integrity + RTCM; see `docs/CONFIGURATION.md`) |
 | 2.3 | RTK Float achieved | `ros2 topic echo /gnss_rover/gnss_node/fix` | `status.status` = 1 (driver maps RTK Float → STATUS_SBAS_FIX) within ~30s |
 | 2.4 | RTK Fixed achieved | `ros2 topic echo /gnss_rover/gnss_node/fix` | `status.status` = 2 (driver maps RTK Fixed → STATUS_GBAS_FIX), covariance drops to cm-level (< 0.01 m²) within ~60s |
 | 2.5 | High-precision position | `ros2 topic echo /gnss_rover/gnss_node/fix --once` | Position accuracy visibly better than standalone (smaller covariance) |
 | 2.6 | ~/integrity publishes | `ros2 topic echo /gnss_rover/gnss_node/integrity --once` | `level` = 0 (OK) when RTK fixed with good signal |
 | 2.7 | ~/operational publishes | `ros2 topic echo /gnss_rover/gnss_node/operational --once` | `data` = true |
 | 2.8 | Integrity checks pass | `ros2 topic echo /gnss_rover/gnss_node/integrity --once` | Individual `check_*_ok` fields are `true` |
-| 2.9 | ~/velocity publishes | `ros2 topic hz /gnss_rover/gnss_node/velocity` | ~10 Hz |
+| 2.9 | ~/velocity publishes | `ros2 topic hz /gnss_rover/gnss_node/velocity` | ~5 Hz (same F9P ceiling as 2.2) |
 | 2.10 | ~/time_reference publishes | `ros2 topic echo /gnss_rover/gnss_node/time_reference --once` | Timestamp populated |
 | 2.11 | /diagnostics NTRIP status | `ros2 topic echo /diagnostics` | NTRIP status shows connected, correction age < 10s |
 | 2.12 | Correction age reasonable | Check `/diagnostics` or `~/integrity` | `correction_age_s` updating, < 10s |

@@ -97,11 +97,13 @@ device:
 ```yaml
 device:
   navigation:
-    rate_hz: 10           # Update rate (1-25 Hz for ZED-F9P)
+    rate_hz: 10           # Update rate (1-25 Hz for ZED-F9P) -- see note below
     min_satellites: 4     # Minimum satellites for valid fix
     max_hdop: 5.0         # HDOP warning threshold
     max_pdop: 10.0        # PDOP warning threshold
 ```
+
+To actually change the rate, set `device.ublox.rate.measurement_ms` (see below). `rate_hz` is currently validation-only. See **Navigation rate vs constellations** further down for the realistic rates each mode can sustain and how to tune the trade-off.
 
 ### Reconnection Behavior
 
@@ -141,6 +143,60 @@ device:
       measurement_ms: 100   # Measurement period (100ms = 10Hz)
       nav_ratio: 1          # Nav solutions per measurement
 ```
+
+`measurement_ms` is the authoritative rate setting written to `CFG-RATE-MEAS`. (Note: `device.navigation.rate_hz` currently exists for validation only and is not yet wired to the receiver — use `ublox.rate.measurement_ms` to actually change the rate.)
+
+### Navigation rate vs constellations — picking your trade-off
+
+The ZED-F9P has a fixed CPU budget per epoch. Enabling more constellations, more signals, or more messages raises the per-epoch workload, and the receiver silently clamps the nav rate to what it can sustain. Narrow the workload to go faster.
+
+**Shipping mode defaults** (what each YAML in `config/` requests today):
+
+| Mode | `measurement_ms` | Rate | Why |
+|---|---|---|---|
+| `standalone` | 100 | 10 Hz | Light workload — just NAV-PVT |
+| `rover_ntrip` | 200 | 5 Hz | All constellations + integrity + RTCM decode — F9P ceiling |
+| `rover_radio` | 200 | 5 Hz | Same as `rover_ntrip` |
+| `moving_base` | 200 | 5 Hz | Heavy — computes the base solution + RTCM output |
+| `moving_base_rover` | 200 | 5 Hz | Matches the moving base |
+| `static_base` | 1000 | 1 Hz | Stationary — rate is irrelevant |
+
+**F9P CPU envelope (empirical):**
+- All four constellations (GPS + GLONASS + Galileo + BeiDou) + L1/L2 dual-band + full integrity messages + RTCM input caps out around **5 Hz** (we measure ~5.5 Hz when asking for 10 Hz).
+- Drop to GPS + one other constellation and you can sustain **10 Hz** with integrity on.
+- GPS-only with minimal messages can reach **20–25 Hz**.
+
+**Two knobs for tuning:**
+
+1. **Rate** — `device.ublox.rate.measurement_ms`
+   ```yaml
+   device:
+     ublox:
+       rate:
+         measurement_ms: 100   # request 10 Hz
+   ```
+   The F9P will do as asked up to its CPU ceiling for the active workload. Above the ceiling it silently caps.
+
+2. **Constellations** — `device.ublox.signals.*`
+   ```yaml
+   device:
+     ublox:
+       signals:
+         gps:      { enabled: true,  l1: true, l2: true }
+         galileo:  { enabled: true,  l1: true, l2: true }   # E1 + E5b
+         glonass:  { enabled: false }                        # skip to free CPU
+         beidou:   { enabled: false }
+         qzss:     { enabled: false }
+         sbas:     { enabled: false }
+   ```
+
+**Tuning examples:**
+
+- **Europe, 10 Hz rover_ntrip:** keep GPS + Galileo dual-band on, disable GLONASS + BeiDou + QZSS, set `measurement_ms: 100`.
+- **Asia-Pacific, want QZSS correction:** leave all constellations on, accept 5 Hz. If you need 10 Hz, drop GLONASS or one of the non-primary constellations instead.
+- **High-dynamics GPS-only survey at 20 Hz:** disable all non-GPS constellations and integrity feature, set `measurement_ms: 50`.
+
+See the ZED-F9P Integration Manual for the formal rate-limit tables per constellation mix.
 
 ### Port and Protocol Settings
 

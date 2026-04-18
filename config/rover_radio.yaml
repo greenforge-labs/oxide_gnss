@@ -16,7 +16,7 @@ device:
   frame: ENU
 
   navigation:
-    rate_hz: 10
+    rate_hz: 5
     min_satellites: 4
     max_hdop: 5.0
     max_pdop: 10.0
@@ -31,8 +31,12 @@ device:
   ublox:
     family: "F9P"
 
+    # 5 Hz is the sustainable rate on ZED-F9P when all four constellations,
+    # dual-band, full integrity messages, and RTCM corrections are active.
+    # Narrow `signals` below (or drop features) to hit 10 Hz+ on this board.
+    # See docs/CONFIGURATION.md -> "Navigation rate vs constellations".
     rate:
-      measurement_ms: 100   # 10 Hz
+      measurement_ms: 200   # 5 Hz
       nav_ratio: 1
 
     # Navigation engine configuration
