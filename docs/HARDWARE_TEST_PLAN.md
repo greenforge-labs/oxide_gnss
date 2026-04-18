@@ -398,7 +398,8 @@ Run these as variations of the above modes to verify feature gating works correc
 
 | # | Test | Procedure | Pass Criteria |
 |---|------|-----------|---------------|
-| 7.1 | Device disconnect/reconnect | Unplug USB-C from F9P while running, wait 5s, replug | Driver detects disconnect, reconnects with backoff, resumes publishing |
+| 7.1 | Device disconnect/reconnect (physical) | Unplug USB-C from F9P while running, wait 5s, replug | Driver detects disconnect (EOF or `watchdog_timeout_secs`), reconnects with backoff, resumes publishing |
+| 7.1b | Silent-firmware watchdog | With driver running, send the F9P a CFG-VALSET that zeros all MSGOUT keys on USB (or detach the antenna for long enough that no packets emerge) so `read()` keeps returning `Ok(0)` while the serial handle stays open | `packet_watchdog_secs` (default 3 s) fires, driver logs the packet-watchdog timeout, reconnect cycle begins, publishing resumes once packets flow again |
 | 7.2 | NTRIP network loss | Disable WiFi/ethernet during rover_ntrip test, re-enable | NTRIP reconnects with exponential backoff, RTK resumes |
 | 7.3 | Invalid serial port | Set `device.port` to `/dev/ttyNONEXIST` | Clean error message, no panic |
 | 7.4 | Invalid NTRIP credentials | Set wrong password | Clean error message in logs, node stays running (device still works without corrections) |
