@@ -1171,17 +1171,30 @@ impl UbxHandler {
                                 other_count += 1;
                             }
                         }
-                        // CFG-VALGET response (class 0x06, id 0x8B). Not in
-                        // ublox 0.10's PacketRef, so it arrives here. The
-                        // version byte in the payload distinguishes our own
-                        // outgoing request (0x00) from the device's response
-                        // (0x01); parse_cfg_valget_response handles that.
-                        ublox::proto27::PacketRef::Unknown(pkt)
-                            if pkt.class == 0x06 && pkt.msg_id == 0x8B =>
+                        // CFG-VALGET response (class 0x06, id 0x8B). ublox 0.10
+                        // parses this into a typed variant (not Unknown), so
+                        // we match it here and build the key→value map from
+                        // the crate's CfgValIter. Only responses (version=1)
+                        // are kept; our own outgoing request echoes would
+                        // have version=0 and are ignored.
+                        ublox::proto27::PacketRef::CfgValGetResponse(resp)
+                            if resp.version() == 1 =>
                         {
-                            if let Some(resp) = parse_cfg_valget_response(pkt.payload) {
-                                debug!(n_keys = resp.len(), "CFG-VALGET response received");
-                                new_valget = Some(resp);
+                            let mut parsed = CfgValGetResponse::new();
+                            let mut scratch = [0u8; 16];
+                            for cfg_val in resp.cfg_data() {
+                                let n = cfg_val.write_to(&mut scratch);
+                                if n < 4 {
+                                    continue;
+                                }
+                                let key_id = u32::from_le_bytes([
+                                    scratch[0], scratch[1], scratch[2], scratch[3],
+                                ]);
+                                parsed.insert(key_id, scratch[4..n].to_vec());
+                            }
+                            if !parsed.is_empty() {
+                                debug!(n_keys = parsed.len(), "CFG-VALGET response received");
+                                new_valget = Some(parsed);
                             } else {
                                 other_count += 1;
                             }
@@ -2044,59 +2057,6 @@ pub fn build_cfg_valget(key_ids: &[u32], layer: u8) -> Vec<u8> {
 /// Parsed CFG-VALGET response: key ID → raw little-endian value bytes.
 pub type CfgValGetResponse = std::collections::HashMap<u32, Vec<u8>>;
 
-/// Return the value size (bytes) encoded in a CFG key ID.
-///
-/// The upper nibble of byte[3] of the key (bits 28..31) encodes value width.
-/// Reference: u-blox "Configuration interface" documentation, table "Size
-/// encoding of CFG key IDs".
-fn cfg_key_value_size(key_id: u32) -> Option<usize> {
-    match (key_id >> 28) & 0x7 {
-        0x1 => Some(1), // L (bit) stored in one byte
-        0x2 => Some(1), // U1/E1/X1
-        0x3 => Some(2), // U2/E2/X2
-        0x4 => Some(4), // U4/E4/X4/R4
-        0x5 => Some(8), // U8/R8
-        _ => None,
-    }
-}
-
-/// Parse a CFG-VALGET **response** payload.
-///
-/// Response layout:
-///
-/// ```text
-/// version (u8 = 0x01) | layer (u8) | position (u16 LE) |
-///   { key_id (u32 LE) ; value (N bytes, from key size) } repeated
-/// ```
-///
-/// The size of each value is derived from the key ID itself (see
-/// [`cfg_key_value_size`]). Returns `None` if the payload is truncated
-/// or the version byte is not `0x01` (i.e. it's our own outgoing request
-/// echoing back).
-fn parse_cfg_valget_response(payload: &[u8]) -> Option<CfgValGetResponse> {
-    if payload.len() < 4 {
-        return None;
-    }
-    if payload[0] != 0x01 {
-        // version 0 = request, not a response
-        return None;
-    }
-
-    let mut out = CfgValGetResponse::new();
-    let mut i = 4; // skip version(1) + layer(1) + position(2)
-    while i + 4 <= payload.len() {
-        let key_id = u32::from_le_bytes(payload[i..i + 4].try_into().ok()?);
-        let size = cfg_key_value_size(key_id)?;
-        i += 4;
-        if i + size > payload.len() {
-            return None;
-        }
-        out.insert(key_id, payload[i..i + size].to_vec());
-        i += size;
-    }
-    Some(out)
-}
-
 /// Build a CFG-VALSET packet that writes to **all three layers** (RAM +
 /// BBR + FLASH) for the given `CfgVal` entries. Used for settings like
 /// the USB serial string that must survive a power cycle.
@@ -2416,56 +2376,6 @@ mod tests {
         // Checksum: recompute and compare
         let (ck_a, ck_b) = ubx_checksum(&pkt[2..pkt.len() - 2]);
         assert_eq!(&pkt[pkt.len() - 2..], &[ck_a, ck_b]);
-    }
-
-    #[test]
-    fn test_parse_cfg_valget_response_four_u64_keys() {
-        // Simulate a response carrying our four UsbSerialNoStr* keys.
-        // Each pair is (u32 key LE) + (u64 value LE) = 12 bytes; total
-        // payload = 4-byte header + 48 bytes = 52 bytes.
-        let mut payload = Vec::new();
-        payload.push(0x01); // version = 1 (response)
-        payload.push(0x00); // layer = RAM
-        payload.extend_from_slice(&[0x00, 0x00]); // position
-        let pairs: [(u32, u64); 4] = [
-            (0x5065_0015, 0x3130_3241_6263_6465), // "edcbA210" ASCII LE
-            (0x5065_0016, 0),
-            (0x5065_0017, 0),
-            (0x5065_0018, 0),
-        ];
-        for (k, v) in pairs {
-            payload.extend_from_slice(&k.to_le_bytes());
-            payload.extend_from_slice(&v.to_le_bytes());
-        }
-
-        let resp = parse_cfg_valget_response(&payload).expect("valid response parses");
-        assert_eq!(resp.len(), 4);
-        for (k, v) in pairs {
-            let bytes = resp.get(&k).expect("key present");
-            assert_eq!(bytes.len(), 8);
-            assert_eq!(u64::from_le_bytes(bytes[..].try_into().unwrap()), v);
-        }
-    }
-
-    #[test]
-    fn test_parse_cfg_valget_response_rejects_request_version() {
-        // A packet with version = 0 (our own outgoing request echoing back)
-        // must not be treated as a response — callers rely on this to
-        // distinguish request from response frames.
-        let payload = vec![0x00, 0x00, 0x00, 0x00];
-        assert!(parse_cfg_valget_response(&payload).is_none());
-    }
-
-    #[test]
-    fn test_parse_cfg_valget_response_truncated_returns_none() {
-        // Valid header + key id but no value bytes.
-        let payload = vec![
-            0x01, 0x00, 0x00, 0x00, // header (version=1)
-            0x15, 0x00, 0x65,
-            0x50, // key 0x50650015 LE
-                  // … value bytes missing
-        ];
-        assert!(parse_cfg_valget_response(&payload).is_none());
     }
 
     #[test]
