@@ -1,0 +1,80 @@
+[package]
+name = "oxide_gnss"
+version = "0.1.0"
+edition = "2021"
+authors = ["Geoff Sokoll <geoff.s@greenforgelabs.com.au>"]
+description = "A Rust-based ROS2 GNSS driver with integrated NTRIP client"
+license = "MIT"
+repository = "https://github.com/greenforge-labs/oxide_gnss"
+homepage = "https://github.com/greenforge-labs/oxide_gnss"
+rust-version = "1.80"
+readme = "README.md"
+keywords = ["ros2", "gnss", "gps", "ntrip", "ublox"]
+categories = ["science::geo", "embedded", "hardware-support"]
+
+[lib]
+name = "oxide_gnss"
+path = "src/lib.rs"
+
+[[bin]]
+name = "oxide_gnss_node"
+path = "src/main.rs"
+required-features = ["ros2"]
+
+# Admin-only CLI tool. Assigns a USB serial string on a u-blox ZED-F9P
+# (e.g. after a factory reset has left it blank). Not part of normal
+# driver startup — run once during bring-up so udev rules can pick the
+# device up by name.
+[[bin]]
+name = "oxide_gnss_assign_serial"
+path = "src/bin/oxide_gnss_assign_serial.rs"
+
+[dependencies]
+# ROS2 dependencies - resolved via colcon patches in .cargo/config.toml
+# Version "*" allows workspace patches to override with distro-specific versions
+# Build with: source /opt/ros/$ROS_DISTRO/setup.bash && source install/setup.bash && cargo build --features ros2
+rclrs = { version = "0.7", optional = true }
+sensor_msgs = { version = "*", optional = true }
+geometry_msgs = { version = "*", optional = true }
+std_msgs = { version = "*", optional = true }
+diagnostic_msgs = { version = "*", optional = true }
+builtin_interfaces = { version = "*", optional = true }
+oxide_gnss_msgs = { version = "0.1", optional = true }
+
+# GNSS Protocols
+ublox = { version = "0.10", features = ["alloc", "ubx_proto23", "ubx_proto27"] }
+rtcm-rs = "0.11"
+
+# Communications
+serial2-tokio = "0.1"
+base64 = "0.22"
+url = "2.5"
+tokio = { version = "1", features = ["full"] }
+
+# NTRIP client
+ntrip-core = "0.2"
+
+# Utilities
+nalgebra = "0.33"
+chrono = "0.4"
+thiserror = "2.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+async-trait = "0.1"
+
+regex = "1.12.2"
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[features]
+default = ["ros2"]
+# Enable ROS2 integration - requires ROS2 environment (e.g., WSL2 with ROS2 Jazzy)
+# Build from workspace root with: colcon build, then cargo build --features ros2
+ros2 = ["dep:rclrs", "dep:sensor_msgs", "dep:geometry_msgs", "dep:std_msgs", "dep:diagnostic_msgs", "dep:builtin_interfaces", "dep:oxide_gnss_msgs"]
+
+[package.metadata.ros]
+install_to_share = ["launch", "config", "udev"]

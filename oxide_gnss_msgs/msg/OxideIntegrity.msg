@@ -1,0 +1,108 @@
+# GNSS Integrity Status Message
+# Provides safety-critical integrity monitoring data for GNSS solutions
+
+# Header with timestamp
+std_msgs/Header header
+
+# Overall integrity level (0=OK, 1=DEGRADED, 2=CRITICAL, 3=FAILED)
+uint8 level
+uint8 LEVEL_OK = 0
+uint8 LEVEL_DEGRADED = 1
+uint8 LEVEL_CRITICAL = 2
+uint8 LEVEL_FAILED = 3
+
+# Human-readable status message
+string status_message
+
+# Operational status (true if level is OK or DEGRADED)
+bool operational
+
+# =============================================================================
+# Individual Check Results (true = passed)
+# Enables pass/fail grid visualization for diagnosing integrity state changes
+# =============================================================================
+bool check_fix_type_ok          # Fix type is acceptable (not NoFix/2D/DR/TimeOnly)
+bool check_satellites_ok        # Satellite count meets threshold
+bool check_h_accuracy_ok        # Horizontal accuracy within limit
+bool check_v_accuracy_ok        # Vertical accuracy within limit
+bool check_pdop_ok              # PDOP within limit
+bool check_carrier_ok           # Carrier solution is RTK Fixed (when RTK expected)
+bool check_correction_age_ok    # Correction age within limit
+bool check_signal_quality_ok    # Signal quality (C/N0) within limits
+bool check_jamming_ok           # No critical jamming detected
+bool check_spoofing_ok          # No multiple spoofers detected
+bool check_antenna_ok           # Antenna status is OK (not open/short)
+bool check_pl_horizontal_ok     # Horizontal PL within alert limit
+bool check_pl_vertical_ok       # Vertical PL within alert limit
+bool check_pl_velocity_ok       # Velocity PL within alert limit
+bool check_pl_valid_ok          # Protection level validity check passed
+
+# =============================================================================
+# Position Quality
+# =============================================================================
+uint8 fix_type              # 0=none, 1=dead-reck, 2=2D, 3=3D, 4=GNSS+DR, 5=time-only, 6=RTK-float, 7=RTK-fixed
+uint8 carrier_solution      # 0=none, 1=float, 2=fixed
+bool differential_applied   # Differential corrections applied
+uint8 num_satellites        # Number of satellites used
+float32 h_accuracy_m        # Horizontal accuracy (m)
+float32 v_accuracy_m        # Vertical accuracy (m)
+float32 pdop                # Position dilution of precision
+
+# Signal quality (from NAV-SAT)
+float32 mean_cno            # Mean C/N0 of satellites used in solution (dB-Hz)
+uint8 min_cno               # Minimum C/N0 among used satellites (dB-Hz)
+uint8 sats_above_cno_threshold  # Satellites with C/N0 >= 30 dB-Hz
+
+# Covariance validity (matrices available in NavSatFix/TwistWithCovarianceStamped)
+bool covariance_valid       # True if NAV-COV data was received from device
+
+# RTK/Correction status
+float32 correction_age_s    # Age of differential corrections (-1 if no RTK)
+bool correction_received    # RTCM/correction data received
+bool correction_used        # Correction data was used by receiver
+
+# Security status
+uint8 jamming_state         # 0=unknown, 1=ok, 2=warning, 3=critical
+uint8 JAMMING_UNKNOWN = 0
+uint8 JAMMING_OK = 1
+uint8 JAMMING_WARNING = 2
+uint8 JAMMING_CRITICAL = 3
+
+uint8 spoofing_state        # 0=unknown, 1=ok, 2=indicated, 3=multiple
+uint8 SPOOFING_UNKNOWN = 0
+uint8 SPOOFING_OK = 1
+uint8 SPOOFING_INDICATED = 2
+uint8 SPOOFING_MULTIPLE = 3
+
+uint32 security_events      # Number of security events logged
+uint8 jamming_indicator     # CW jamming indicator (0-255 scale from MON-HW)
+
+# Hardware status
+uint8 antenna_status        # 0=unknown, 1=ok, 2=open, 3=short
+uint8 ANTENNA_UNKNOWN = 0
+uint8 ANTENNA_OK = 1
+uint8 ANTENNA_OPEN = 2
+uint8 ANTENNA_SHORT = 3
+
+# Communication status
+uint8 comm_ports            # Number of communication ports
+uint8 comm_tx_errors        # TX errors detected
+
+# Protection Level data (from NAV-PL) - ISO 26262/SOTIF compliant integrity bounds
+bool protection_level_valid         # True if PL data is valid and current
+float32 horizontal_pl_m             # Horizontal protection level (m)
+float32 vertical_pl_m               # Vertical protection level (m)
+float32 velocity_pl_ms              # Velocity protection level magnitude (m/s)
+float64 target_mir                  # Target Misleading Information Risk [%MI/epoch]
+uint8 pl_frame                      # Protection level reference frame
+uint8 pl_invalidity_reason          # Reason if PL is invalid
+
+uint8 PL_FRAME_INVALID = 0
+uint8 PL_FRAME_NED = 1
+uint8 PL_FRAME_LONG_LAT_VERT = 2
+uint8 PL_FRAME_ELLIPSE = 3
+
+uint8 PL_REASON_VALID = 0
+uint8 PL_REASON_NOT_AVAILABLE = 1
+uint8 PL_REASON_NOT_TRUSTWORTHY = 2
+uint8 PL_REASON_NOT_VERIFIED = 3

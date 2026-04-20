@@ -1,0 +1,134 @@
+# Build and push CI Docker images to GitHub Container Registry
+#
+# This workflow builds Docker images for multiple ROS2 distros and architectures
+# with Rust + ros2-rust pre-installed for fast CI builds.
+#
+# Images are tagged as: <distro>-<arch> (e.g. jazzy-amd64, jazzy-arm64)
+#
+# Triggers:
+#   - Manual: Actions tab -> "Build CI Docker Image" -> Run workflow
+#   - On Dockerfile changes to master/main
+#   - Weekly (to pick up dependency updates)
+
+name: Build CI Docker Image
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      distro:
+        description: 'ROS2 distro to build (or "all")'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - humble
+          - jazzy
+          - kilted
+          - rolling
+
+  # Auto-trigger when Dockerfile changes
+  push:
+    branches: [master, main]
+    paths:
+      - '.github/docker/Dockerfile.ci'
+
+  # Weekly rebuild to get updates
+  schedule:
+    - cron: '0 0 * * 0'  # Every Sunday at midnight UTC
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}-ci
+
+jobs:
+  build-and-push:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # amd64 builds
+          - distro: humble
+            ros_base: ros:humble-ros-base
+            arch: amd64
+            runner: ubuntu-latest
+          - distro: jazzy
+            ros_base: ros:jazzy-ros-base
+            arch: amd64
+            runner: ubuntu-latest
+          - distro: kilted
+            ros_base: ros:kilted-ros-base
+            arch: amd64
+            runner: ubuntu-latest
+          - distro: rolling
+            ros_base: ros:rolling-ros-base
+            arch: amd64
+            runner: ubuntu-latest
+          # arm64 builds (native runners)
+          - distro: jazzy
+            ros_base: ros:jazzy-ros-base
+            arch: arm64
+            runner: ubuntu-24.04-arm
+          - distro: kilted
+            ros_base: ros:kilted-ros-base
+            arch: arm64
+            runner: ubuntu-24.04-arm
+
+    # Required for pushing to GHCR
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ matrix.distro }}-${{ matrix.arch }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: .github/docker/Dockerfile.ci
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            ROS_BASE_IMAGE=${{ matrix.ros_base }}
+            ROS_DISTRO=${{ matrix.distro }}
+
+  # Tag jazzy-amd64 as 'latest' after all builds complete
+  tag-latest:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag jazzy-amd64 as latest
+        run: |
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:jazzy-amd64
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:jazzy-amd64 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest

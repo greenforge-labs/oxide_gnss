@@ -1,0 +1,25 @@
+# oxide_gnss configuration: Standalone GPS
+#
+# Basic GPS operation without RTK corrections.
+# Suitable for applications that don't require centimeter-level accuracy.
+
+mode: standalone
+
+features:
+  satellites: false        # Enable satellite info
+
+device:
+  port: "/dev/gnss_f9p_rover"
+  baud_rate: 460800
+  frame: ENU
+
+  navigation:
+    rate_hz: 10
+    min_satellites: 4
+    max_hdop: 5.0
+
+  ublox:
+    nav_spg:
+      dynamic_model: portable   # General purpose, low dynamics
+
+# No NTRIP needed for standalone mode

@@ -1,0 +1,149 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Fast format check (runs on native runner, no Docker needed)
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  # Multi-distro, multi-arch build with ROS2 (uses pre-built Docker images)
+  build:
+    name: Build & Test (${{ matrix.distro }}/${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # humble: amd64 only (no arm64 CI image built)
+          - distro: humble
+            ros_distro: humble
+            arch: amd64
+            runner: ubuntu-latest
+          # jazzy: both arches
+          - distro: jazzy
+            ros_distro: jazzy
+            arch: amd64
+            runner: ubuntu-latest
+          - distro: jazzy
+            ros_distro: jazzy
+            arch: arm64
+            runner: ubuntu-24.04-arm
+          # kilted: both arches
+          - distro: kilted
+            ros_distro: kilted
+            arch: amd64
+            runner: ubuntu-latest
+          - distro: kilted
+            ros_distro: kilted
+            arch: arm64
+            runner: ubuntu-24.04-arm
+    container:
+      image: ghcr.io/greenforge-labs/oxide_gnss-ci:${{ matrix.distro }}-${{ matrix.arch }}
+      options: --user root
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: src/oxide_gnss_repo
+
+      - name: Build with colcon
+        shell: bash
+        run: |
+          # Source ROS2 and ros2-rust workspace
+          source /opt/ros/${{ matrix.ros_distro }}/setup.bash
+          source /opt/ros2_ws/install/setup.bash
+
+          # Copy the .cargo/config.toml from ros2-rust workspace to use the patches
+          mkdir -p .cargo
+          cp /opt/ros2_ws/.cargo/config.toml .cargo/ 2>/dev/null || true
+
+          # Reorganize for colcon: driver in oxide_gnss/, messages in oxide_gnss_msgs/
+          mv src/oxide_gnss_repo src/oxide_gnss
+          mv src/oxide_gnss/oxide_gnss_msgs src/
+
+          # Build messages first, then the driver
+          colcon build --packages-select oxide_gnss_msgs oxide_gnss
+
+      - name: Run clippy
+        shell: bash
+        run: |
+          source /opt/ros/${{ matrix.ros_distro }}/setup.bash
+          source /opt/ros2_ws/install/setup.bash
+          source install/setup.bash
+          cd src/oxide_gnss
+          cargo clippy --features ros2 -- -D warnings
+
+      - name: Run tests
+        shell: bash
+        run: |
+          source /opt/ros/${{ matrix.ros_distro }}/setup.bash
+          source /opt/ros2_ws/install/setup.bash
+          source install/setup.bash
+          cd src/oxide_gnss
+          cargo test --features ros2
+
+  # Code coverage with cargo-llvm-cov (jazzy/amd64 only)
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    container:
+      image: ghcr.io/greenforge-labs/oxide_gnss-ci:jazzy-amd64
+      options: --user root
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: src/oxide_gnss_repo
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Build workspace
+        shell: bash
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source /opt/ros2_ws/install/setup.bash
+          mkdir -p .cargo
+          cp /opt/ros2_ws/.cargo/config.toml .cargo/ 2>/dev/null || true
+          mv src/oxide_gnss_repo src/oxide_gnss
+          mv src/oxide_gnss/oxide_gnss_msgs src/
+          colcon build --packages-select oxide_gnss_msgs oxide_gnss
+
+      - name: Generate coverage
+        shell: bash
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source /opt/ros2_ws/install/setup.bash
+          source install/setup.bash
+          cd src/oxide_gnss
+          cargo llvm-cov --features ros2 --lcov --output-path lcov.info
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: src/oxide_gnss/lcov.info
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # Rolling CI disabled - ros2-rust API not yet stable on rolling
+  # Re-enable when rclrs matures and rosidl_runtime_rs stabilizes
+  # See: https://github.com/ros2-rust/ros2_rust/issues

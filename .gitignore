@@ -1,0 +1,26 @@
+# Rust build artifacts
+/target/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vendor documentation (copyrighted, do not commit)
+/docs/vendor/
+/docs/ublox/
+/docs/datasheets/
+
+# ROS2 build artifacts (when built in-tree)
+/build/
+/install/
+/log/
+
+# Environment and credentials
+.env
+*.local

@@ -1,0 +1,40 @@
+# oxide_gnss configuration: RTK Rover with NTRIP
+#
+# This is the most common RTK configuration - a rover receiving corrections
+# from an NTRIP caster over the network.
+
+mode: rover_ntrip
+
+features:
+  high_precision: true    # Use HP position in ~/fix topic
+  integrity: true         # Enable integrity monitoring
+  satellites: false       # Disable to reduce bandwidth
+
+device:
+  port: "/dev/gnss_f9p_rover"
+  baud_rate: 460800
+  frame: ENU
+
+  navigation:
+    rate_hz: 5
+    min_satellites: 4
+    max_hdop: 5.0
+
+  ublox:
+    # 5 Hz (set via `navigation.rate_hz` above) is the sustainable rate on
+    # ZED-F9P when all four constellations, dual-band, full integrity
+    # messages, and RTCM corrections are active. Narrow `signals` below
+    # (or drop features) to hit 10 Hz+ on this board. See
+    # docs/CONFIGURATION.md -> "Navigation rate vs constellations".
+    nav_spg:
+      dynamic_model: automotive   # Ground vehicle dynamics
+
+ntrip:
+  host: "ntrip.data.gnss.ga.gov.au"
+  port: 2101
+  use_https: false
+  mountpoint: "SFLD00AUS0"
+  username: "${NTRIP_USERNAME}"
+  password: "${NTRIP_PASSWORD}"
+  send_gga: true
+  gga_interval_secs: 10

@@ -1,0 +1,7 @@
+# u-blox ZED-F9P
+# Vendor: 0x1546, Product: 0x01a9
+# Creates symlink /dev/gnss_f9p_{serial}
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1546", ATTRS{idProduct}=="01a9", SYMLINK+="gnss_f9p_%s{serial}"
+
+# User specific aliases (Uncomment and replace YOUR_SERIAL with actual device serial number)
+# SUBSYSTEM=="tty", ATTRS{idVendor}=="1546", ATTRS{idProduct}=="01a9", ATTRS{serial}=="12345678", SYMLINK+="gnss_rover"
