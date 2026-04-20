@@ -7,6 +7,7 @@
 //! - Injecting RTCM corrections
 //! - Reporting position data for NTRIP GGA
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -140,7 +141,7 @@ impl DeviceMessage {
     }
 }
 
-/// Shared device task state for external monitoring.
+/// Snapshot of device task state for external monitoring.
 #[derive(Debug, Default)]
 pub struct DeviceTaskState {
     /// Current device state
@@ -153,31 +154,46 @@ pub struct DeviceTaskState {
     pub rtcm_bytes_injected: u64,
 }
 
+#[derive(Debug, Default)]
+struct DeviceTaskInner {
+    state: DeviceState,
+    fix_type: FixType,
+}
+
+/// Shared device task state. Counters are atomic and mutated lock-free from
+/// the hot path; the mutable device state enum stays under the mutex.
+#[derive(Debug, Default)]
+pub struct DeviceTaskShared {
+    inner: Mutex<DeviceTaskInner>,
+    messages_received: AtomicU64,
+    rtcm_bytes_injected: AtomicU64,
+}
+
 /// Handle for monitoring the device task.
 #[derive(Clone)]
 pub struct DeviceTaskHandle {
-    state: Arc<Mutex<DeviceTaskState>>,
+    shared: Arc<DeviceTaskShared>,
 }
 
 impl DeviceTaskHandle {
     /// Get current device state.
     pub async fn state(&self) -> DeviceState {
-        self.state.lock().await.state.clone()
+        self.shared.inner.lock().await.state.clone()
     }
 
     /// Get current fix type.
     pub async fn fix_type(&self) -> FixType {
-        self.state.lock().await.fix_type
+        self.shared.inner.lock().await.fix_type
     }
 
     /// Get a snapshot of the task state.
     pub async fn snapshot(&self) -> DeviceTaskState {
-        let s = self.state.lock().await;
+        let inner = self.shared.inner.lock().await;
         DeviceTaskState {
-            state: s.state.clone(),
-            fix_type: s.fix_type,
-            messages_received: s.messages_received,
-            rtcm_bytes_injected: s.rtcm_bytes_injected,
+            state: inner.state.clone(),
+            fix_type: inner.fix_type,
+            messages_received: self.shared.messages_received.load(Ordering::Relaxed),
+            rtcm_bytes_injected: self.shared.rtcm_bytes_injected.load(Ordering::Relaxed),
         }
     }
 }
@@ -190,7 +206,7 @@ pub struct DeviceTask {
     /// Enabled ROS topics (for mode-aware validation)
     enabled_topics: Vec<String>,
     channels: DeviceTaskChannels,
-    state: Arc<Mutex<DeviceTaskState>>,
+    shared: Arc<DeviceTaskShared>,
     configurator_options: ConfiguratorOptions,
     /// Integrity aggregator for safety monitoring
     integrity: IntegrityAggregator,
@@ -219,7 +235,7 @@ impl DeviceTask {
             ublox_config,
             enabled_topics,
             channels,
-            state: Arc::new(Mutex::new(DeviceTaskState::default())),
+            shared: Arc::new(DeviceTaskShared::default()),
             configurator_options: ConfiguratorOptions::default(),
             integrity: IntegrityAggregator::with_thresholds(integrity_thresholds),
             last_rtcm_received: None,
@@ -240,7 +256,7 @@ impl DeviceTask {
             ublox_config,
             enabled_topics,
             channels,
-            state: Arc::new(Mutex::new(DeviceTaskState::default())),
+            shared: Arc::new(DeviceTaskShared::default()),
             configurator_options,
             integrity: IntegrityAggregator::with_thresholds(integrity_thresholds),
             last_rtcm_received: None,
@@ -250,7 +266,7 @@ impl DeviceTask {
     /// Get a handle for monitoring this task.
     pub fn handle(&self) -> DeviceTaskHandle {
         DeviceTaskHandle {
-            state: Arc::clone(&self.state),
+            shared: Arc::clone(&self.shared),
         }
     }
 
@@ -428,7 +444,7 @@ impl DeviceTask {
         serial: &mut super::SerialPort,
         ubx: &mut UbxHandler,
     ) -> Result<(), DeviceError> {
-        let mut read_buf = [0u8; 1024];
+        let mut read_buf = [0u8; 4096];
         let watchdog = Duration::from_secs_f64(self.config.watchdog_timeout_secs);
         let packet_watchdog = Duration::from_secs_f64(self.config.packet_watchdog_secs);
         let mut last_progress = tokio::time::Instant::now();
@@ -510,8 +526,9 @@ impl DeviceTask {
         let result = ubx.process(data);
 
         if result.messages_processed > 0 {
-            let mut state = self.state.lock().await;
-            state.messages_received += result.messages_processed as u64;
+            self.shared
+                .messages_received
+                .fetch_add(result.messages_processed as u64, Ordering::Relaxed);
         }
 
         // Track if we need to recompute integrity
@@ -706,9 +723,9 @@ impl DeviceTask {
 
         // Update fix type
         {
-            let mut state = self.state.lock().await;
-            if state.fix_type != pvt.fix_type {
-                state.fix_type = pvt.fix_type;
+            let mut inner = self.shared.inner.lock().await;
+            if inner.fix_type != pvt.fix_type {
+                inner.fix_type = pvt.fix_type;
                 // Send fix type change message
                 let _ = self
                     .channels
@@ -752,8 +769,9 @@ impl DeviceTask {
                 debug!(bytes = n, "RTCM data injected");
                 // Track timestamp for host-side correction age
                 self.last_rtcm_received = Some(Instant::now());
-                let mut state = self.state.lock().await;
-                state.rtcm_bytes_injected += n as u64;
+                self.shared
+                    .rtcm_bytes_injected
+                    .fetch_add(n as u64, Ordering::Relaxed);
             }
             Err(e) => {
                 warn!(error = %e, "Failed to inject RTCM data");
@@ -764,14 +782,14 @@ impl DeviceTask {
     /// Update the device state and notify.
     async fn set_state(&mut self, new_state: DeviceState) {
         {
-            let mut state = self.state.lock().await;
-            if state.state != new_state {
+            let mut inner = self.shared.inner.lock().await;
+            if inner.state != new_state {
                 info!(
-                    from = %state.state,
+                    from = %inner.state,
                     to = %new_state,
                     "Device state transition"
                 );
-                state.state = new_state.clone();
+                inner.state = new_state.clone();
             }
         }
 
@@ -913,9 +931,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_device_task_handle() {
-        let state = Arc::new(Mutex::new(DeviceTaskState::default()));
+        let shared = Arc::new(DeviceTaskShared::default());
         let handle = DeviceTaskHandle {
-            state: Arc::clone(&state),
+            shared: Arc::clone(&shared),
         };
 
         // Default state
@@ -924,11 +942,11 @@ mod tests {
 
         // Update state
         {
-            let mut s = state.lock().await;
-            s.state = DeviceState::Active;
-            s.fix_type = FixType::RtkFixed;
-            s.messages_received = 100;
+            let mut inner = shared.inner.lock().await;
+            inner.state = DeviceState::Active;
+            inner.fix_type = FixType::RtkFixed;
         }
+        shared.messages_received.store(100, Ordering::Relaxed);
 
         assert!(matches!(handle.state().await, DeviceState::Active));
         assert_eq!(handle.fix_type().await, FixType::RtkFixed);
