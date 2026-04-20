@@ -49,7 +49,7 @@ rtcm-rs = "0.11"
 serial2-tokio = "0.1"
 base64 = "0.22"
 url = "2.5"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "signal"] }
 
 # NTRIP client
 ntrip-core = "0.2"
@@ -78,3 +78,8 @@ ros2 = ["dep:rclrs", "dep:sensor_msgs", "dep:geometry_msgs", "dep:std_msgs", "de
 
 [package.metadata.ros]
 install_to_share = ["launch", "config", "udev"]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "debuginfo"

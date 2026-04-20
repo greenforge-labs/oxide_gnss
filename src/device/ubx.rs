@@ -1436,7 +1436,7 @@ impl UbxHandler {
     }
 
     fn parse_nav_sat(msg: &NavSatRef) -> SatInfo {
-        let mut sats = Vec::new();
+        let mut sats = Vec::with_capacity(msg.num_svs() as usize);
         for sv in msg.svs() {
             sats.push(SatStatus {
                 gnss_id: sv.gnss_id(),
@@ -1594,8 +1594,8 @@ impl UbxHandler {
         let flags: SecSigFlags = msg.sig_sec_flags();
         // Additional observability (not currently exposed in ROS messages)
         let jam_num_cent_freqs = msg.jam_num_cent_freqs();
-        let mut cent_freq_khz = Vec::new();
-        let mut jammed = Vec::new();
+        let mut cent_freq_khz = Vec::with_capacity(jam_num_cent_freqs as usize);
+        let mut jammed = Vec::with_capacity(jam_num_cent_freqs as usize);
         for e in msg.jam_state_cent_freqs() {
             cent_freq_khz.push(e.cent_freq_khz);
             jammed.push(e.jammed);
@@ -1621,7 +1621,7 @@ impl UbxHandler {
 
     /// Parse SEC-SIGLOG (security event log) message.
     fn parse_sec_siglog(msg: &SecSiglogRef) -> SecSiglogData {
-        let mut events = Vec::new();
+        let mut events = Vec::with_capacity(msg.num_events() as usize);
         for event in msg.events() {
             events.push(SecSiglogEventData {
                 time_elapsed_s: event.time_elapsed_s,
@@ -1724,7 +1724,7 @@ impl UbxHandler {
     fn parse_mon_comms(msg: &MonCommsRef) -> MonCommsData {
         use ublox::mon_comms::PortId;
 
-        let mut ports = Vec::new();
+        let mut ports = Vec::with_capacity(msg.n_ports() as usize);
         for port in msg.ports() {
             let port_name = match port.port_id {
                 // The u-blox F9P interface description uses portId values:

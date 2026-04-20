@@ -6,6 +6,7 @@
 //! - Sending GGA position reports
 //! - Automatic reconnection with backoff
 
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -51,7 +52,7 @@ pub enum NtripMessage {
     },
 }
 
-/// Shared NTRIP task state for external monitoring.
+/// Snapshot of NTRIP task state for external monitoring.
 #[derive(Debug, Default)]
 pub struct NtripTaskState {
     /// Current NTRIP state
@@ -66,26 +67,43 @@ pub struct NtripTaskState {
     pub connection_count: u32,
 }
 
+#[derive(Debug, Default)]
+struct NtripTaskInner {
+    state: NtripState,
+    last_data_time: Option<Instant>,
+}
+
+/// Shared NTRIP task state. Counters are atomic and mutated lock-free from
+/// the hot path; the mutable NTRIP state enum stays under the mutex.
+#[derive(Debug, Default)]
+pub struct NtripTaskShared {
+    inner: Mutex<NtripTaskInner>,
+    bytes_received: AtomicU64,
+    messages_forwarded: AtomicU64,
+    connection_count: AtomicU32,
+}
+
 /// Handle for monitoring the NTRIP task.
 #[derive(Clone)]
 pub struct NtripTaskHandle {
-    state: Arc<Mutex<NtripTaskState>>,
+    shared: Arc<NtripTaskShared>,
 }
 
 impl NtripTaskHandle {
     /// Get current NTRIP state.
     pub async fn state(&self) -> NtripState {
-        self.state.lock().await.state.clone()
+        self.shared.inner.lock().await.state.clone()
     }
 
     /// Get total bytes received.
     pub async fn bytes_received(&self) -> u64 {
-        self.state.lock().await.bytes_received
+        self.shared.bytes_received.load(Ordering::Relaxed)
     }
 
     /// Get correction age in seconds (time since last data).
     pub async fn correction_age_secs(&self) -> Option<f64> {
-        self.state
+        self.shared
+            .inner
             .lock()
             .await
             .last_data_time
@@ -94,13 +112,13 @@ impl NtripTaskHandle {
 
     /// Get a snapshot of the task state.
     pub async fn snapshot(&self) -> NtripTaskState {
-        let s = self.state.lock().await;
+        let inner = self.shared.inner.lock().await;
         NtripTaskState {
-            state: s.state.clone(),
-            bytes_received: s.bytes_received,
-            messages_forwarded: s.messages_forwarded,
-            last_data_time: s.last_data_time,
-            connection_count: s.connection_count,
+            state: inner.state.clone(),
+            bytes_received: self.shared.bytes_received.load(Ordering::Relaxed),
+            messages_forwarded: self.shared.messages_forwarded.load(Ordering::Relaxed),
+            last_data_time: inner.last_data_time,
+            connection_count: self.shared.connection_count.load(Ordering::Relaxed),
         }
     }
 }
@@ -109,7 +127,7 @@ impl NtripTaskHandle {
 pub struct NtripTask {
     config: NtripConfig,
     channels: NtripTaskChannels,
-    state: Arc<Mutex<NtripTaskState>>,
+    shared: Arc<NtripTaskShared>,
 }
 
 impl NtripTask {
@@ -118,14 +136,14 @@ impl NtripTask {
         Self {
             config,
             channels,
-            state: Arc::new(Mutex::new(NtripTaskState::default())),
+            shared: Arc::new(NtripTaskShared::default()),
         }
     }
 
     /// Get a handle for monitoring this task.
     pub fn handle(&self) -> NtripTaskHandle {
         NtripTaskHandle {
-            state: Arc::clone(&self.state),
+            shared: Arc::clone(&self.shared),
         }
     }
 
@@ -228,10 +246,7 @@ impl NtripTask {
         client.connect_with_gga(initial_gga.as_ref()).await?;
 
         // Update state and stats
-        {
-            let mut state = self.state.lock().await;
-            state.connection_count += 1;
-        }
+        self.shared.connection_count.fetch_add(1, Ordering::Relaxed);
         self.set_state(NtripState::Streaming).await;
         *last_streaming_start = Some(Instant::now());
         if self
@@ -311,18 +326,18 @@ impl NtripTask {
         debug!(bytes = data.len(), "Received RTCM data");
 
         // Update stats
-        {
-            let mut state = self.state.lock().await;
-            state.bytes_received += data.len() as u64;
-            state.last_data_time = Some(Instant::now());
-        }
+        self.shared
+            .bytes_received
+            .fetch_add(data.len() as u64, Ordering::Relaxed);
+        self.shared.inner.lock().await.last_data_time = Some(Instant::now());
 
         // Forward to device
         if let Err(e) = self.channels.rtcm_tx.send(data.to_vec()).await {
             warn!(error = %e, "Failed to forward RTCM to device");
         } else {
-            let mut state = self.state.lock().await;
-            state.messages_forwarded += 1;
+            self.shared
+                .messages_forwarded
+                .fetch_add(1, Ordering::Relaxed);
         }
 
         // Notify supervisor
@@ -361,14 +376,14 @@ impl NtripTask {
     /// Update the NTRIP state and notify.
     async fn set_state(&mut self, new_state: NtripState) {
         {
-            let mut state = self.state.lock().await;
-            if state.state != new_state {
+            let mut inner = self.shared.inner.lock().await;
+            if inner.state != new_state {
                 info!(
-                    from = %state.state,
+                    from = %inner.state,
                     to = %new_state,
                     "NTRIP state transition"
                 );
-                state.state = new_state.clone();
+                inner.state = new_state.clone();
             }
         }
 
@@ -451,9 +466,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_ntrip_task_handle() {
-        let state = Arc::new(Mutex::new(NtripTaskState::default()));
+        let shared = Arc::new(NtripTaskShared::default());
         let handle = NtripTaskHandle {
-            state: Arc::clone(&state),
+            shared: Arc::clone(&shared),
         };
 
         // Default state
@@ -462,11 +477,11 @@ mod tests {
 
         // Update state
         {
-            let mut s = state.lock().await;
-            s.state = NtripState::Streaming;
-            s.bytes_received = 5000;
-            s.last_data_time = Some(Instant::now());
+            let mut inner = shared.inner.lock().await;
+            inner.state = NtripState::Streaming;
+            inner.last_data_time = Some(Instant::now());
         }
+        shared.bytes_received.store(5000, Ordering::Relaxed);
 
         assert!(matches!(handle.state().await, NtripState::Streaming));
         assert_eq!(handle.bytes_received().await, 5000);
@@ -479,23 +494,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_state_transitions() {
-        let state = Arc::new(Mutex::new(NtripTaskState::default()));
+        let shared = Arc::new(NtripTaskShared::default());
         let handle = NtripTaskHandle {
-            state: Arc::clone(&state),
+            shared: Arc::clone(&shared),
         };
 
         // Simulate state progression: Disabled -> Connecting -> Streaming
-        {
-            let mut s = state.lock().await;
-            s.state = NtripState::Connecting;
-        }
+        shared.inner.lock().await.state = NtripState::Connecting;
         assert!(matches!(handle.state().await, NtripState::Connecting));
 
-        {
-            let mut s = state.lock().await;
-            s.state = NtripState::Streaming;
-            s.connection_count = 1;
-        }
+        shared.inner.lock().await.state = NtripState::Streaming;
+        shared.connection_count.store(1, Ordering::Relaxed);
         assert!(matches!(handle.state().await, NtripState::Streaming));
 
         // Verify connection count tracked
@@ -505,20 +514,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_backoff_state() {
-        let state = Arc::new(Mutex::new(NtripTaskState::default()));
+        let shared = Arc::new(NtripTaskShared::default());
         let handle = NtripTaskHandle {
-            state: Arc::clone(&state),
+            shared: Arc::clone(&shared),
         };
 
         // Simulate backoff state
-        {
-            let mut s = state.lock().await;
-            s.state = NtripState::Backoff {
-                attempt: 3,
-                delay_secs: 8,
-                reason: "Connection refused".to_string(),
-            };
-        }
+        shared.inner.lock().await.state = NtripState::Backoff {
+            attempt: 3,
+            delay_secs: 8,
+            reason: "Connection refused".to_string(),
+        };
 
         let current = handle.state().await;
         match current {
@@ -537,19 +543,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_correction_age_none_when_no_data() {
-        let state = Arc::new(Mutex::new(NtripTaskState::default()));
+        let shared = Arc::new(NtripTaskShared::default());
         let handle = NtripTaskHandle {
-            state: Arc::clone(&state),
+            shared: Arc::clone(&shared),
         };
 
         // No data received yet
         assert!(handle.correction_age_secs().await.is_none());
 
         // After receiving data
-        {
-            let mut s = state.lock().await;
-            s.last_data_time = Some(Instant::now());
-        }
+        shared.inner.lock().await.last_data_time = Some(Instant::now());
 
         // Correction age should be very small (just set)
         let age = handle.correction_age_secs().await.unwrap();
@@ -558,20 +561,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_snapshot_captures_all_fields() {
-        let state = Arc::new(Mutex::new(NtripTaskState::default()));
+        let shared = Arc::new(NtripTaskShared::default());
         let handle = NtripTaskHandle {
-            state: Arc::clone(&state),
+            shared: Arc::clone(&shared),
         };
 
         // Set up complex state
         {
-            let mut s = state.lock().await;
-            s.state = NtripState::Streaming;
-            s.bytes_received = 123456;
-            s.messages_forwarded = 42;
-            s.connection_count = 5;
-            s.last_data_time = Some(Instant::now());
+            let mut inner = shared.inner.lock().await;
+            inner.state = NtripState::Streaming;
+            inner.last_data_time = Some(Instant::now());
         }
+        shared.bytes_received.store(123456, Ordering::Relaxed);
+        shared.messages_forwarded.store(42, Ordering::Relaxed);
+        shared.connection_count.store(5, Ordering::Relaxed);
 
         let snapshot = handle.snapshot().await;
         assert!(matches!(snapshot.state, NtripState::Streaming));
@@ -730,17 +733,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_stats_accumulation() {
-        let state = Arc::new(Mutex::new(NtripTaskState::default()));
+        let shared = Arc::new(NtripTaskShared::default());
         let handle = NtripTaskHandle {
-            state: Arc::clone(&state),
+            shared: Arc::clone(&shared),
         };
 
         // Simulate receiving data in chunks
         for _ in 0..10 {
-            let mut s = state.lock().await;
-            s.bytes_received += 256;
-            s.messages_forwarded += 1;
-            s.last_data_time = Some(Instant::now());
+            shared.bytes_received.fetch_add(256, Ordering::Relaxed);
+            shared.messages_forwarded.fetch_add(1, Ordering::Relaxed);
+            shared.inner.lock().await.last_data_time = Some(Instant::now());
         }
 
         let snapshot = handle.snapshot().await;
@@ -750,16 +752,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_multiple_reconnections_tracked() {
-        let state = Arc::new(Mutex::new(NtripTaskState::default()));
+        let shared = Arc::new(NtripTaskShared::default());
         let handle = NtripTaskHandle {
-            state: Arc::clone(&state),
+            shared: Arc::clone(&shared),
         };
 
         // Simulate multiple reconnection cycles
         for i in 1..=5 {
-            let mut s = state.lock().await;
-            s.connection_count = i;
-            s.state = NtripState::Streaming;
+            shared.connection_count.store(i, Ordering::Relaxed);
+            shared.inner.lock().await.state = NtripState::Streaming;
         }
 
         let snapshot = handle.snapshot().await;
