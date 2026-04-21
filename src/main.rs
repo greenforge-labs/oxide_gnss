@@ -154,16 +154,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let supervisor_msg_tx_device = supervisor_msg_tx.clone();
     tokio::spawn(async move {
         while let Some(msg) = device_msg_rx.recv().await {
-            // Convert and forward messages that need to reach ROS/supervisor
-            // Internal messages (Covariance, PosEcef, etc.) return None and are skipped
-            if let Some(gnss_msg) = msg.into_gnss_message() {
-                if supervisor_msg_tx_device.send(gnss_msg).await.is_err() {
-                    tracing::warn!(
-                        target: oxide_gnss::logging::category::STATE,
-                        "Failed to forward device message to supervisor - shutting down"
-                    );
-                    break;
-                }
+            if supervisor_msg_tx_device
+                .send(msg.into_gnss_message())
+                .await
+                .is_err()
+            {
+                tracing::warn!(
+                    target: oxide_gnss::logging::category::STATE,
+                    "Failed to forward device message to supervisor - shutting down"
+                );
+                break;
             }
         }
     });
