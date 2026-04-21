@@ -22,8 +22,7 @@ use crate::state::{DeviceState, FixType, GnssIntegrity, IntegrityAggregator, Int
 use super::config::{ConfigStep, ConfiguratorOptions, DeviceConfigurator};
 use super::serial::SerialPortBuilder;
 use super::ubx::{
-    CovData, HpPosData, MonCommsData, MonHwData, MonRfData, PosEcefData, PvtData, RelPosNedData,
-    RxmCorData, SatInfo, SecSigData, SecSiglogData, SurveyInData, UbxHandler,
+    HpPosData, PvtData, RelPosNedData, SatInfo, SecSigData, SurveyInData, UbxHandler,
 };
 
 /// Channels required by the device task.
@@ -75,36 +74,26 @@ impl GgaData {
 }
 
 /// Messages sent from the device task.
+///
+/// Only messages that are forwarded to the supervisor/ROS task appear here.
+/// Internal UBX payloads consumed purely by the integrity aggregator
+/// (NAV-COV, NAV-POSECEF, SEC-SIGLOG, RXM-COR, MON-COMMS, MON-HW, MON-RF,
+/// fix-type transitions) are handled in-place inside the device task and
+/// never touch this channel.
 #[derive(Debug, Clone)]
 pub enum DeviceMessage {
     /// Device state changed
     StateChanged(DeviceState),
     /// New PVT data available
     Pvt(PvtData),
-    /// Fix type changed
-    FixTypeChanged(FixType),
     /// High precision position
     HpPos(HpPosData),
     /// Satellite status
     SatInfo(SatInfo),
     /// Integrity status update
     Integrity(GnssIntegrity),
-    /// Position covariance
-    Covariance(CovData),
-    /// ECEF position
-    PosEcef(PosEcefData),
     /// Security signal status
     SecSig(SecSigData),
-    /// Security event log
-    SecSiglog(SecSiglogData),
-    /// Correction status
-    RxmCor(RxmCorData),
-    /// Communication port status
-    MonComms(MonCommsData),
-    /// Hardware status (antenna, jamming indicator) - deprecated
-    MonHw(MonHwData),
-    /// RF status (antenna, jamming indicator) - replaces MonHw
-    MonRf(MonRfData),
     /// Relative position for moving base/rover
     RelPosNed(RelPosNedData),
     /// Survey-in status (NAV-SVIN) — static_base progress for /diagnostics
@@ -113,30 +102,17 @@ pub enum DeviceMessage {
 
 impl DeviceMessage {
     /// Convert to a GnssMessage for forwarding to the supervisor/ROS task.
-    ///
-    /// Returns `None` for internal messages that are processed by the
-    /// IntegrityAggregator and don't need to be forwarded (Covariance,
-    /// PosEcef, SecSiglog, RxmCor, MonComms, MonHw, MonRf, FixTypeChanged).
-    pub fn into_gnss_message(self) -> Option<crate::state::GnssMessage> {
+    pub fn into_gnss_message(self) -> crate::state::GnssMessage {
         use crate::state::GnssMessage;
         match self {
-            DeviceMessage::Pvt(pvt) => Some(GnssMessage::Pvt(pvt)),
-            DeviceMessage::StateChanged(state) => Some(GnssMessage::DeviceStateChanged(state)),
-            DeviceMessage::HpPos(hp) => Some(GnssMessage::HpPos(hp)),
-            DeviceMessage::SatInfo(sat) => Some(GnssMessage::SatInfo(sat)),
-            DeviceMessage::SecSig(sig) => Some(GnssMessage::SecSig(sig)),
-            DeviceMessage::Integrity(integrity) => Some(GnssMessage::Integrity(integrity)),
-            DeviceMessage::RelPosNed(rel_pos) => Some(GnssMessage::RelPosNed(rel_pos)),
-            DeviceMessage::SurveyIn(svin) => Some(GnssMessage::SurveyIn(svin)),
-            // Internal messages processed by IntegrityAggregator - not forwarded
-            DeviceMessage::FixTypeChanged(_)
-            | DeviceMessage::Covariance(_)
-            | DeviceMessage::PosEcef(_)
-            | DeviceMessage::SecSiglog(_)
-            | DeviceMessage::RxmCor(_)
-            | DeviceMessage::MonComms(_)
-            | DeviceMessage::MonHw(_)
-            | DeviceMessage::MonRf(_) => None,
+            DeviceMessage::Pvt(pvt) => GnssMessage::Pvt(pvt),
+            DeviceMessage::StateChanged(state) => GnssMessage::DeviceStateChanged(state),
+            DeviceMessage::HpPos(hp) => GnssMessage::HpPos(hp),
+            DeviceMessage::SatInfo(sat) => GnssMessage::SatInfo(sat),
+            DeviceMessage::SecSig(sig) => GnssMessage::SecSig(sig),
+            DeviceMessage::Integrity(integrity) => GnssMessage::Integrity(integrity),
+            DeviceMessage::RelPosNed(rel_pos) => GnssMessage::RelPosNed(rel_pos),
+            DeviceMessage::SurveyIn(svin) => GnssMessage::SurveyIn(svin),
         }
     }
 }
@@ -559,25 +535,15 @@ impl DeviceTask {
                 .await;
         }
 
-        // Handle NAV-COV (position/velocity covariance)
+        // Handle NAV-COV (position/velocity covariance) — integrity only
         if let Some(ref cov) = result.cov {
             self.integrity.update_covariance(cov);
-            let _ = self
-                .channels
-                .msg_tx
-                .send(DeviceMessage::Covariance(cov.clone()))
-                .await;
             integrity_updated = true;
         }
 
-        // Handle NAV-POSECEF
+        // Handle NAV-POSECEF — integrity only
         if let Some(ref pos) = result.pos_ecef {
             self.integrity.update_pos_ecef(pos);
-            let _ = self
-                .channels
-                .msg_tx
-                .send(DeviceMessage::PosEcef(pos.clone()))
-                .await;
         }
 
         // Handle SEC-SIG (jamming/spoofing detection)
@@ -591,57 +557,32 @@ impl DeviceTask {
             integrity_updated = true;
         }
 
-        // Handle SEC-SIGLOG (security event log)
+        // Handle SEC-SIGLOG (security event log) — integrity only
         if let Some(ref siglog) = result.sec_siglog {
             self.integrity.update_sec_siglog(siglog);
-            let _ = self
-                .channels
-                .msg_tx
-                .send(DeviceMessage::SecSiglog(siglog.clone()))
-                .await;
             integrity_updated = true;
         }
 
-        // Handle RXM-COR (correction status)
+        // Handle RXM-COR (correction status) — integrity only
         if let Some(ref cor) = result.rxm_cor {
             self.integrity.update_rxm_cor(cor);
-            let _ = self
-                .channels
-                .msg_tx
-                .send(DeviceMessage::RxmCor(cor.clone()))
-                .await;
             integrity_updated = true;
         }
 
-        // Handle MON-COMMS (communication port status)
+        // Handle MON-COMMS (communication port status) — integrity only
         if let Some(ref comms) = result.mon_comms {
             self.integrity.update_mon_comms(comms);
-            let _ = self
-                .channels
-                .msg_tx
-                .send(DeviceMessage::MonComms(comms.clone()))
-                .await;
         }
 
-        // Handle MON-HW (hardware status) - deprecated, prefer MON-RF
+        // Handle MON-HW (hardware status) — integrity only (deprecated, prefer MON-RF)
         if let Some(ref hw) = result.mon_hw {
             self.integrity.update_mon_hw(hw);
-            let _ = self
-                .channels
-                .msg_tx
-                .send(DeviceMessage::MonHw(hw.clone()))
-                .await;
             integrity_updated = true;
         }
 
-        // Handle MON-RF (RF status) - replaces MON-HW
+        // Handle MON-RF (RF status) — integrity only (replaces MON-HW)
         if let Some(ref rf) = result.mon_rf {
             self.integrity.update_mon_rf(rf);
-            let _ = self
-                .channels
-                .msg_tx
-                .send(DeviceMessage::MonRf(rf.clone()))
-                .await;
             integrity_updated = true;
         }
 
@@ -721,17 +662,12 @@ impl DeviceTask {
             pvt.diff_corr_age_s, // Device-reported correction age
         );
 
-        // Update fix type
+        // Update fix type (tracked internally; publishers read it via the
+        // integrity/PVT stream, so no separate channel message is needed).
         {
             let mut inner = self.shared.inner.lock().await;
             if inner.fix_type != pvt.fix_type {
                 inner.fix_type = pvt.fix_type;
-                // Send fix type change message
-                let _ = self
-                    .channels
-                    .msg_tx
-                    .send(DeviceMessage::FixTypeChanged(pvt.fix_type))
-                    .await;
             }
         }
 
@@ -924,9 +860,6 @@ mod tests {
     fn test_device_message_variants() {
         let state_msg = DeviceMessage::StateChanged(DeviceState::Active);
         assert!(matches!(state_msg, DeviceMessage::StateChanged(_)));
-
-        let fix_msg = DeviceMessage::FixTypeChanged(FixType::RtkFixed);
-        assert!(matches!(fix_msg, DeviceMessage::FixTypeChanged(_)));
     }
 
     #[tokio::test]
