@@ -352,23 +352,10 @@ pub struct IntegrityAggregator {
     pub thresholds: IntegrityThresholds,
     /// Current integrity state
     current: GnssIntegrity,
-    /// Last covariance data
-    last_cov: Option<CovData>,
-    /// Last ECEF position
-    last_pos_ecef: Option<PosEcefData>,
-    /// Last security signal status
-    last_sec_sig: Option<SecSigData>,
-    /// Last security event log
-    last_sec_siglog: Option<SecSiglogData>,
-    /// Last correction status
-    last_rxm_cor: Option<RxmCorData>,
-    /// Last communication status
-    last_mon_comms: Option<MonCommsData>,
-    /// Last hardware status
-    last_mon_hw: Option<MonHwData>,
     /// Timestamp of last PVT update (None = never received)
     last_pvt_update: Option<Instant>,
-    /// Last protection level data (NAV-PL)
+    /// Last protection level data (NAV-PL) — retained because compute()
+    /// reads it back to fill the output message.
     last_nav_pl: Option<NavPlData>,
 }
 
@@ -391,47 +378,39 @@ impl IntegrityAggregator {
     /// Note: Covariance matrices are available in NavSatFix/TwistWithCovarianceStamped.
     /// This only tracks validity for integrity monitoring.
     pub fn update_covariance(&mut self, cov: &CovData) {
-        self.last_cov = Some(cov.clone());
         self.current.covariance_valid = cov.pos_cov_valid && cov.vel_cov_valid;
     }
 
     /// Update with ECEF position data (NAV-POSECEF).
-    pub fn update_pos_ecef(&mut self, pos: &PosEcefData) {
-        self.last_pos_ecef = Some(pos.clone());
-        // ECEF position is stored for potential coordinate transforms
-        // but doesn't directly affect integrity level
+    pub fn update_pos_ecef(&mut self, _pos: &PosEcefData) {
+        // ECEF position doesn't directly affect integrity level.
     }
 
     /// Update with security signal status (SEC-SIG).
     pub fn update_sec_sig(&mut self, sig: &SecSigData) {
-        self.last_sec_sig = Some(sig.clone());
         self.current.jamming_state = sig.jamming_state;
         self.current.spoofing_state = sig.spoofing_state;
     }
 
     /// Update with security event log (SEC-SIGLOG).
     pub fn update_sec_siglog(&mut self, siglog: &SecSiglogData) {
-        self.last_sec_siglog = Some(siglog.clone());
         self.current.security_events = siglog.num_events as u32;
     }
 
     /// Update with differential correction status (RXM-COR).
     pub fn update_rxm_cor(&mut self, cor: &RxmCorData) {
-        self.last_rxm_cor = Some(cor.clone());
         self.current.correction_received = true;
         self.current.correction_used = cor.msg_used == CorrectionMsgUsed::Used;
     }
 
     /// Update with communication port status (MON-COMMS).
     pub fn update_mon_comms(&mut self, comms: &MonCommsData) {
-        self.last_mon_comms = Some(comms.clone());
         self.current.comm_ports = comms.n_ports;
         self.current.comm_tx_errors = comms.tx_errors;
     }
 
     /// Update with hardware status (MON-HW).
     pub fn update_mon_hw(&mut self, hw: &MonHwData) {
-        self.last_mon_hw = Some(hw.clone());
         self.current.antenna_status = hw.antenna_status.into();
         self.current.jamming_indicator = hw.jam_ind;
     }

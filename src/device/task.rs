@@ -522,17 +522,13 @@ impl DeviceTask {
         }
 
         // Handle Satellite Info and update signal quality for integrity
-        if let Some(ref sat) = result.sat_info {
+        if let Some(sat) = result.sat_info {
             // Compute signal quality metrics from satellite data
             let signal_quality = sat.compute_signal_quality();
             self.integrity.update_signal_quality(&signal_quality);
             integrity_updated = true;
 
-            let _ = self
-                .channels
-                .msg_tx
-                .send(DeviceMessage::SatInfo(sat.clone()))
-                .await;
+            let _ = self.channels.msg_tx.send(DeviceMessage::SatInfo(sat)).await;
         }
 
         // Handle NAV-COV (position/velocity covariance) — integrity only
@@ -547,13 +543,9 @@ impl DeviceTask {
         }
 
         // Handle SEC-SIG (jamming/spoofing detection)
-        if let Some(ref sig) = result.sec_sig {
-            self.integrity.update_sec_sig(sig);
-            let _ = self
-                .channels
-                .msg_tx
-                .send(DeviceMessage::SecSig(sig.clone()))
-                .await;
+        if let Some(sig) = result.sec_sig {
+            self.integrity.update_sec_sig(&sig);
+            let _ = self.channels.msg_tx.send(DeviceMessage::SecSig(sig)).await;
             integrity_updated = true;
         }
 
@@ -587,20 +579,20 @@ impl DeviceTask {
         }
 
         // Handle NAV-RELPOSNED (relative position for moving base/rover)
-        if let Some(ref rel_pos) = result.rel_pos_ned {
+        if let Some(rel_pos) = result.rel_pos_ned {
             let _ = self
                 .channels
                 .msg_tx
-                .send(DeviceMessage::RelPosNed(rel_pos.clone()))
+                .send(DeviceMessage::RelPosNed(rel_pos))
                 .await;
         }
 
         // Handle NAV-SVIN (survey-in progress on a static base)
-        if let Some(ref svin) = result.svin {
+        if let Some(svin) = result.svin {
             let _ = self
                 .channels
                 .msg_tx
-                .send(DeviceMessage::SurveyIn(svin.clone()))
+                .send(DeviceMessage::SurveyIn(svin))
                 .await;
         }
 
