@@ -242,31 +242,67 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let _ros_handle = spawn_ros_task(publishers, ros_channels, ros_config);
 
-    // Spin the node
+    // Spin the rclrs executor on its own OS thread.
+    //
+    // The old approach polled `executor.spin(spin_once().timeout(100ms))` in a
+    // tokio loop with a 10ms sleep between iterations — that woke the main
+    // thread 100×/sec for nothing and put a ~110ms ceiling on ROS callback
+    // latency (parameter events, service calls, timers). Running `spin()` with
+    // `SpinOptions::default()` (no timeout) on a dedicated thread instead lets
+    // the executor block in `rcl_wait` and wake the instant a callback is
+    // ready — zero polling, no latency floor.
+    //
+    // Shutdown: `SpinOptions::until_promise_resolved` is the mechanism that
+    // both flips the executor's `halt_spinning` flag *and* triggers its guard
+    // conditions to wake a blocked wait set. We wire that promise to a tokio
+    // oneshot; dropping `stop_tx` (on shutdown) resolves it and the spin
+    // thread returns cleanly.
     info!("Node is ready, spinning...");
 
-    // Main loop
+    let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
+    let stop_promise = executor.commands().run(async move {
+        // Awaited by the rclrs task executor; completes when `stop_tx` is
+        // dropped or sends. `tokio::sync::oneshot` doesn't need the tokio
+        // reactor to be polled, so this is fine off the tokio runtime.
+        let _ = stop_rx.await;
+    });
+
+    let spin_thread = std::thread::Builder::new()
+        .name("rclrs-spin".into())
+        .spawn(move || {
+            let errors = executor.spin(SpinOptions::default().until_promise_resolved(stop_promise));
+            for e in &errors {
+                if !e.to_string().contains("Timeout") {
+                    warn!("Error from ROS2 executor: {}", e);
+                }
+            }
+        })
+        .expect("failed to spawn rclrs-spin thread");
+
+    // Wait for a shutdown request.
+    let mut shutdown_rx = supervisor.shutdown_rx();
     loop {
-        // Check if shutdown was requested
-        if *supervisor.shutdown_rx().borrow() {
-            info!("Shutdown requested, stopping node");
+        if *shutdown_rx.borrow_and_update() {
             break;
         }
-
-        // Process ROS callbacks (spin once with timeout)
-        let errors = executor.spin(SpinOptions::spin_once().timeout(Duration::from_millis(100)));
-        for e in &errors {
-            // Ignore timeout errors - they're expected when there's nothing to process
-            if !e.to_string().contains("Timeout") {
-                warn!("Error spinning ROS2 executor: {}", e);
-            }
+        if shutdown_rx.changed().await.is_err() {
+            // All shutdown senders dropped — treat as shutdown.
+            break;
         }
+    }
+    info!("Shutdown requested, stopping ROS executor");
 
-        // Small sleep to avoid busy loop
-        sleep(Duration::from_millis(10)).await;
+    // Resolve the spin-stop promise; the executor returns within ~1 wait-set
+    // cycle and the thread exits.
+    drop(stop_tx);
+    sleep(Duration::from_millis(500)).await;
+    if spin_thread.is_finished() {
+        let _ = spin_thread.join();
+    } else {
+        warn!("rclrs-spin thread did not stop promptly; exiting anyway");
     }
 
-    // Wait for tasks to finish
+    // Wait for the tokio tasks (device / NTRIP / ROS publisher) to wind down.
     info!("Waiting for tasks to finish...");
     sleep(Duration::from_millis(500)).await;
 
