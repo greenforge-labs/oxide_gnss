@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Default file log filter is now `info` globally. Set `OXIDE_GNSS_FILE_LOG=oxide_gnss=debug` to re-enable debug-level events in the file appender; `RUST_LOG` continues to control stderr independently.
+
+No public API or topic-content changes.
+
 ## [0.2.0] - 2026-05-13
 
 ### Changed
