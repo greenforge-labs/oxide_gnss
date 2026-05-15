@@ -1,6 +1,6 @@
 [package]
 name = "oxide_gnss"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 authors = ["Geoff Sokoll <geoff.s@greenforgelabs.com.au>"]
 description = "A Rust-based ROS2 GNSS driver with integrated NTRIP client"
