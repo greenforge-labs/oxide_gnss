@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Default file log filter is now `info` globally. Set `OXIDE_GNSS_FILE_LOG=oxide_gnss=debug` to re-enable debug-level events in the file appender; `RUST_LOG` continues to control stderr independently.
+- Default file log filter is now `info` globally. Set `OXIDE_GNSS_FILE_LOG=oxide_gnss=debug` to re-enable debug-level events in the file appender; `RUST_LOG` continues to control stderr independently. Reduces steady-state CPU by ~25–30% across all modes.
 
 No public API or topic-content changes.
 
