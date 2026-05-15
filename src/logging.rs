@@ -35,8 +35,7 @@ pub mod category {
 ///
 /// # Default Behavior
 /// - Stderr: INFO level, compact format (override with RUST_LOG)
-/// - File: DEBUG for oxide_gnss, INFO for ntrip_core, daily rotation
-///   (override with OXIDE_GNSS_FILE_LOG)
+/// - File: INFO globally, daily rotation (override with OXIDE_GNSS_FILE_LOG)
 /// - Log directory: OXIDE_GNSS_LOG_DIR env → ~/.ros/log/oxide_gnss/ → /tmp/oxide_gnss/
 ///
 /// # Environment Variables
@@ -66,9 +65,13 @@ pub fn init_with_level(default_level: Level) -> WorkerGuard {
         ))
     });
 
-    // File filter (defaults to DEBUG for oxide_gnss, INFO for ntrip_core)
-    let file_filter = EnvFilter::try_from_env("OXIDE_GNSS_FILE_LOG")
-        .unwrap_or_else(|_| EnvFilter::new("oxide_gnss=debug,ntrip_core=info,info"));
+    // File filter defaults to INFO; set OXIDE_GNSS_FILE_LOG=oxide_gnss=debug to re-enable
+    // debug-level events. Per-epoch debug logs on the device/ROS/NTRIP hot paths add up
+    // through tracing dispatch, message format, the crossbeam channel to the non-blocking
+    // appender, and the futex_wake to its thread; keep them off by default.
+    // See ferrous_gnss commit 95a2fd9 / docs/PROFILING.md for the investigation.
+    let file_filter =
+        EnvFilter::try_from_env("OXIDE_GNSS_FILE_LOG").unwrap_or_else(|_| EnvFilter::new("info"));
 
     // Resolve log directory
     let log_dir = resolve_log_dir();
